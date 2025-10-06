@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Toro Mecánico - Alquiler</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Toro Mecánico Rentals</h1>
+    <nav>
+      <a href="#home">Inicio</a>
+      <a href="#about">Quiénes somos</a>
+      <a href="#booking">Reservar</a>
+      <a href="#login">Ingresar</a>
+    </nav>
+  </header>
+
+  <main id="home">
+    <section class="hero">
+      <h2>Divertite en tu evento</h2>
+      <p>Alquilamos toro mecánico para cumpleaños, casamientos, despedidas y eventos corporativos.</p>
+      <button id="goBooking">Reservar ahora</button>
+    </section>
+
+    <section id="about" class="about">
+      <h3>Quiénes somos</h3>
+      <p>Empresa local en Argentina con X años de experiencia. Montaje, operario y traslado incluidos en la zona.</p>
+      <div class="gallery">
+        <img src="https://via.placeholder.com/300x200?text=Foto1" alt="foto1">
+        <img src="https://via.placeholder.com/300x200?text=Foto2" alt="foto2">
+        <img src="https://via.placeholder.com/300x200?text=Foto3" alt="foto3">
+      </div>
+    </section>
+
+    <section id="booking" class="booking">
+      <h3>Reservar</h3>
+      <form id="bookingForm">
+        <label>Nombre completo<input type="text" id="name" required></label>
+        <label>Email<input type="email" id="email" required></label>
+        <label>Teléfono<input type="text" id="phone"></label>
+
+        <label>Tipo de evento
+          <select id="eventType">
+            <option>Cumpleaños</option>
+            <option>Casamiento</option>
+            <option>Despedida</option>
+            <option>Fiesta</option>
+            <option>Evento corporativo</option>
+          </select>
+        </label>
+
+        <label>Fecha<input type="date" id="date" required></label>
+        <label>Hora<input type="time" id="time" required></label>
+
+        <label>Dirección<input type="text" id="address" placeholder="Calle 123"></label>
+        <label>Barrio<input type="text" id="neighborhood" placeholder="Ej: Palermo" required></label>
+
+        <label>Duración (horas)
+          <input type="number" id="duration" min="1" value="4" required>
+        </label>
+
+        <p>Seña: $<span id="depositAmt">10000</span> (ejemplo)</p>
+
+        <button type="submit">Solicitar seña (pagar)</button>
+      </form>
+      <div id="message"></div>
+    </section>
+
+    <section id="login" class="login">
+      <h3>Ingresar / Registrarse</h3>
+      <form id="authForm">
+        <label>Email<input type="email" id="authEmail" required></label>
+        <label>Nombre (solo para registro)<input type="text" id="authName"></label>
+        <button type="submit">Enviar</button>
+      </form>
+      <div id="authMsg"></div>
+    </section>
+  </main>
+
+  <footer>
+    <small>© Toro Mecánico - Contacto: info@tusitio.com</small>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
