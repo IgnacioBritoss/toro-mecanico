@@ -2,7 +2,7 @@ import { pool } from "./db.js";
 import nodemailer from "nodemailer";
 
 export const config = {
-  runtime: "nodejs18.x"
+  runtime: "nodejs"
 };
 
 function isValidEmail(e) {
@@ -68,15 +68,13 @@ export default async function handler(req, res) {
       const reservation = rres.rows[0];
 
       // Enviar email al propietario
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || "587", 10),
-        secure: false,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
-        }
-      });
+     const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || "587", 10),
+  secure: process.env.SMTP_PORT === "465", // true solo si usás 465
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+});
+
 
       const ownerEmail = process.env.TO_EMAIL || "britosignacio106@gmail.com";
       const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
