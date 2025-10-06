@@ -1,0 +1,32 @@
+# Dependencias
+node_modules/
+
+# Vercel (CLI)
+.vercel/
+
+# Variables de entorno (¡no subir!)
+.env
+.env.local
+.env.*.local
+
+# Logs y diagnósticos
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Cobertura / builds locales
+coverage/
+dist/
+.out/
+.next/
+.vercel_build_output/
+
+# SO / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
