@@ -1,88 +1,270 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Toro Mecánico - Alquiler</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Toro Mecánico — Alquiler para eventos (CABA y GBA)</title>
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas y traslado en AMBA. Reservá fecha y horario para tu evento." />
 </head>
 <body>
-  <header class="top">
-    <h1>Toro Mecánico Rentals</h1>
-    <nav>
-      <a href="#home">Inicio</a>
-      <a href="#about">Quiénes somos</a>
-      <a href="#booking">Reservar</a>
-      <a href="#login">Ingresar</a>
-    </nav>
+  <!-- Navbar -->
+  <header class="nav">
+    <div class="container nav__inner">
+      <div class="brand">
+        <div class="brand__logo">TM</div>
+        <span class="brand__name">TORO MECÁNICO</span>
+      </div>
+      <nav class="nav__links">
+        <a href="#precios">Precios</a>
+        <a href="#calendario">Disponibilidad</a>
+        <a href="#galeria">Galería</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contacto">Contacto</a>
+      </nav>
+      <a id="waTop" class="btn btn--wa" target="_blank" rel="noreferrer">WhatsApp</a>
+    </div>
   </header>
 
-  <main id="home">
-    <section class="hero">
-      <h2>Divertite en tu evento</h2>
-      <p>Alquilamos toro mecánico para cumpleaños, casamientos, despedidas y eventos corporativos.</p>
-      <button id="goBooking">Reservar ahora</button>
-    </section>
-
-    <section id="about" class="about">
-      <h3>Quiénes somos</h3>
-      <p>Empresa local en Argentina con X años de experiencia. Montaje, operario y traslado incluidos en la zona.</p>
-      <div class="gallery">
-        <img src="https://via.placeholder.com/300x200?text=Foto1" alt="foto1">
-        <img src="https://via.placeholder.com/300x200?text=Foto2" alt="foto2">
-        <img src="https://via.placeholder.com/300x200?text=Foto3" alt="foto3">
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container hero__grid">
+      <div class="hero__copy">
+        <h1>Alquiler de <span class="u-underline">Toro Mecánico</span> en CABA y GBA</h1>
+        <p>Animate con un servicio profesional: operador incluido, equipo seguro y diversión para todas las edades.</p>
+        <div class="hero__cta">
+          <a href="#calendario" class="btn btn--primary">Ver disponibilidad</a>
+          <a href="#precios" class="btn btn--ghost">Ver precios</a>
+        </div>
+        <ul class="hero__bullets">
+          <li>Seguro y colchonetas</li>
+          <li>Traslado en AMBA</li>
+          <li>Montaje menor a 30 min</li>
+        </ul>
       </div>
-    </section>
+      <div class="hero__media">
+        <div class="media__frame">
+          <div class="media__placeholder">Foto / video del toro en acción</div>
+        </div>
+        <p class="hint">(Insertar foto real acá)</p>
+      </div>
+    </div>
+  </section>
 
-    <section id="booking" class="booking">
-      <h3>Reservar</h3>
-      <form id="bookingForm">
-        <label>Nombre completo<input type="text" id="name" required></label>
-        <label>Email<input type="email" id="email" required></label>
-        <label>Teléfono<input type="text" id="phone"></label>
+  <!-- Precios -->
+  <section id="precios" class="section section--muted">
+    <div class="container">
+      <h2 class="section__title">Precios</h2>
+      <p class="section__subtitle">Tarifas orientativas. Pasanos tu zona y horario para cotizar con traslado.</p>
+      <div class="cards">
+        <article class="card">
+          <header class="card__head">
+            <h3>Por hora</h3>
+          </header>
+          <p class="card__price">$80.000 <span>/hora</span></p>
+          <ul class="card__list">
+            <li>Operador incluido</li>
+            <li>Seguro y colchonetas</li>
+            <li>Traslado a domicilio*</li>
+          </ul>
+          <a href="#calendario" class="btn btn--block">Reservar</a>
+          <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
+        </article>
 
-        <label>Tipo de evento
-          <select id="eventType">
-            <option>Cumpleaños</option>
-            <option>Casamiento</option>
-            <option>Despedida</option>
-            <option>Fiesta</option>
-            <option>Evento corporativo</option>
-          </select>
+        <article class="card card--featured">
+          <header class="card__head">
+            <h3>Medio evento</h3>
+            <span class="badge">Más elegido</span>
+          </header>
+          <p class="card__price">$180.000 <span>/3 hs</span></p>
+          <ul class="card__list">
+            <li>Operador incluido</li>
+            <li>Seguro y colchonetas</li>
+            <li>Traslado a domicilio*</li>
+          </ul>
+          <a href="#calendario" class="btn btn--block btn--primary">Reservar</a>
+          <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
+        </article>
+
+        <article class="card">
+          <header class="card__head">
+            <h3>Evento completo</h3>
+          </header>
+          <p class="card__price">$300.000 <span>/5 hs</span></p>
+          <ul class="card__list">
+            <li>Operador incluido</li>
+            <li>Seguro y colchonetas</li>
+            <li>Traslado a domicilio*</li>
+          </ul>
+          <a href="#calendario" class="btn btn--block">Reservar</a>
+          <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Disponibilidad -->
+  <section id="calendario" class="section">
+    <div class="container">
+      <div class="section__header">
+        <div>
+          <h2 class="section__title">Disponibilidad</h2>
+          <p class="section__subtitle">Elegí una fecha y un horario tentativo. Confirmamos por WhatsApp y email.</p>
+        </div>
+        <div class="cal__nav">
+          <button id="prevMonth" class="btn btn--icon" aria-label="Mes anterior">←</button>
+          <button id="nextMonth" class="btn btn--icon" aria-label="Mes siguiente">→</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- Calendario -->
+        <div class="cal">
+          <div class="cal__head">
+            <h3 id="calTitle"></h3>
+          </div>
+          <div class="cal__week">
+            <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+          </div>
+          <div id="calGrid" class="cal__grid"></div>
+        </div>
+
+        <!-- Selector de hora + CTA -->
+        <aside class="slot">
+          <h3 class="slot__title">Horario</h3>
+          <div id="hourList" class="slot__hours"></div>
+
+          <div class="slot__summary">
+            <div class="summary__label">Fecha elegida:</div>
+            <div id="summaryText" class="summary__value">Elegí un día • --:-- hs</div>
+          </div>
+
+          <a id="waBtn" class="btn btn--block btn--wa" target="_blank" rel="noreferrer">
+            Consultar y reservar por WhatsApp
+          </a>
+          <p class="hint">La confirmación y seña se coordinan por chat.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- Galería -->
+  <section id="galeria" class="section section--muted">
+    <div class="container">
+      <h2 class="section__title">Galería</h2>
+      <div class="gallery">
+        <div class="gallery__item"></div>
+        <div class="gallery__item"></div>
+        <div class="gallery__item"></div>
+        <div class="gallery__item"></div>
+        <div class="gallery__item"></div>
+        <div class="gallery__item"></div>
+      </div>
+      <p class="hint">(Reemplazar por fotos reales: armado, gente jugando, colchonetas y operador)</p>
+    </div>
+  </section>
+
+  <!-- Testimonios -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section__title">Lo que dicen</h2>
+      <div class="testis">
+        <article class="testi">“La estrella del cumple. Los chicos felices.”<div class="testi__who">— Cliente 1</div></article>
+        <article class="testi">“Puntuales y profesionales. Repetimos seguro.”<div class="testi__who">— Cliente 2</div></article>
+        <article class="testi">“Diversión para todos.”<div class="testi__who">— Cliente 3</div></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section section--muted">
+    <div class="container">
+      <h2 class="section__title">Preguntas frecuentes</h2>
+      <div class="faq">
+        <details class="faq__item">
+          <summary>¿Qué espacio necesito?</summary>
+          <p>Aproximadamente 5×5 m libres y una toma de 220V. Incluimos colchonetas alrededor para seguridad.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Cómo se confirma la reserva?</summary>
+          <p>Por WhatsApp coordinamos la seña y los datos del evento. Emitimos comprobante si necesitás.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Es apto para niños?</summary>
+          <p>Sí, ajustamos la velocidad. Siempre con operador y normas de seguridad.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Viajan al interior?</summary>
+          <p>Hacemos AMBA. Para otras zonas, consultanos para armar una propuesta.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contacto / Formulario de reserva -->
+  <section id="contacto" class="section">
+    <div class="container grid grid--2">
+      <div>
+        <h2 class="section__title">Contacto</h2>
+        <p class="section__subtitle">Completá tus datos para reservar. Solo mayores de 18.</p>
+        <ul class="contact-list">
+          <li><a href="tel:+5491132895416">+54 9 11 3289-5416</a></li>
+          <li>Instagram / Facebook: <strong>@TorazoEventos</strong></li>
+          <li>Base en CABA — Enviamos a todo AMBA</li>
+        </ul>
+      </div>
+
+      <form id="reserveForm" class="form" novalidate>
+        <label>Nombre y apellido
+          <input id="fName" type="text" placeholder="Juan Pérez" required />
+        </label>
+        <label>Email
+          <input id="fEmail" type="email" placeholder="mail@ejemplo.com" required />
+        </label>
+        <label>Edad (solo mayores)
+          <input id="fAge" type="number" min="18" step="1" placeholder="18" required />
+        </label>
+        <div class="form__row">
+          <label>Fecha
+            <input id="formDate" type="date" required />
+          </label>
+          <label>Horario
+            <input id="formTime" type="time" required />
+          </label>
+        </div>
+        <label>Zona
+          <input id="fZone" type="text" placeholder="Lanús, San Isidro, etc." />
         </label>
 
-        <label>Fecha<input type="date" id="date" required></label>
-        <label>Hora<input type="time" id="time" required></label>
+        <fieldset class="plan">
+          <legend>Plan</legend>
+          <label class="plan__opt"><input type="radio" name="plan" value="hora" checked /> Por hora</label>
+          <label class="plan__opt"><input type="radio" name="plan" value="medio" /> Medio evento (3 hs)</label>
+          <label class="plan__opt"><input type="radio" name="plan" value="completo" /> Evento completo (5 hs)</label>
+        </fieldset>
 
-        <label>Dirección<input type="text" id="address" placeholder="Calle 123"></label>
-        <label>Barrio<input type="text" id="neighborhood" placeholder="Ej: Palermo" required></label>
-
-        <label>Duración (horas)
-          <input type="number" id="duration" min="1" value="4" required>
+        <label>Mensaje
+          <textarea id="fMsg" rows="3" placeholder="Contame del evento (cumple, casamiento, empresa, etc.)"></textarea>
         </label>
 
-        <p>Seña: $<span id="depositAmt">10000</span> (ejemplo)</p>
-
-        <button type="submit">Solicitar seña (pagar)</button>
+        <button type="submit" class="btn btn--primary">Enviar reserva</button>
+        <p id="formHint" class="hint">(Te responderemos por email/WhatsApp.)</p>
       </form>
-      <div id="message"></div>
-    </section>
+    </div>
+  </section>
 
-    <section id="login" class="login">
-      <h3>Ingresar / Registrarse</h3>
-      <form id="authForm">
-        <label>Email<input type="email" id="authEmail" required></label>
-        <label>Nombre (solo para registro)<input type="text" id="authName"></label>
-        <button type="submit">Enviar</button>
-      </form>
-      <div id="authMsg"></div>
-    </section>
-  </main>
-
-  <footer>
-    <small>© Toro Mecánico - Contacto: info@tusitio.com</small>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <p>© <span id="year"></span> Toro Mecánico — Eventos</p>
+      <div class="footer__links">
+        <a href="#">Términos</a>
+        <a href="#">Privacidad</a>
+        <a href="#">Admin</a>
+      </div>
+    </div>
   </footer>
 
-  <script src="/app.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
