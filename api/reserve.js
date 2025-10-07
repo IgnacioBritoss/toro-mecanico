@@ -1,4 +1,3 @@
-
 import { pool } from "./db.js";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
@@ -17,11 +16,21 @@ export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
   try{
-    const { name, email, phone, postal_code, age, zone, message, date, time, plan } = req.body || {};
+    const {
+      name, email, phone, postal_code, age, zone, message, date, time, plan,
+      location
+    } = req.body || {};
+
+    // Validaciones básicas
     if (!name || !email || !age || !date || !time || !zone || !phone || !postal_code)
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     if (!isValidEmail(email)) return res.status(400).json({ error: "Email inválido" });
     if (parseInt(age,10) < 18) return res.status(400).json({ error: "Solo mayores de 18 años" });
+
+    // Validación de ubicación exacta (nueva)
+    if (!location || !location.lat || !location.lng || !location.display_name){
+      return res.status(400).json({ error: "Falta ubicación exacta del evento." });
+    }
 
     const planKey = (plan || "1h").toLowerCase();
     if (!["1h","2h"].includes(planKey)) return res.status(400).json({ error: "Plan inválido" });
@@ -33,6 +42,7 @@ export default async function handler(req, res){
     try{
       await client.query("BEGIN");
 
+      // upsert de user
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -44,11 +54,16 @@ export default async function handler(req, res){
       );
       user = u.rows[0];
 
+      // disponibilidad del día/hora
       const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1`, [date]);
       if (qDay.rowCount >= 2){ await client.query("ROLLBACK"); return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." }); }
       if (new Set(qDay.rows.map(r=>r.event_hour)).has(hourInt)){
         await client.query("ROLLBACK"); return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
+
+      // NOTA: si tenés columnas para ubicación en la tabla reservations, podés agregarlas aquí.
+      // Para no romper tu schema actual, guardamos como antes (sin lat/lng),
+      // y enviamos la ubicación completa por email. (Opcional: crear tabla reservation_locations)
 
       const r = await client.query(
         `INSERT INTO reservations (user_id, event_date, event_hour, plan, zone, message, status)
@@ -81,15 +96,26 @@ export default async function handler(req, res){
         const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
         const token = signToken(reservation.id, user.email);
-const baseUrl =
-  process.env.PUBLIC_BASE_URL?.trim() ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+        const baseUrl =
+          process.env.PUBLIC_BASE_URL?.trim() ||
+          (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
 
         const acceptUrl = `${baseUrl}/api/accept?id=${reservation.id}&token=${token}`;
         const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
         const price = PRICE_USD[reservation.plan];
 
-        // Mail al OWNER con Aceptar/Rechazar
+        const locLineHtml = `
+          <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
+            <div><strong>Ubicación exacta</strong></div>
+            <div>${location.display_name}</div>
+            <div>Lat: ${location.lat} &nbsp; Lng: ${location.lng} &nbsp; (OSM ${location.osm_id || "-"})</div>
+            <div style="margin-top:8px">
+              <a href="https://www.google.com/maps?q=${encodeURIComponent(location.lat)},${encodeURIComponent(location.lng)}" target="_blank" rel="noreferrer"
+                style="display:inline-block;background:#0ea5e9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">Abrir en Google Maps</a>
+            </div>
+          </div>`;
+
+        // Mail al OWNER con Aceptar/Rechazar + ubicación
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
@@ -102,7 +128,8 @@ const baseUrl =
             <p>Localidad: ${user.zone || "-"}</p>
             <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
             <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
-            <p>${reservation.message || ""}</p>
+            ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
+            ${locLineHtml}
             <p style="margin-top:16px">
               <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
               <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
@@ -110,12 +137,19 @@ const baseUrl =
           </div>`
         });
 
-        // Mail al CLIENTE
+        // Mail al CLIENTE (confirmación de recepción)
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
           subject: "Recibimos tu solicitud de reserva",
-          text: `Hola ${user.name}, recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}). En el siguiente paso podrás confirmar y ver el pago de seña.`
+          text:
+`Hola ${user.name},
+Recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}).
+
+Ubicación: ${location.display_name}
+Mapa: https://www.google.com/maps?q=${encodeURIComponent(location.lat)},${encodeURIComponent(location.lng)}
+
+En el siguiente paso podrás confirmar y ver el pago de seña.`
         });
       }
     } catch (e) {

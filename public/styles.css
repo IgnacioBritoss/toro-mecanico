@@ -282,3 +282,15 @@ input[type="number"] {
 .locked-input::-webkit-calendar-picker-indicator{
   opacity: 0; pointer-events: none;
 }
+
+
+/* ====== Ubicación (autocomplete + mapa pequeño) ====== */
+.suggest{position:relative;z-index:5;margin-top:6px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.08);max-height:220px;overflow:auto}
+.suggest.hidden{display:none}
+.suggest .s-item{padding:10px 12px;border-top:1px solid #eef2ff;cursor:pointer}
+.suggest .s-item:first-child{border-top:0}
+.suggest .s-item:hover,.suggest .s-item.active{background:#eef2ff}
+
+.map-wrap{display:block;width:100%}
+.map{height:220px;border:1px solid var(--border);border-radius:12px;margin-top:8px}
+.hidden{display:none} /* ya lo tenés, sirve también para el mapa */

@@ -185,6 +185,28 @@
 
         </div>
 
+        <!-- ⬇️ Pegar dentro del <form id="reserveForm">, justo DESPUÉS del bloque de Localidad -->
+<div class="form__row">
+  <label>Ubicación del evento (calle y número)
+    <input id="fAddress" type="text" placeholder="Ej: Av. Corrientes 1234, CABA" autocomplete="off" />
+    <!-- Dropdown de sugerencias -->
+    <div id="addrSuggest" class="suggest hidden" role="listbox" aria-label="Sugerencias de direcciones"></div>
+    <p class="hint">Elegí una sugerencia para fijar el punto exacto.</p>
+  </label>
+
+  <!-- Mapa chico, aparece solo si hay búsqueda/selección -->
+  <div class="map-wrap">
+    <div id="addrMap" class="map hidden" aria-label="Mapa de ubicación"></div>
+  </div>
+</div>
+
+<!-- Campos ocultos para enviar por mail / guardar -->
+<input type="hidden" id="addr_lat" name="addr_lat">
+<input type="hidden" id="addr_lng" name="addr_lng">
+<input type="hidden" id="addr_display" name="addr_display">
+<input type="hidden" id="addr_osm_id" name="addr_osm_id">
+
+
         <div class="form__row">
           <label>Fecha
             <input id="formDate" type="date" required class="locked-input" aria-readonly="true" onfocus="this.blur()" />
@@ -250,7 +272,8 @@
       </div>
     </div>
   </footer>
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./main.js"></script>
 </body>
 </html>

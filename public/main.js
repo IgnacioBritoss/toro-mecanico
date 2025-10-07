@@ -159,6 +159,132 @@ function updateSummary(){
   summaryText && (summaryText.textContent = `${dateStr} • ${pad2(selectedHour)}:00 hs`);
 }
 
+// =======================
+// UBICACIÓN DEL EVENTO
+// (Leaflet + Nominatim)
+// =======================
+const fAddress    = document.getElementById("fAddress");
+const addrSuggest = document.getElementById("addrSuggest");
+const addrMapEl   = document.getElementById("addrMap");
+
+const addrLat     = document.getElementById("addr_lat");
+const addrLng     = document.getElementById("addr_lng");
+const addrDisplay = document.getElementById("addr_display");
+const addrOsmId   = document.getElementById("addr_osm_id");
+
+// Centro inicial (CABA) + sesgo a AMBA
+const START = { lat: -34.6037, lng: -58.3816, zoom: 13 };
+// west, north, east, south
+const VIEWBOX = "-58.9,-34.2,-57.9,-34.9";
+const USE_VIEWBOX = true;
+
+let addrMap, addrMarker, debounceTimer = null, selectedIndex = -1, currentData = [];
+
+function ensureMapVisible(){
+  if (!addrMapEl) return;
+  if (addrMapEl.classList.contains("hidden")) {
+    addrMapEl.classList.remove("hidden");
+  }
+  if (!addrMap && window.L){
+    addrMap = L.map('addrMap').setView([START.lat, START.lng], START.zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(addrMap);
+
+    addrMarker = L.marker([START.lat, START.lng], { draggable: true }).addTo(addrMap);
+    addrMarker.on('dragend', () => {
+      const { lat, lng } = addrMarker.getLatLng();
+      setHidden(lat, lng, addrDisplay?.value || "", addrOsmId?.value || "");
+    });
+
+    setTimeout(() => addrMap.invalidateSize(), 50);
+  } else if (addrMap) {
+    setTimeout(() => addrMap.invalidateSize(), 50);
+  }
+}
+
+function fetchSuggest(q){
+  const base = 'https://nominatim.openstreetmap.org/search';
+  const params = new URLSearchParams({
+    q, format: 'jsonv2', addressdetails: '1',
+    countrycodes: 'ar', limit: '6', 'accept-language': 'es'
+  });
+  if (USE_VIEWBOX){ params.append('viewbox', VIEWBOX); params.append('bounded','1'); }
+
+  fetch(`${base}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+    .then(r => r.json())
+    .then(showSuggest)
+    .catch(() => hideSuggest());
+}
+
+function showSuggest(list){
+  currentData = list || [];
+  if (!addrSuggest) return;
+  if (!currentData.length) { hideSuggest(); return; }
+  addrSuggest.innerHTML = currentData.map((it, i) =>
+    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${esc(it.display_name||'')}</div>`
+  ).join('');
+  selectedIndex = 0;
+  addrSuggest.classList.remove("hidden");
+  [...addrSuggest.querySelectorAll('.s-item')].forEach(div => {
+    div.addEventListener('mousedown', () => {
+      const i = Number(div.getAttribute('data-i'));
+      choose(currentData[i]);
+    });
+  });
+}
+
+function hideSuggest(){
+  if (!addrSuggest) return;
+  addrSuggest.classList.add("hidden");
+  addrSuggest.innerHTML = '';
+  currentData = [];
+  selectedIndex = -1;
+}
+
+function moveActive(delta){
+  const items = addrSuggest ? [...addrSuggest.querySelectorAll('.s-item')] : [];
+  if (!items.length) return;
+  selectedIndex = (selectedIndex + delta + items.length) % items.length;
+  items.forEach((el, idx) => el.classList.toggle('active', idx === selectedIndex));
+  items[selectedIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function choose(item){
+  hideSuggest();
+  ensureMapVisible();
+  const nice = item.display_name || '';
+  const lat = Number(item.lat), lng = Number(item.lon);
+  if (fAddress) fAddress.value = nice;
+  setHidden(lat, lng, nice, item.osm_id || '');
+  if (addrMarker) addrMarker.setLatLng([lat, lng]);
+  if (addrMap) addrMap.setView([lat, lng], 18);
+}
+
+function setHidden(lat, lng, displayName, osmId){
+  if (addrLat) addrLat.value = lat ?? '';
+  if (addrLng) addrLng.value = lng ?? '';
+  if (addrDisplay) addrDisplay.value = displayName ?? '';
+  if (addrOsmId) addrOsmId.value = osmId ?? '';
+}
+
+function esc(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Eventos del input
+fAddress?.addEventListener('input', () => {
+  const q = fAddress.value.trim();
+  if (debounceTimer) clearTimeout(debounceTimer);
+  if (q.length < 3) { hideSuggest(); return; }
+  debounceTimer = setTimeout(() => { ensureMapVisible(); fetchSuggest(q); }, 320);
+});
+fAddress?.addEventListener('keydown', (e) => {
+  if (!addrSuggest || addrSuggest.classList.contains('hidden')) return;
+  if (e.key === 'ArrowDown'){ e.preventDefault(); moveActive(1); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); moveActive(-1); }
+  else if (e.key === 'Enter'){ e.preventDefault(); if (selectedIndex>=0) choose(currentData[selectedIndex]); }
+  else if (e.key === 'Escape'){ hideSuggest(); }
+});
+
 // --------- enviar reserva ----------
 async function onSubmitReservation(e){
   e.preventDefault();
@@ -172,13 +298,29 @@ async function onSubmitReservation(e){
     message: fMsg.value.trim(),
     date: formDate.value,
     time: formTime.value,
-    plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h"
+    plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h",
+
+    // NUEVO: ubicación precisa
+    location: {
+      address: (document.getElementById('fAddress')?.value || '').trim(),
+      lat: Number(addrLat?.value || 0),
+      lng: Number(addrLng?.value || 0),
+      display_name: addrDisplay?.value || '',
+      osm_id: addrOsmId?.value || ''
+    }
   };
 
   if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.zone||!payload.phone||!payload.postal_code){
     formHint.textContent="Completá todos los campos."; return;
   }
   if(payload.age<18){ formHint.textContent="Solo mayores de 18 años."; return; }
+
+  // Ubicación requerida
+  if (!payload.location.lat || !payload.location.lng || !payload.location.display_name){
+    formHint.textContent = "Indicá la dirección y elegí una sugerencia para fijar el punto en el mapa.";
+    document.getElementById('fAddress')?.focus();
+    return;
+  }
 
   try{
     const res=await fetch("/api/reserve",{ method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(payload) });
@@ -188,6 +330,10 @@ async function onSubmitReservation(e){
     lastReservation = { id: data.reservation?.id, token: data.token };
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
+
+    // Limpiar ubicación en ocultos y re-ocultar mapa (opcional)
+    setHidden('', '', '', '');
+    addrMapEl?.classList.add('hidden');
 
     // Mostrar bloque de segundo paso y ocultar pago (hasta que confirme)
     secondStepBlock.classList.remove("hidden");
