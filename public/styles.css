@@ -47,17 +47,28 @@ body{
 .hero__bullets{display:grid;gap:6px;margin:16px 0 0;padding-left:18px}
 .hero__bullets li{color:#1f2937}
 
-.hero__media .media__frame{
-  border-radius:18px;
-  background:#eef2ff; /* fondo suave por si la imagen no ocupa 100% en algún breakpoint */
-  border:1px solid rgba(255,255,255,.7);
-  box-shadow:0 10px 30px rgba(0,0,0,.08);
-  overflow:hidden;
-  /* IMPORTANTE: quitamos el aspect-ratio fijo para que NO recorte */
-  /* aspect-ratio:16/9;  <-- eliminar si lo tenías */
+/* === SOLO IMAGEN (sin marco atrás) =============================== */
+.hero__media{
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
-/* Imagen de fondo que cubre y recorta bordes */
-.img-cover{background-image:var(--img);background-size:cover;background-position:center}
+.hero__img{
+  display:block;
+  width:100%;
+  height:auto;             /* no se deforma */
+  border-radius:22px;      /* bordes redondeados */
+  box-shadow:0 18px 38px rgba(15,23,42,.18), 0 4px 10px rgba(15,23,42,.12);
+}
+/* En desktop la hacemos “un poco más ancha que alta” visualmente
+   limitando la altura si la imagen es muy alta (sin recortar ni deformar). */
+@media (min-width: 900px){
+  .hero__img{
+    max-height:520px;      /* ajustable; quitalo si querés toda la altura */
+    object-fit:contain;    /* no recorta si llega al tope */
+  }
+}
+
 .media__placeholder{color:#64748b;font-size:14px}
 .hint{color:#64748b;font-size:12px;margin-top:6px}
 
@@ -200,47 +211,28 @@ input[type="number"] {
   -moz-appearance: none;
   cursor: pointer;
 
-  /* base */
   background:
-    linear-gradient(#fff, #fff) padding-box, /* fondo del control */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'><path fill='%230f172a' d='M7 10l5 5 5-5'/></svg>") no-repeat right 14px center / 18px 18px; /* chevron */
+    linear-gradient(#fff, #fff) padding-box,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'><path fill='%230f172a' d='M7 10l5 5 5-5'/></svg>") no-repeat right 14px center / 18px 18px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 12px 44px 12px 12px; /* espacio para la flecha */
+  padding: 12px 44px 12px 12px;
   box-shadow: inset 0 2px 6px rgba(0,0,0,.04);
   transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
   color: var(--text);
   background-color: #fff;
 }
-
-/* hover/focus para feedback */
-#fLocality:hover {
-  border-color: #cbd5e1;
-  background-color: #f8fafc;
-}
-#fLocality:focus {
-  outline: none;
-  border-color: #94a3b8;
-  box-shadow: 0 0 0 3px rgba(148,163,184,.25);
-}
-
-/* color del placeholder (opción vacía) y de las opciones */
-#fLocality:invalid { color: #94a3b8; }   /* “Elegí tu zona” más suave */
+#fLocality:hover { border-color: #cbd5e1; background-color: #f8fafc; }
+#fLocality:focus { outline: none; border-color: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,.25); }
+#fLocality:invalid { color: #94a3b8; }
 #fLocality option { color: var(--text); }
 
-
 /* === Select custom “lindo” ====================================== */
-.nice-select-wrap {
-  position: relative;
-}
-
-/* Escondemos el select nativo pero sigue recibiendo foco/validación */
+.nice-select-wrap { position: relative; }
 .nice-select-wrap select {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  opacity: 0; pointer-events: none; /* el shell recibe los clics */
+  opacity: 0; pointer-events: none;
 }
-
-/* Botón cerrado */
 .nice-select-display{
   width:100%; text-align:left; cursor:pointer;
   background:#fff; color:var(--text);
@@ -251,8 +243,6 @@ input[type="number"] {
 }
 .nice-select-display:hover{ background:#f8fafc; border-color:#cbd5e1; }
 .nice-select-display:focus{ outline: none; }
-
-/* Indicador (flecha) */
 .nice-select-caret{
   position:absolute; right:12px; top:50%; translate:0 -50%;
   width:18px; height:18px; pointer-events:none;
@@ -261,11 +251,7 @@ input[type="number"] {
     no-repeat center / 18px 18px;
   transition: transform .15s ease;
 }
-.nice-select-display[aria-expanded="true"] .nice-select-caret{
-  transform: rotate(180deg) translateY(50%);
-}
-
-/* Lista desplegable */
+.nice-select-display[aria-expanded="true"] .nice-select-caret{ transform: rotate(180deg) translateY(50%); }
 .nice-select-list{
   position:absolute; z-index:40; left:0; right:0; top:calc(100% + 6px);
   list-style:none; margin:0; padding:6px;
@@ -274,33 +260,17 @@ input[type="number"] {
   max-height:280px; overflow:auto; display:none;
 }
 .nice-select-display[aria-expanded="true"] + .nice-select-list{ display:block; }
-
-/* Item */
 .nice-select-list li{
   padding:10px 12px; border-radius:10px; cursor:pointer;
   transition: background .12s ease, color .12s ease;
 }
-.nice-select-list li[aria-selected="true"]{
-  background:#0f172a; color:#fff;
-}
-.nice-select-list li:hover{
-  background:#eef2ff;
-}
-
-/* Placeholder “Elegí tu zona” más suave cuando está vacío */
+.nice-select-list li[aria-selected="true"]{ background:#0f172a; color:#fff; }
+.nice-select-list li:hover{ background:#eef2ff; }
 .nice-select-wrap.is-empty .nice-select-text{ color:#94a3b8; }
-
-/* Accesibilidad foco visible */
 .nice-select-display:focus-visible{
   box-shadow: 0 0 0 3px rgba(148,163,184,.25);
   border-color:#94a3b8;
 }
-
-/* === (ya tenías) Quitar spinners de Edad ======================== */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
-input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }
-
 
 /* Campos bloqueados (fecha/hora en el form) */
 .locked-input{
@@ -309,45 +279,6 @@ input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }
   border-color: var(--border);
   cursor: not-allowed;
 }
-
-/* eliminamos cualquier spinner visual posible */
 .locked-input::-webkit-calendar-picker-indicator{
   opacity: 0; pointer-events: none;
-}
-
-
-
-/* Hero */
-.hero{padding:56px 0}
-.hero__grid{display:grid;gap:28px}
-@media(min-width:900px){.hero__grid{grid-template-columns:1.1fr .9fr}}
-.hero__copy h1{font-size:40px;line-height:1.1;margin:0}
-.hero__copy p{margin:14px 0 0;color:var(--muted);font-size:18px}
-.u-underline{box-shadow:inset 0 -10px 0 0 var(--accent)}
-.hero__cta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
-.hero__bullets{display:grid;gap:6px;margin:16px 0 0;padding-left:18px}
-.hero__bullets li{color:#1f2937}
-
-/* Marco que SE ADAPTA al alto de la imagen (sin recortes) */
-.hero__media{display:flex;align-items:center}
-.hero__media .media__frame{
-  background:#eef2ff;             /* fondo suave */
-  border:1px solid rgba(255,255,255,.7);
-  border-radius:18px;
-  box-shadow:0 10px 30px rgba(0,0,0,.08);
-  overflow:hidden;                 /* bordes redondeados recortan la imagen */
-  /* IMPORTANTE: NO ponemos aspect-ratio aquí, así el alto sigue a la imagen */
-}
-.media__img{
-  display:block;
-  width:100%;      /* ocupa el ancho de la columna */
-  height:auto;     /* mantiene proporción y NO recorta */
-}
-
-/* Opcional: limitar altura máxima en desktop para que no quede gigante */
-@media (min-width: 900px){
-  .media__img{
-    max-height: 520px;   /* ajustable; elimina si querés todo su alto */
-    object-fit: contain; /* no recorta si llega al tope de altura */
-  }
 }
