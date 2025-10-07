@@ -1,9 +1,6 @@
 import { pool } from "./db.js";
 import nodemailer from "nodemailer";
-
-export const config = {
-  runtime: "nodejs"
-};
+export const config = { runtime: "nodejs" };
 
 function isValidEmail(e) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || "");
@@ -19,64 +16,67 @@ export default async function handler(req, res) {
     if (!name || !email || !age || !date || !time) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ error: "Email inválido" });
-    }
-    if (parseInt(age, 10) < 18) {
-      return res.status(400).json({ error: "Solo mayores de 18 años" });
-    }
+    if (!isValidEmail(email)) return res.status(400).json({ error: "Email inválido" });
+    if (parseInt(age, 10) < 18) return res.status(400).json({ error: "Solo mayores de 18 años" });
+
     const planNorm = (plan || "hora").toLowerCase();
     if (!["hora","medio","completo"].includes(planNorm)) {
       return res.status(400).json({ error: "Plan inválido" });
     }
 
-    // Transacción simple
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
-      // Upsert de usuario por email
-      const upsertUser = `
-        INSERT INTO users (name, email, age, zone)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (email) DO UPDATE SET
-          name = EXCLUDED.name,
-          age = EXCLUDED.age,
-          zone = EXCLUDED.zone,
-          updated_at = now()
-        RETURNING id, email, name, age, zone;
-      `;
-      const ures = await client.query(upsertUser, [name, email, age, zone || null]);
+      // Upsert usuario por email
+      const ures = await client.query(
+        `INSERT INTO users (name, email, age, zone)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (email) DO UPDATE SET
+           name=EXCLUDED.name, age=EXCLUDED.age, zone=EXCLUDED.zone, updated_at=now()
+         RETURNING id, name, email, age, zone`,
+        [name, email, age, zone || null]
+      );
       const user = ures.rows[0];
 
-      // Evitar doble booking por fecha+hora
-      const insertRes = `
-        INSERT INTO reservations (user_id, event_date, event_hour, plan, zone, message)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, event_date, event_hour, plan, zone, message, created_at;
-      `;
-      const rres = await client.query(insertRes, [
-        user.id,
-        date,                         // YYYY-MM-DD
-        parseInt(time.split(":")[0], 10), // HH
-        planNorm,
-        zone || null,
-        message || null
-      ]);
+      // Reglas de disponibilidad:
+      // - máx 2 reservas por día
+      // - no repetir la misma hora
+      const hourInt = parseInt(time.split(":")[0], 10);
+      const qDay = await client.query(
+        `SELECT event_hour FROM reservations WHERE event_date = $1`,
+        [date]
+      );
+      const takenHours = new Set(qDay.rows.map(r => r.event_hour));
+      if (qDay.rowCount >= 2) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." });
+      }
+      if (takenHours.has(hourInt)) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "Esa hora ya está ocupada." });
+      }
+
+      // Insertar reserva
+      const rres = await client.query(
+        `INSERT INTO reservations (user_id, event_date, event_hour, plan, zone, message)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING id, event_date, event_hour, plan, zone, message, created_at`,
+        [user.id, date, hourInt, planNorm, zone || null, message || null]
+      );
 
       await client.query("COMMIT");
       const reservation = rres.rows[0];
 
-      // Enviar email al propietario
-     const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "587", 10),
-  secure: process.env.SMTP_PORT === "465", // true solo si usás 465
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-});
+      // Email al propietario
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        secure: process.env.SMTP_PORT === "465",
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      });
 
-
-      const ownerEmail = process.env.TO_EMAIL || "britosignacio106@gmail.com";
+      const ownerEmail = process.env.TO_EMAIL || "britos.toro.147@gmail.com";
       const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
       const textBody = [
@@ -104,7 +104,6 @@ export default async function handler(req, res) {
         text: textBody
       });
 
-      // (Opcional) email de confirmación al usuario
       if (process.env.SEND_USER_MAIL === "true") {
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
@@ -118,10 +117,10 @@ export default async function handler(req, res) {
     } catch (e) {
       await client.query("ROLLBACK");
       if (e.code === "23505") {
-        // Violación de UNIQUE (fecha+hora)
         return res.status(409).json({ error: "Ese horario ya está reservado. Elegí otro." });
       }
-      throw e;
+      console.error(e);
+      return res.status(500).json({ error: "Error interno" });
     } finally {
       client.release();
     }

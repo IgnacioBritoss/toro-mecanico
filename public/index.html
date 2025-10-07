@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Toro Mecánico — Alquiler para eventos (CABA y GBA)</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="./styles.css" />
   <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas y traslado en AMBA. Reservá fecha y horario para tu evento." />
 </head>
 <body>
@@ -20,9 +20,9 @@
         <a href="#calendario">Disponibilidad</a>
         <a href="#galeria">Galería</a>
         <a href="#faq">FAQ</a>
-        <a href="#contacto">Contacto</a>
+        <a href="#reserva">Reserva</a>
       </nav>
-      <a id="waTop" class="btn btn--wa" target="_blank" rel="noreferrer">WhatsApp</a>
+      <!-- Botón de WhatsApp del top: eliminado -->
     </div>
   </header>
 
@@ -58,43 +58,30 @@
       <p class="section__subtitle">Tarifas orientativas. Pasanos tu zona y horario para cotizar con traslado.</p>
       <div class="cards">
         <article class="card">
-          <header class="card__head">
-            <h3>Por hora</h3>
-          </header>
+          <header class="card__head"><h3>Por hora</h3></header>
           <p class="card__price">$80.000 <span>/hora</span></p>
           <ul class="card__list">
-            <li>Operador incluido</li>
-            <li>Seguro y colchonetas</li>
-            <li>Traslado a domicilio*</li>
+            <li>Operador incluido</li><li>Seguro y colchonetas</li><li>Traslado a domicilio*</li>
           </ul>
           <a href="#calendario" class="btn btn--block">Reservar</a>
           <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
         </article>
-
         <article class="card card--featured">
           <header class="card__head">
-            <h3>Medio evento</h3>
-            <span class="badge">Más elegido</span>
+            <h3>Medio evento</h3><span class="badge">Más elegido</span>
           </header>
           <p class="card__price">$180.000 <span>/3 hs</span></p>
           <ul class="card__list">
-            <li>Operador incluido</li>
-            <li>Seguro y colchonetas</li>
-            <li>Traslado a domicilio*</li>
+            <li>Operador incluido</li><li>Seguro y colchonetas</li><li>Traslado a domicilio*</li>
           </ul>
           <a href="#calendario" class="btn btn--block btn--primary">Reservar</a>
           <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
         </article>
-
         <article class="card">
-          <header class="card__head">
-            <h3>Evento completo</h3>
-          </header>
+          <header class="card__head"><h3>Evento completo</h3></header>
           <p class="card__price">$300.000 <span>/5 hs</span></p>
           <ul class="card__list">
-            <li>Operador incluido</li>
-            <li>Seguro y colchonetas</li>
-            <li>Traslado a domicilio*</li>
+            <li>Operador incluido</li><li>Seguro y colchonetas</li><li>Traslado a domicilio*</li>
           </ul>
           <a href="#calendario" class="btn btn--block">Reservar</a>
           <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
@@ -109,7 +96,7 @@
       <div class="section__header">
         <div>
           <h2 class="section__title">Disponibilidad</h2>
-          <p class="section__subtitle">Elegí una fecha y un horario tentativo. Confirmamos por WhatsApp y email.</p>
+          <p class="section__subtitle">Elegí una fecha y un horario tentativo. Confirmamos por email.</p>
         </div>
         <div class="cal__nav">
           <button id="prevMonth" class="btn btn--icon" aria-label="Mes anterior">←</button>
@@ -139,10 +126,8 @@
             <div id="summaryText" class="summary__value">Elegí un día • --:-- hs</div>
           </div>
 
-          <a id="waBtn" class="btn btn--block btn--wa" target="_blank" rel="noreferrer">
-            Consultar y reservar por WhatsApp
-          </a>
-          <p class="hint">La confirmación y seña se coordinan por chat.</p>
+          <button id="goToForm" class="btn btn--block btn--primary">Reservar ahora</button>
+          <p class="hint">La confirmación y seña se coordinan por chat/email.</p>
         </aside>
       </div>
     </div>
@@ -153,12 +138,8 @@
     <div class="container">
       <h2 class="section__title">Galería</h2>
       <div class="gallery">
-        <div class="gallery__item"></div>
-        <div class="gallery__item"></div>
-        <div class="gallery__item"></div>
-        <div class="gallery__item"></div>
-        <div class="gallery__item"></div>
-        <div class="gallery__item"></div>
+        <div class="gallery__item"></div><div class="gallery__item"></div><div class="gallery__item"></div>
+        <div class="gallery__item"></div><div class="gallery__item"></div><div class="gallery__item"></div>
       </div>
       <p class="hint">(Reemplazar por fotos reales: armado, gente jugando, colchonetas y operador)</p>
     </div>
@@ -187,7 +168,7 @@
         </details>
         <details class="faq__item">
           <summary>¿Cómo se confirma la reserva?</summary>
-          <p>Por WhatsApp coordinamos la seña y los datos del evento. Emitimos comprobante si necesitás.</p>
+          <p>Por email coordinamos la seña y los datos del evento. Emitimos comprobante si necesitás.</p>
         </details>
         <details class="faq__item">
           <summary>¿Es apto para niños?</summary>
@@ -201,18 +182,11 @@
     </div>
   </section>
 
-  <!-- Contacto / Formulario de reserva -->
-  <section id="contacto" class="section">
-    <div class="container grid grid--2">
-      <div>
-        <h2 class="section__title">Contacto</h2>
-        <p class="section__subtitle">Completá tus datos para reservar. Solo mayores de 18.</p>
-        <ul class="contact-list">
-          <li><a href="tel:+5491132895416">+54 9 11 3289-5416</a></li>
-          <li>Instagram / Facebook: <strong>@TorazoEventos</strong></li>
-          <li>Base en CABA — Enviamos a todo AMBA</li>
-        </ul>
-      </div>
+  <!-- Reserva -->
+  <section id="reserva" class="section">
+    <div class="container">
+      <h2 class="section__title">Reserva</h2>
+      <p class="section__subtitle">Completá tus datos. Solo mayores de 18.</p>
 
       <form id="reserveForm" class="form" novalidate>
         <label>Nombre y apellido
@@ -244,11 +218,11 @@
         </fieldset>
 
         <label>Mensaje
-          <textarea id="fMsg" rows="3" placeholder="Contame del evento (cumple, casamiento, empresa, etc.)"></textarea>
+          <textarea id="fMsg" rows="3" placeholder="Contame del evento"></textarea>
         </label>
 
         <button type="submit" class="btn btn--primary">Enviar reserva</button>
-        <p id="formHint" class="hint">(Te responderemos por email/WhatsApp.)</p>
+        <p id="formHint" class="hint">(Te responderemos por email.)</p>
       </form>
     </div>
   </section>
@@ -258,6 +232,7 @@
     <div class="container footer__inner">
       <p>© <span id="year"></span> Toro Mecánico — Eventos</p>
       <div class="footer__links">
+        <a href="https://wa.me/5491132895416" target="_blank" rel="noreferrer">Soporte por WhatsApp</a>
         <a href="#">Términos</a>
         <a href="#">Privacidad</a>
         <a href="#">Admin</a>
@@ -265,6 +240,6 @@
     </div>
   </footer>
 
-  <script src="main.js"></script>
+  <script src="./main.js"></script>
 </body>
 </html>
