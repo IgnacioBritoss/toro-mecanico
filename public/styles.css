@@ -48,9 +48,13 @@ body{
 .hero__bullets li{color:#1f2937}
 
 .hero__media .media__frame{
-  aspect-ratio:16/9;border-radius:18px;background:rgba(0,0,0,.06);
-  border:1px solid rgba(255,255,255,.7);box-shadow:0 10px 30px rgba(0,0,0,.08);
-  overflow:hidden;display:grid;place-items:center
+  aspect-ratio:16/9;
+  border-radius:18px;
+  background: #eef2ff;             /* fondo suave para las bandas */
+  border:1px solid rgba(255,255,255,.7);
+  box-shadow:0 10px 30px rgba(0,0,0,.08);
+  overflow:hidden;
+  position:relative;
 }
 /* Imagen de fondo que cubre y recorta bordes */
 .img-cover{background-image:var(--img);background-size:cover;background-position:center}
@@ -328,7 +332,8 @@ input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }
 .media__img{
   width:100%;
   height:100%;
-  object-fit:cover;      /* llena el cuadro recortando lo que sobre */
+  object-fit:contain;               /* <- antes: cover */
   object-position:center;
   display:block;
+  background:#eef2ff;               /* mismo fondo que el marco */
 }
