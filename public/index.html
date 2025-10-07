@@ -181,13 +181,16 @@
         </div>
 
         <div class="form__row">
-          <label>Fecha
-            <input id="formDate" type="date" required />
-          </label>
-          <label>Horario
-            <input id="formTime" type="time" required />
-          </label>
-        </div>
+  <label>Fecha
+    <input id="formDate" type="date" required
+           class="locked-input" aria-readonly="true" onfocus="this.blur()" />
+  </label>
+  <label>Horario
+    <input id="formTime" type="time" required
+           class="locked-input" aria-readonly="true" onfocus="this.blur()" />
+  </label>
+</div>
+
 
         <fieldset class="plan plan--pretty">
           <legend>Elegí tu plan</legend>

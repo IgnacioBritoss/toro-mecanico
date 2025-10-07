@@ -296,3 +296,17 @@ input[type="number"] {
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }
+
+
+/* Campos bloqueados (fecha/hora en el form) */
+.locked-input{
+  background: #f8fafc;
+  color: var(--text);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+/* eliminamos cualquier spinner visual posible */
+.locked-input::-webkit-calendar-picker-indicator{
+  opacity: 0; pointer-events: none;
+}

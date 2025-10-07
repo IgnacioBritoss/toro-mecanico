@@ -44,9 +44,30 @@ function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pa
 function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
 function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
 
+// --- Bloquear edición directa de Fecha/Hora en el form ---
+function lockDateTimeFields() {
+  if (!formDate || !formTime) return;
+
+  const blockEv = (e) => e.preventDefault();
+  ["keydown","keypress","keyup","wheel","paste","cut","contextmenu","beforeinput","input"].forEach(ev => {
+    formDate.addEventListener(ev, blockEv);
+    formTime.addEventListener(ev, blockEv);
+  });
+
+  formDate.style.pointerEvents = "none";
+  formTime.style.pointerEvents = "none";
+}
+
+function setFormDateTimeFromSelection() {
+  if (selectedDate) formDate.value = toInputDate(selectedDate);
+  if (selectedHour) formTime.value = `${pad2(selectedHour)}:00`;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+  lockDateTimeFields();                  // bloquear edición en el form
   await fetchAvailabilityForMonth(activeMonth);
   renderCalendar(); renderHours(); updateSummary();
+  setFormDateTimeFromSelection();        // por si ya hay selección
 
   prevMonthBtn?.addEventListener("click", async () => {
     activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1);
@@ -58,8 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   goToFormBtn?.addEventListener("click", () => {
-    if (selectedDate) formDate.value = toInputDate(selectedDate);
-    if (selectedHour) formTime.value = `${pad2(selectedHour)}:00`;
+    setFormDateTimeFromSelection(); // aseguramos sincronización
     document.getElementById("reserva").scrollIntoView({ behavior:"smooth" });
   });
 
@@ -254,14 +274,10 @@ async function onSecondStep(){
   const list = wrap.querySelector('.nice-select-list');
   const text = wrap.querySelector('.nice-select-text');
 
-  // crea los <li> a partir de las <option>
   function buildList(){
     list.innerHTML = '';
-    Array.from(sel.options).forEach((opt, idx) => {
-      // si querés ocultar el placeholder en la lista, podés saltar idx===0
+    Array.from(sel.options).forEach((opt) => {
       const li = document.createElement('li');
-      // valor seguro: si no hay atributo value, el .value = texto igualmente,
-      // pero dejamos explícito el fallback
       const v = opt.getAttribute('value') ?? opt.textContent.trim();
       li.dataset.value = v;
       li.textContent = opt.textContent;
@@ -269,7 +285,6 @@ async function onSecondStep(){
       if (opt.selected) li.setAttribute('aria-selected','true');
 
       li.addEventListener('click', () => {
-        // setea el select de forma robusta
         setSelectValue(v);
         close();
         btn.focus();
@@ -280,7 +295,6 @@ async function onSecondStep(){
   }
 
   function setSelectValue(v){
-    // Buscamos la option por value sin usar CSS.escape
     let foundIndex = -1;
     for (let i=0; i<sel.options.length; i++){
       if (sel.options[i].value === v){
@@ -288,7 +302,6 @@ async function onSecondStep(){
         break;
       }
     }
-    // si no la encuentra por value, probamos por texto (por si no había value)
     if (foundIndex === -1){
       for (let i=0; i<sel.options.length; i++){
         if (sel.options[i].textContent.trim() === v){
@@ -298,8 +311,7 @@ async function onSecondStep(){
       }
     }
     if (foundIndex !== -1){
-      sel.selectedIndex = foundIndex;     // <- cambia la selección real
-      // dispara eventos para que el form y tu app se enteren del cambio
+      sel.selectedIndex = foundIndex;
       sel.dispatchEvent(new Event('input',  {bubbles:true}));
       sel.dispatchEvent(new Event('change', {bubbles:true}));
       syncFromSelect();
@@ -308,12 +320,10 @@ async function onSecondStep(){
 
   function syncFromSelect(){
     const v = sel.value;
-    // texto visible
     const opt = sel.options[sel.selectedIndex] || sel.options[0];
     text.textContent = opt ? opt.textContent : 'Elegí tu zona';
     wrap.classList.toggle('is-empty', !v);
 
-    // marca seleccionado en la lista
     const items = list.querySelectorAll('li');
     items.forEach(li => {
       li.toggleAttribute('aria-selected', li.dataset.value === v ||
@@ -335,12 +345,9 @@ async function onSecondStep(){
   function onDoc(e){ if (!wrap.contains(e.target)) close(); }
   function onKey(e){ if (e.key === 'Escape') close(); }
 
-  // Eventos
   btn.addEventListener('click', toggle);
-  // Si alguien cambia el select (ej. autocompletado del navegador), mantenemos sincronizado
   sel.addEventListener('change', syncFromSelect);
 
-  // Init
   buildList();
   syncFromSelect();
 })();
