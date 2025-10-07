@@ -1,15 +1,14 @@
-// ======= Config básica =======
+// ======= Config =======
 const MAX_PER_DAY = 2;
 const HOURS = [12, 14, 16, 18, 20, 22];
-const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 let activeMonth = (() => { const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
 let selectedDate = null;
 let selectedHour = 18;
-let availability = {}; // { "YYYY-MM-DD": {count, hours:[] } }
+let availability = {};
+let lastReservation = null; // { id, token }
 
 // DOM
-const yearSpan = document.getElementById("year");
 const calTitle = document.getElementById("calTitle");
 const calGrid = document.getElementById("calGrid");
 const prevMonthBtn = document.getElementById("prevMonth");
@@ -18,10 +17,11 @@ const hourList = document.getElementById("hourList");
 const summaryText = document.getElementById("summaryText");
 const goToFormBtn = document.getElementById("goToForm");
 
-// Form reserva
 const reserveForm = document.getElementById("reserveForm");
 const fName = document.getElementById("fName");
 const fEmail = document.getElementById("fEmail");
+const fPhone = document.getElementById("fPhone");
+const fPostal = document.getElementById("fPostal");
 const fAge = document.getElementById("fAge");
 const fLocality = document.getElementById("fLocality");
 const fMsg = document.getElementById("fMsg");
@@ -29,44 +29,44 @@ const formDate = document.getElementById("formDate");
 const formTime = document.getElementById("formTime");
 const formHint = document.getElementById("formHint");
 
-// Opiniones
-const reviewForm = document.getElementById("reviewForm");
-const reviewName = document.getElementById("reviewName");
-const reviewText = document.getElementById("reviewText");
-const reviewHint = document.getElementById("reviewHint");
-const reviewsList = document.getElementById("reviewsList");
+// Paso 2 + Pago
+const secondStepBlock = document.getElementById("secondStepBlock");
+const secondStepBtn = document.getElementById("secondStepBtn");
+const secondStepHint = document.getElementById("secondStepHint");
+const paymentBlockManual = document.getElementById("paymentBlockManual");
+const mpLink1ars = document.getElementById("mp-link-1ars");
+const payWarn = document.getElementById("payWarn");
+
+// ---- helpers fecha/hora
+function pad2(n){ return String(n).padStart(2,"0"); }
+function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
+function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (yearSpan) yearSpan.textContent = new Date().getFullYear();
-
   await fetchAvailabilityForMonth(activeMonth);
-  renderCalendar();
-  renderHours();
-  updateSummary();
+  renderCalendar(); renderHours(); updateSummary();
 
-  prevMonthBtn.addEventListener("click", async () => {
+  prevMonthBtn?.addEventListener("click", async () => {
     activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1);
     await fetchAvailabilityForMonth(activeMonth); renderCalendar();
   });
-  nextMonthBtn.addEventListener("click", async () => {
+  nextMonthBtn?.addEventListener("click", async () => {
     activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1);
     await fetchAvailabilityForMonth(activeMonth); renderCalendar();
   });
 
-  goToFormBtn.addEventListener("click", () => {
+  goToFormBtn?.addEventListener("click", () => {
     if (selectedDate) formDate.value = toInputDate(selectedDate);
     if (selectedHour) formTime.value = `${pad2(selectedHour)}:00`;
-    document.getElementById("reserva").scrollIntoView({ behavior: "smooth" });
+    document.getElementById("reserva").scrollIntoView({ behavior:"smooth" });
   });
 
-  reserveForm.addEventListener("submit", onSubmitReservation);
-
-  // Opiniones
-  reviewForm.addEventListener("submit", onSubmitReview);
-  await loadReviews();
+  reserveForm?.addEventListener("submit", onSubmitReservation);
+  secondStepBtn?.addEventListener("click", onSecondStep);
 });
 
-// --------- Calendario ----------
+// --------- calendario/horas/summary ----------
 function buildMonthGrid(baseDate){
   const y=baseDate.getFullYear(), m=baseDate.getMonth();
   const first=new Date(y,m,1); const firstW=(first.getDay()+6)%7;
@@ -76,7 +76,6 @@ function buildMonthGrid(baseDate){
   while(cells.length%7!==0) cells.push(null);
   return cells;
 }
-
 async function fetchAvailabilityForMonth(date){
   const start=new Date(date.getFullYear(), date.getMonth(), 1);
   const end=new Date(date.getFullYear(), date.getMonth()+1, 0);
@@ -86,14 +85,13 @@ async function fetchAvailabilityForMonth(date){
     availability = res.ok ? (await res.json()).days || {} : {};
   }catch{ availability = {}; }
 }
-
 function renderCalendar(){
   const grid = buildMonthGrid(activeMonth);
-  calTitle.textContent = `${monthNames[activeMonth.getMonth()]} ${activeMonth.getFullYear()}`;
+  if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
   calGrid.innerHTML = "";
   grid.forEach(d=>{
-    const btn = document.createElement("button");
-    btn.className = "cal__day";
+    const btn=document.createElement("button");
+    btn.className="cal__day";
     if(!d){ btn.classList.add("cal__day--muted"); btn.disabled=true; }
     else{
       const key = toInputDate(d);
@@ -105,8 +103,11 @@ function renderCalendar(){
         if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
         btn.addEventListener("click", ()=>{
           selectedDate=d; formDate.value=toInputDate(d);
-          const taken=new Set(info.hours||[]);
-          if(taken.has(selectedHour)){ const free=HOURS.find(h=>!taken.has(h)); if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; } }
+          const taken=new Set((availability[key]?.hours)||[]);
+          if(taken.has(selectedHour)){
+            const free=HOURS.find(h=>!taken.has(h));
+            if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
+          }
           renderCalendar(); renderHours(); updateSummary();
         });
       }
@@ -114,7 +115,6 @@ function renderCalendar(){
     calGrid.appendChild(btn);
   });
 }
-
 function renderHours(){
   hourList.innerHTML = "";
   const key = selectedDate ? toInputDate(selectedDate) : null;
@@ -133,38 +133,44 @@ function renderHours(){
     hourList.appendChild(b);
   });
 }
-
 function updateSummary(){
   const dateStr = selectedDate ? toLocaleDate(selectedDate) : "Elegí un día";
-  summaryText.textContent = `${dateStr} • ${pad2(selectedHour)}:00 hs`;
+  summaryText && (summaryText.textContent = `${dateStr} • ${pad2(selectedHour)}:00 hs`);
 }
 
-// --------- Reserva ----------
+// --------- enviar reserva ----------
 async function onSubmitReservation(e){
   e.preventDefault();
-  const name=fName.value.trim();
-  const email=fEmail.value.trim();
-  const age=parseInt(fAge.value,10);
-  const locality=fLocality.value.trim();
-  const message=fMsg.value.trim();
-  const date=formDate.value;
-  const time=formTime.value;
-  const plan=(document.querySelector('input[name="plan"]:checked')||{}).value || "1h";
+  const payload = {
+    name: fName.value.trim(),
+    email: fEmail.value.trim(),
+    phone: fPhone.value.trim(),
+    postal_code: fPostal.value.trim(),
+    age: parseInt(fAge.value,10),
+    zone: fLocality.value.trim(),
+    message: fMsg.value.trim(),
+    date: formDate.value,
+    time: formTime.value,
+    plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h"
+  };
 
-  if(!name||!email||!age||!date||!time||!locality){ formHint.textContent="Completá todos los campos."; return; }
-  if(age<18){ formHint.textContent="Solo mayores de 18 años."; return; }
+  if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.zone||!payload.phone||!payload.postal_code){
+    formHint.textContent="Completá todos los campos."; return;
+  }
+  if(payload.age<18){ formHint.textContent="Solo mayores de 18 años."; return; }
 
   try{
-    const res=await fetch("/api/reserve",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ name, email, age, zone:locality, message, date, time, plan })
-    });
+    const res=await fetch("/api/reserve",{ method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(payload) });
     const data=await res.json();
     if(!res.ok){ formHint.textContent=data.error||"No se pudo procesar la reserva."; return; }
 
-    formHint.textContent="Reserva enviada. Revisá tu email para aceptarla y señar el 10%.";
+    lastReservation = { id: data.reservation?.id, token: data.token };
+    formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
+
+    secondStepBlock.classList.remove("hidden");
+    secondStepHint.textContent="";
+    paymentBlockManual.classList.add("hidden");
 
     await fetchAvailabilityForMonth(activeMonth);
     renderCalendar(); renderHours(); updateSummary();
@@ -173,42 +179,36 @@ async function onSubmitReservation(e){
   }
 }
 
-// --------- Opiniones ----------
-async function onSubmitReview(e){
-  e.preventDefault();
-  const name = reviewName.value.trim();
-  const text = reviewText.value.trim();
-  const stars = parseInt((document.querySelector('input[name="stars"]:checked')||{}).value||"1",10);
-  if(!name || !text){ reviewHint.textContent="Completá nombre y comentario."; return; }
-  try{
-    const r=await fetch("/api/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,text,stars})});
-    const d=await r.json();
-    if(!r.ok){ reviewHint.textContent=d.error||"No se pudo guardar."; return; }
-    reviewHint.textContent="¡Gracias por tu opinión!";
-    reviewForm.reset(); await loadReviews();
-  }catch{ reviewHint.textContent="Error de red."; }
-}
+// --------- segundo paso ----------
+async function onSecondStep(){
+  if(!lastReservation?.id || !lastReservation?.token){
+    secondStepHint.textContent="No encontramos tu reserva. Volvé a enviarla.";
+    return;
+  }
+  secondStepBtn.disabled = true;
+  secondStepHint.textContent = "Avisando al dueño...";
 
-async function loadReviews(){
   try{
-    const r=await fetch("/api/review?recent=1");
-    const d=await r.json();
-    reviewsList.innerHTML = "";
-    (d.items||[]).forEach(x=>{
-      const el=document.createElement("div");
-      el.className="review";
-      el.innerHTML = `
-        <div><strong>${escapeHtml(x.name)}</strong> — ${"★".repeat(x.stars)}${"☆".repeat(5-x.stars)}</div>
-        <div class="review__meta">${new Date(x.created_at).toLocaleDateString("es-AR")}</div>
-        <div>${escapeHtml(x.text)}</div>`;
-      reviewsList.appendChild(el);
+    const r = await fetch("/api/confirm-step",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ id:lastReservation.id, token:lastReservation.token })
     });
-  }catch{ /* noop */ }
-}
+    const d = await r.json();
+    if(!r.ok){ secondStepHint.textContent = d.error || "No se pudo preparar el pago."; secondStepBtn.disabled=false; return; }
 
-// Helpers
-function sameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
-function pad2(n){ return String(n).padStart(2,"0"); }
-function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); } catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
-function toInputDate(d){ const yyyy=d.getFullYear(); const mm=pad2(d.getMonth()+1); const dd=pad2(d.getDate()); return `${yyyy}-${mm}-${dd}`; }
-function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
+    // Mostrar botón de pago
+    if (d.payLink){
+      mpLink1ars.href = d.payLink;
+      payWarn.textContent = "";
+    }else{
+      mpLink1ars.removeAttribute("href");
+      payWarn.textContent = "El link de pago todavía no está configurado.";
+    }
+    paymentBlockManual.classList.remove("hidden");
+    secondStepHint.textContent = "Listo. Apretá el botón para ir al pago.";
+  }catch{
+    secondStepHint.textContent="Error de red. Probá de nuevo.";
+    secondStepBtn.disabled=false;
+  }
+}

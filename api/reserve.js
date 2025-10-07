@@ -16,8 +16,8 @@ export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
   try{
-    const { name, email, age, zone, message, date, time, plan } = req.body || {};
-    if (!name || !email || !age || !date || !time || !zone)
+    const { name, email, phone, postal_code, age, zone, message, date, time, plan } = req.body || {};
+    if (!name || !email || !age || !date || !time || !zone || !phone || !postal_code)
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     if (!isValidEmail(email)) return res.status(400).json({ error: "Email inválido" });
     if (parseInt(age,10) < 18) return res.status(400).json({ error: "Solo mayores de 18 años" });
@@ -32,25 +32,23 @@ export default async function handler(req, res){
     try{
       await client.query("BEGIN");
 
-      // Upsert user
       const u = await client.query(
-        `INSERT INTO users (name, email, age, zone)
-         VALUES ($1,$2,$3,$4)
+        `INSERT INTO users (name, email, age, zone, phone, postal_code)
+         VALUES ($1,$2,$3,$4,$5,$6)
          ON CONFLICT (email) DO UPDATE SET
-           name=EXCLUDED.name, age=EXCLUDED.age, zone=EXCLUDED.zone, updated_at=now()
-         RETURNING id, name, email, age, zone`,
-        [name, email, age, zone || null]
+           name=EXCLUDED.name, age=EXCLUDED.age, zone=EXCLUDED.zone,
+           phone=EXCLUDED.phone, postal_code=EXCLUDED.postal_code, updated_at=now()
+         RETURNING id, name, email, age, zone, phone, postal_code`,
+        [name, email, age, zone || null, phone || null, postal_code || null]
       );
       user = u.rows[0];
 
-      // reglas: máximo 2 por día / no duplicar hora
       const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1`, [date]);
       if (qDay.rowCount >= 2){ await client.query("ROLLBACK"); return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." }); }
       if (new Set(qDay.rows.map(r=>r.event_hour)).has(hourInt)){
         await client.query("ROLLBACK"); return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // Insert reservation
       const r = await client.query(
         `INSERT INTO reservations (user_id, event_date, event_hour, plan, zone, message, status)
          VALUES ($1,$2,$3,$4,$5,$6,'pendiente')
@@ -67,7 +65,7 @@ export default async function handler(req, res){
       return res.status(500).json({ error: "Error interno (DB)" });
     }finally{ client.release(); }
 
-    // ---------- Email (no rompe si falla) ----------
+    // ---- Emails ----
     let mailError = null;
     try {
       if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -78,37 +76,45 @@ export default async function handler(req, res){
           auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
         });
 
-        const ownerEmail = process.env.TO_EMAIL || "britos.toro.147@gmail.com";
+        const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
         const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
         const token = signToken(reservation.id, user.email);
-        const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
-        const payUrl = `${baseUrl}/?pay=1&id=${reservation.id}&token=${token}#reserva`;
-        const price = PRICE_USD[planKey];
+const baseUrl =
+  process.env.PUBLIC_BASE_URL?.trim() ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  
+        const acceptUrl = `${baseUrl}/api/accept?id=${reservation.id}&token=${token}`;
+        const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
+        const price = PRICE_USD[reservation.plan];
 
+        // Mail al OWNER con Aceptar/Rechazar
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
           subject: "Nueva reserva — Toro Mecánico",
           html: `
-            <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-              <h2>Nueva reserva</h2>
-              <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
-              <p>Localidad: ${user.zone || "-"}</p>
-              <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
-              <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
-              <p>${reservation.message || ""}</p>
-              <p style="margin-top:16px">
-                <a href="${payUrl}" style="background:#0f172a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Aceptar reserva</a>
-              </p>
-            </div>`
+          <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
+            <h2>Nueva reserva</h2>
+            <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
+            <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
+            <p>Localidad: ${user.zone || "-"}</p>
+            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
+            <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
+            <p>${reservation.message || ""}</p>
+            <p style="margin-top:16px">
+              <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
+              <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
+            </p>
+          </div>`
         });
 
+        // Mail al CLIENTE
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
           subject: "Recibimos tu solicitud de reserva",
-          text: `Hola ${user.name}, recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}). Te avisaremos por email para señar el 10% una vez aceptada.`
+          text: `Hola ${user.name}, recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}). En el siguiente paso podrás confirmar y ver el pago de seña.`
         });
       }
     } catch (e) {
@@ -116,8 +122,8 @@ export default async function handler(req, res){
       mailError = e.message || "email failed";
     }
 
-    // siempre 200, aunque falle el mail
-    return res.status(200).json({ ok: true, reservation, mailError });
+    const token = signToken(reservation.id, user.email);
+    return res.status(200).json({ ok: true, reservation, token, mailError });
 
   }catch(err){
     console.error("GENERIC ERROR:", err);
