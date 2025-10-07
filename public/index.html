@@ -41,11 +41,13 @@
           <li>Montaje menor a 30 min</li>
         </ul>
       </div>
+
+      <!-- Imagen del héroe -->
       <div class="hero__media">
         <div
           class="media__frame img-cover"
           style="--img:url('/imgproyecto/toro-mecanico-2-A85prPbWxDF8pbZo.avif')"
-          aria-label="Toro mecánico en evento"
+          aria-label="Toro mecánico montado en evento con colchonetas de seguridad"
           role="img"></div>
       </div>
     </div>
@@ -153,7 +155,7 @@
           </label>
 
           <label>Localidad (GBA)
-            <select id="fLocality" required>
+            <select id="fLocality" class="select" required>
               <option value="">Elegí tu zona</option>
               <option>Avellaneda</option><option>Lanús</option><option>Quilmes</option>
               <option>Berazategui</option><option>Florencio Varela</option>
@@ -202,22 +204,21 @@
       <!-- Paso 2 -->
       <section id="secondStepBlock" class="flow-card hidden">
         <h3>Segundo paso</h3>
-        <p class="hint">Confirmá que vas a realizar la seña. Este aviso le llega al dueño para estar atento.</p>
+        <p class="hint">Confirmá que vas a realizar la seña.</p>
         <button id="secondStepBtn" class="btn btn--primary">Confirmar y ver pago</button>
         <p id="secondStepHint" class="hint"></p>
       </section>
 
       <!-- Pago -->
       <section id="paymentBlockManual" class="flow-card hidden">
-        <h3>Seña de prueba ($1 ARS)</h3>
-        <p class="hint">Apretá el botón para pagar la seña. El dueño verificará y te confirmará por email.</p>
+        <h3>Seña</h3>
 
         <!-- Botón embebido de MP si hay preference -->
         <div id="mp-button-wrap" style="margin:12px 0;"></div>
 
         <!-- Fallback link -->
         <a id="mp-link-1ars" class="btn btn--primary hidden" target="_blank" rel="noreferrer">
-          Señar $1 con Mercado Pago
+          Señar con Mercado Pago
         </a>
 
         <p id="payWarn" class="hint"></p>
