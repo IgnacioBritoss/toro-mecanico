@@ -52,6 +52,8 @@ body{
   border:1px solid rgba(255,255,255,.7);box-shadow:0 10px 30px rgba(0,0,0,.08);
   overflow:hidden;display:grid;place-items:center
 }
+/* Imagen de fondo que cubre y recorta bordes */
+.img-cover{background-image:var(--img);background-size:cover;background-position:center}
 .media__placeholder{color:#64748b;font-size:14px}
 .hint{color:#64748b;font-size:12px;margin-top:6px}
 
@@ -135,15 +137,23 @@ body{
 .form__row{display:grid;gap:12px;grid-template-columns:1fr}
 @media(min-width:900px){.form__row{grid-template-columns:1fr 1fr}}
 
+/* Planes mejorados (sin radios rojos) */
 .plan{border:1px solid var(--border);border-radius:14px;padding:12px}
 .plan--pretty .plan__opt{display:block}
+.plan__opt input{display:none}
 .plan__card{
   display:flex;align-items:center;justify-content:space-between;
   gap:12px;margin-top:8px;background:#fff;border:1px solid var(--border);
-  border-radius:12px;padding:12px 14px
+  border-radius:12px;padding:14px 16px;cursor:pointer;transition:.2s
 }
+.plan__card strong{font-size:20px}
+.plan__card em{font-style:normal;color:#334155}
+.plan__card:hover{border-color:#cbd5e1;background:#f8fafc}
 .plan__card--pop{border-color:#fde68a;background:#fffbe8}
-.plan__opt input{margin-right:8px}
+.plan__opt input:checked + .plan__card{
+  background:var(--primary);color:#fff;border-color:var(--primary)
+}
+.plan__opt input:checked + .plan__card em{color:#e5e7eb}
 
 /* Opiniones */
 .rating{display:flex;flex-direction:row-reverse;gap:6px}
@@ -153,6 +163,13 @@ body{
 .reviews{margin-top:12px;display:grid;gap:12px}
 .review{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
 .review__meta{font-size:12px;color:#64748b}
+
+/* Tarjetas del flujo (segundo paso / pago) */
+.flow-card{
+  margin-top:22px;background:#fff;border:1px solid var(--border);border-radius:16px;
+  padding:16px;box-shadow:0 10px 26px rgba(0,0,0,.08)
+}
+.hidden{display:none}
 
 /* Footer */
 .footer{border-top:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.7);padding:24px 0}

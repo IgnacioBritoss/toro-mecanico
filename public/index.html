@@ -7,26 +7,23 @@
   <link rel="stylesheet" href="./styles.css" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/favicon.ico" />
-
   <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas y traslado en AMBA. Reservá fecha y horario para tu evento." />
 </head>
 <body>
   <!-- Navbar -->
-  <!-- Navbar -->
-<header class="nav">
-  <div class="container nav__inner">
-    <div class="brand">
-      <div class="brand__logo">TM</div>
-      <span class="brand__name">TORO MECÁNICO</span>
+  <header class="nav">
+    <div class="container nav__inner">
+      <div class="brand">
+        <div class="brand__logo">TM</div>
+        <span class="brand__name">TORO MECÁNICO</span>
+      </div>
+      <nav class="nav__links">
+        <a href="#precios">Precios</a>
+        <a href="#calendario">Disponibilidad</a>
+        <a href="#reserva">Reserva</a>
+      </nav>
     </div>
-    <nav class="nav__links">
-      <a href="#precios">Precios</a>
-      <a href="#calendario">Disponibilidad</a>
-      <a href="#reserva">Reserva</a>
-    </nav>
-  </div>
-</header>
-
+  </header>
 
   <!-- Hero -->
   <section class="hero">
@@ -45,8 +42,12 @@
         </ul>
       </div>
       <div class="hero__media">
-        <div class="media__frame"><div class="media__placeholder">Foto / video del toro</div></div>
-        <p class="hint">(Reemplazar por foto real)</p>
+        <!-- Imagen de hero usando background para recortar el borde blanco -->
+        <div
+          class="media__frame img-cover"
+          style="--img:url('/imgproyecto/toro-mecanico-2-A85prPbWxDF8pbZo.avif')"
+          aria-label="Toro mecánico en evento"
+          role="img"></div>
       </div>
     </div>
   </section>
@@ -55,7 +56,6 @@
   <section id="precios" class="section section--muted">
     <div class="container">
       <h2 class="section__title">Precios</h2>
-      <p class="section__subtitle">Tarifas en USD. La seña es del 10% al aceptar la reserva.</p>
 
       <div class="cards cards--pricing">
         <article class="card">
@@ -67,7 +67,6 @@
             <li>Traslado en AMBA*</li>
           </ul>
           <a href="#calendario" class="btn btn--block">Reservar</a>
-          <p class="card__note">*Consultar zonas exactas.</p>
         </article>
 
         <article class="card card--featured">
@@ -81,7 +80,6 @@
             <li>Traslado en AMBA*</li>
           </ul>
           <a href="#calendario" class="btn btn--block btn--primary">Reservar</a>
-          <p class="card__note">*Consultar zonas exactas.</p>
         </article>
       </div>
     </div>
@@ -122,107 +120,119 @@
           </div>
 
           <button id="goToForm" class="btn btn--block btn--primary">Reservar ahora</button>
-          <p class="hint">La confirmación y seña (10%) se coordinan por email.</p>
         </aside>
       </div>
     </div>
   </section>
 
   <!-- Reserva -->
-<section id="reserva" class="section">
-  <div class="container">
-    <h2 class="section__title">Reserva</h2>
-    <p class="section__subtitle">Solo mayores de 18. Completar todos los campos.</p>
+  <section id="reserva" class="section">
+    <div class="container">
+      <h2 class="section__title">Reserva</h2>
 
-    <form id="reserveForm" class="form form--elevated" novalidate>
-      <div class="form__row">
-        <label>Nombre y apellido
-          <input id="fName" type="text" placeholder="Juan Pérez" required />
-        </label>
-        <label>Email
-          <input id="fEmail" type="email" placeholder="mail@ejemplo.com" required />
-        </label>
-      </div>
+      <form id="reserveForm" class="form form--elevated" novalidate>
+        <div class="form__row">
+          <label>Nombre y apellido
+            <input id="fName" type="text" placeholder="Juan Pérez" required />
+          </label>
+          <label>Email
+            <input id="fEmail" type="email" placeholder="mail@ejemplo.com" required />
+          </label>
+        </div>
 
-      <div class="form__row">
-        <label>Teléfono (WhatsApp)
-          <input id="fPhone" type="tel" placeholder="+54 9 11 1234-5678" required />
-        </label>
-        <label>Código postal
-          <input id="fPostal" type="text" placeholder="1704" required />
-        </label>
-      </div>
+        <div class="form__row">
+          <label>Teléfono (WhatsApp)
+            <input id="fPhone" type="tel" placeholder="+54 9 11 1234-5678" required />
+          </label>
+          <label>Código postal
+            <input id="fPostal" type="text" placeholder="1704" required />
+          </label>
+        </div>
 
-      <div class="form__row">
-        <label>Edad (solo mayores)
-          <input id="fAge" type="number" min="18" step="1" placeholder="18" required />
+        <div class="form__row">
+          <label>Edad (solo mayores)
+            <input id="fAge" type="number" min="18" step="1" placeholder="18" required />
+          </label>
+
+          <label>Localidad (GBA)
+            <select id="fLocality" required>
+              <option value="">Elegí tu zona</option>
+              <option>Avellaneda</option><option>Lanús</option><option>Quilmes</option>
+              <option>Berazategui</option><option>Florencio Varela</option>
+              <option>Almirante Brown</option><option>Esteban Echeverría</option>
+              <option>Ezeiza</option><option>Lomas de Zamora</option>
+              <option>Vicente López</option><option>San Isidro</option>
+              <option>San Martín</option><option>Tres de Febrero</option>
+              <option>Hurlingham</option><option>Ituzaingó</option>
+              <option>Morón</option><option>Merlo</option><option>Moreno</option>
+              <option>Malvinas Argentinas</option><option>José C. Paz</option>
+              <option>San Miguel</option><option>San Fernando</option>
+              <option>Tigre</option><option>Pilar</option><option>Escobar</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="form__row">
+          <label>Fecha
+            <input id="formDate" type="date" required />
+          </label>
+          <label>Horario
+            <input id="formTime" type="time" required />
+          </label>
+        </div>
+
+        <!-- Planes, sin radios visibles -->
+        <fieldset class="plan plan--pretty">
+          <legend>Elegí tu plan</legend>
+
+          <label class="plan__opt">
+            <input type="radio" name="plan" value="1h" checked />
+            <span class="plan__card">
+              <strong>1 hora</strong><em>USD 300</em>
+            </span>
+          </label>
+
+          <label class="plan__opt">
+            <input type="radio" name="plan" value="2h" />
+            <span class="plan__card plan__card--pop">
+              <strong>2 horas</strong><em>USD 500</em>
+            </span>
+          </label>
+        </fieldset>
+
+        <label>Mensaje
+          <textarea id="fMsg" rows="3" placeholder="Contanos del evento"></textarea>
         </label>
 
-        <label>Localidad (GBA)
-          <select id="fLocality" required>
-            <option value="">Elegí tu zona</option>
-            <option>Avellaneda</option><option>Lanús</option><option>Quilmes</option>
-            <option>Berazategui</option><option>Florencio Varela</option>
-            <option>Almirante Brown</option><option>Esteban Echeverría</option>
-            <option>Ezeiza</option><option>Lomas de Zamora</option>
-            <option>Vicente López</option><option>San Isidro</option>
-            <option>San Martín</option><option>Tres de Febrero</option>
-            <option>Hurlingham</option><option>Ituzaingó</option>
-            <option>Morón</option><option>Merlo</option><option>Moreno</option>
-            <option>Malvinas Argentinas</option><option>José C. Paz</option>
-            <option>San Miguel</option><option>San Fernando</option>
-            <option>Tigre</option><option>Pilar</option><option>Escobar</option>
-          </select>
-        </label>
-      </div>
+        <button type="submit" class="btn btn--primary btn--lg">Enviar reserva</button>
+        <p id="formHint" class="hint">(Luego vas a ver el segundo paso para pagar la seña.)</p>
+      </form>
 
-      <div class="form__row">
-        <label>Fecha
-          <input id="formDate" type="date" required />
-        </label>
-        <label>Horario
-          <input id="formTime" type="time" required />
-        </label>
-      </div>
+      <!-- Paso 2 (tarjeta bonita). Esta se esconde cuando aparece el pago -->
+      <section id="secondStepBlock" class="flow-card hidden">
+        <h3>Segundo paso</h3>
+        <p class="hint">Confirmá que vas a realizar la seña. Este aviso le llega al dueño para estar atento.</p>
+        <button id="secondStepBtn" class="btn btn--primary">Confirmar y ver pago</button>
+        <p id="secondStepHint" class="hint"></p>
+      </section>
 
-      <fieldset class="plan plan--pretty">
-        <legend>Elegí tu plan</legend>
-        <label class="plan__opt">
-          <input type="radio" name="plan" value="1h" checked />
-          <span class="plan__card"><strong>1 hora</strong><em>USD 300</em></span>
-        </label>
-        <label class="plan__opt">
-          <input type="radio" name="plan" value="2h" />
-          <span class="plan__card plan__card--pop"><strong>2 horas</strong><em>USD 500</em></span>
-        </label>
-      </fieldset>
+      <!-- Pago (tarjeta bonita). Aparece luego del segundo paso -->
+      <section id="paymentBlockManual" class="flow-card hidden">
+        <h3>Seña de prueba ($1 ARS)</h3>
+        <p class="hint">Apretá el botón para pagar la seña. El dueño verificará y te confirmará por email.</p>
 
-      <label>Mensaje
-        <textarea id="fMsg" rows="3" placeholder="Contanos del evento"></textarea>
-      </label>
+        <!-- Aquí tu botón de MP (script) si usás preference -->
+        <div id="mp-button-wrap" style="margin:12px 0;"></div>
 
-      <button type="submit" class="btn btn--primary btn--lg">Enviar reserva</button>
-      <p id="formHint" class="hint">(Luego vas a ver el segundo paso para pagar la seña.)</p>
-    </form>
+        <!-- Fallback: link directo si no hay preference -->
+        <a id="mp-link-1ars" class="btn btn--primary hidden" target="_blank" rel="noreferrer">
+          Pagar $1 con Mercado Pago
+        </a>
 
-    <!-- Paso 2: confirmar -->
-    <div id="secondStepBlock" class="payment hidden">
-      <h3>Segundo paso</h3>
-      <p class="hint">Confirmá que vas a realizar la seña. Este aviso le llega al dueño para estar atento.</p>
-      <button id="secondStepBtn" class="btn btn--primary">Confirmar y ver pago</button>
-      <p id="secondStepHint" class="hint"></p>
+        <p id="payWarn" class="hint"></p>
+      </section>
     </div>
-
-    <!-- Pago: $1 ARS (aparece recién después del segundo paso) -->
-    <div id="paymentBlockManual" class="payment hidden">
-      <h3>Seña de prueba ($1 ARS)</h3>
-      <p class="hint">Apretá el botón para abrir Mercado Pago y pagar $1. El dueño verificará y te confirmará por email.</p>
-      <a id="mp-link-1ars" class="btn btn--primary" target="_blank" rel="noreferrer">Pagar $1 con Mercado Pago</a>
-      <p id="payWarn" class="hint"></p>
-    </div>
-  </div>
-</section>
-
+  </section>
 
   <!-- Footer (soporte) -->
   <footer class="footer">

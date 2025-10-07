@@ -211,4 +211,8 @@ async function onSecondStep(){
     secondStepHint.textContent="Error de red. Probá de nuevo.";
     secondStepBtn.disabled=false;
   }
+
+  secondStepBlock.classList.add('hidden');
+paymentBlockManual.classList.remove('hidden');
+
 }
