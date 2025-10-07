@@ -1,45 +1,36 @@
+
 import { pool } from "./db.js";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
-
-import {
-  tplOwnerNewReservation,
-  tplClientReceived,
-} from "./mailTemplates.js";
 
 export const config = { runtime: "nodejs" };
 
 const PRICE_USD = { "1h": 300, "2h": 500 };
 
-function isValidEmail(e) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || "");
-}
-function signToken(id, email) {
+function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
+function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
-  return crypto
-    .createHmac("sha256", secret)
-    .update(`${id}:${email}`)
-    .digest("hex");
+  return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
-  try {
+  try{
     const { name, email, phone, postal_code, age, zone, message, date, time, plan } = req.body || {};
     if (!name || !email || !age || !date || !time || !zone || !phone || !postal_code)
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     if (!isValidEmail(email)) return res.status(400).json({ error: "Email inválido" });
-    if (parseInt(age, 10) < 18) return res.status(400).json({ error: "Solo mayores de 18 años" });
+    if (parseInt(age,10) < 18) return res.status(400).json({ error: "Solo mayores de 18 años" });
 
     const planKey = (plan || "1h").toLowerCase();
-    if (!["1h", "2h"].includes(planKey)) return res.status(400).json({ error: "Plan inválido" });
+    if (!["1h","2h"].includes(planKey)) return res.status(400).json({ error: "Plan inválido" });
 
     const hourInt = parseInt(time.split(":")[0], 10);
 
     const client = await pool.connect();
     let reservation, user;
-    try {
+    try{
       await client.query("BEGIN");
 
       const u = await client.query(
@@ -54,13 +45,9 @@ export default async function handler(req, res) {
       user = u.rows[0];
 
       const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1`, [date]);
-      if (qDay.rowCount >= 2) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." });
-      }
-      if (new Set(qDay.rows.map(r => r.event_hour)).has(hourInt)) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({ error: "Esa hora ya está ocupada." });
+      if (qDay.rowCount >= 2){ await client.query("ROLLBACK"); return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." }); }
+      if (new Set(qDay.rows.map(r=>r.event_hour)).has(hourInt)){
+        await client.query("ROLLBACK"); return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
       const r = await client.query(
@@ -72,14 +59,12 @@ export default async function handler(req, res) {
       reservation = r.rows[0];
 
       await client.query("COMMIT");
-    } catch (e) {
+    }catch(e){
       await client.query("ROLLBACK");
       if (e.code === "23505") return res.status(409).json({ error: "Ese horario ya está reservado." });
       console.error("DB ERROR:", e);
       return res.status(500).json({ error: "Error interno (DB)" });
-    } finally {
-      client.release();
-    }
+    }finally{ client.release(); }
 
     // ---- Emails ----
     let mailError = null;
@@ -89,56 +74,48 @@ export default async function handler(req, res) {
           host: process.env.SMTP_HOST,
           port: parseInt(process.env.SMTP_PORT || "587", 10),
           secure: process.env.SMTP_PORT === "465",
-          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
         });
 
         const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
         const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
         const token = signToken(reservation.id, user.email);
-        const baseUrl =
-          process.env.PUBLIC_BASE_URL?.trim() ||
-          (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+const baseUrl =
+  process.env.PUBLIC_BASE_URL?.trim() ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
 
-        const acceptLink = `${baseUrl}/api/accept?id=${reservation.id}&token=${token}`;
-        const rejectLink = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
-        const priceUsd = PRICE_USD[reservation.plan];
+        const acceptUrl = `${baseUrl}/api/accept?id=${reservation.id}&token=${token}`;
+        const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
+        const price = PRICE_USD[reservation.plan];
 
-        // Mail al dueño (con botones)
-        const ownerMail = tplOwnerNewReservation({
-          name: user.name,
-          email: user.email,
-          phone: user.phone || "-",
-          postal: user.postal_code || "-",
-          age: user.age,
-          zone: user.zone || "-",
-          date: reservation.event_date,
-          time: String(reservation.event_hour).padStart(2, "0") + ":00",
-          plan: reservation.plan,
-          priceUsd,
-          message: reservation.message || "",
-          acceptLink,
-          rejectLink,
-        });
+        // Mail al OWNER con Aceptar/Rechazar
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
-          subject: ownerMail.subject,
-          html: ownerMail.html,
+          subject: "Nueva reserva — Toro Mecánico",
+          html: `
+          <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
+            <h2>Nueva reserva</h2>
+            <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
+            <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
+            <p>Localidad: ${user.zone || "-"}</p>
+            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
+            <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
+            <p>${reservation.message || ""}</p>
+            <p style="margin-top:16px">
+              <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
+              <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
+            </p>
+          </div>`
         });
 
-        // Mail al cliente (“recibimos tu solicitud”)
-        const clientMail = tplClientReceived({
-          name: user.name,
-          date: reservation.event_date,
-          time: String(reservation.event_hour).padStart(2, "0") + ":00",
-          plan: reservation.plan,
-        });
+        // Mail al CLIENTE
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
-          subject: clientMail.subject,
-          html: clientMail.html,
+          subject: "Recibimos tu solicitud de reserva",
+          text: `Hola ${user.name}, recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}). En el siguiente paso podrás confirmar y ver el pago de seña.`
         });
       }
     } catch (e) {
@@ -148,7 +125,8 @@ export default async function handler(req, res) {
 
     const token = signToken(reservation.id, user.email);
     return res.status(200).json({ ok: true, reservation, token, mailError });
-  } catch (err) {
+
+  }catch(err){
     console.error("GENERIC ERROR:", err);
     return res.status(500).json({ error: "Error interno" });
   }
