@@ -244,42 +244,80 @@ async function onSecondStep(){
 }
 
 
-// ===== Nice Select (Custom) =====
+// ===== Nice Select (Custom) - FIX =====
 (function initNiceSelect(){
   const wrap = document.querySelector('.nice-select-wrap');
   if(!wrap) return;
-  const sel = wrap.querySelector('select');
-  const btn = wrap.querySelector('.nice-select-display');
+
+  const sel  = wrap.querySelector('select');
+  const btn  = wrap.querySelector('.nice-select-display');
   const list = wrap.querySelector('.nice-select-list');
   const text = wrap.querySelector('.nice-select-text');
 
-  // Crea los <li> a partir de las <option>
+  // crea los <li> a partir de las <option>
   function buildList(){
     list.innerHTML = '';
-    [...sel.options].forEach(opt => {
-      if (opt.disabled) return;
+    Array.from(sel.options).forEach((opt, idx) => {
+      // si querés ocultar el placeholder en la lista, podés saltar idx===0
       const li = document.createElement('li');
+      // valor seguro: si no hay atributo value, el .value = texto igualmente,
+      // pero dejamos explícito el fallback
+      const v = opt.getAttribute('value') ?? opt.textContent.trim();
+      li.dataset.value = v;
       li.textContent = opt.textContent;
       li.setAttribute('role','option');
-      li.dataset.value = opt.value;
       if (opt.selected) li.setAttribute('aria-selected','true');
+
       li.addEventListener('click', () => {
-        sel.value = opt.value;  // sincroniza valor real
-        sel.dispatchEvent(new Event('change', { bubbles:true }));
+        // setea el select de forma robusta
+        setSelectValue(v);
         close();
+        btn.focus();
       });
+
       list.appendChild(li);
     });
   }
 
+  function setSelectValue(v){
+    // Buscamos la option por value sin usar CSS.escape
+    let foundIndex = -1;
+    for (let i=0; i<sel.options.length; i++){
+      if (sel.options[i].value === v){
+        foundIndex = i;
+        break;
+      }
+    }
+    // si no la encuentra por value, probamos por texto (por si no había value)
+    if (foundIndex === -1){
+      for (let i=0; i<sel.options.length; i++){
+        if (sel.options[i].textContent.trim() === v){
+          foundIndex = i;
+          break;
+        }
+      }
+    }
+    if (foundIndex !== -1){
+      sel.selectedIndex = foundIndex;     // <- cambia la selección real
+      // dispara eventos para que el form y tu app se enteren del cambio
+      sel.dispatchEvent(new Event('input',  {bubbles:true}));
+      sel.dispatchEvent(new Event('change', {bubbles:true}));
+      syncFromSelect();
+    }
+  }
+
   function syncFromSelect(){
-    const val = sel.value;
-    const opt = sel.querySelector(`option[value="${CSS.escape(val)}"]`);
-    text.textContent = opt ? opt.textContent : (sel.options[0]?.textContent || 'Elegí');
-    wrap.classList.toggle('is-empty', !val);
+    const v = sel.value;
+    // texto visible
+    const opt = sel.options[sel.selectedIndex] || sel.options[0];
+    text.textContent = opt ? opt.textContent : 'Elegí tu zona';
+    wrap.classList.toggle('is-empty', !v);
+
     // marca seleccionado en la lista
-    list.querySelectorAll('li').forEach(li => {
-      li.toggleAttribute('aria-selected', li.dataset.value === val);
+    const items = list.querySelectorAll('li');
+    items.forEach(li => {
+      li.toggleAttribute('aria-selected', li.dataset.value === v ||
+        li.textContent.trim() === v);
     });
   }
 
@@ -299,6 +337,7 @@ async function onSecondStep(){
 
   // Eventos
   btn.addEventListener('click', toggle);
+  // Si alguien cambia el select (ej. autocompletado del navegador), mantenemos sincronizado
   sel.addEventListener('change', syncFromSelect);
 
   // Init
