@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Toro Mecánico — Alquiler para eventos (CABA y GBA)</title>
+  <title>Toro Mecánico — Alquiler para eventos (AMBA)</title>
   <link rel="stylesheet" href="./styles.css" />
   <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas y traslado en AMBA. Reservá fecha y horario para tu evento." />
 </head>
@@ -22,7 +22,6 @@
         <a href="#faq">FAQ</a>
         <a href="#reserva">Reserva</a>
       </nav>
-      <!-- Botón de WhatsApp del top: eliminado -->
     </div>
   </header>
 
@@ -31,7 +30,7 @@
     <div class="container hero__grid">
       <div class="hero__copy">
         <h1>Alquiler de <span class="u-underline">Toro Mecánico</span> en CABA y GBA</h1>
-        <p>Animate con un servicio profesional: operador incluido, equipo seguro y diversión para todas las edades.</p>
+        <p>Servicio profesional con operador, colchonetas de seguridad y armado rápido.</p>
         <div class="hero__cta">
           <a href="#calendario" class="btn btn--primary">Ver disponibilidad</a>
           <a href="#precios" class="btn btn--ghost">Ver precios</a>
@@ -43,10 +42,8 @@
         </ul>
       </div>
       <div class="hero__media">
-        <div class="media__frame">
-          <div class="media__placeholder">Foto / video del toro en acción</div>
-        </div>
-        <p class="hint">(Insertar foto real acá)</p>
+        <div class="media__frame"><div class="media__placeholder">Foto / video del toro</div></div>
+        <p class="hint">(Reemplazar por foto real)</p>
       </div>
     </div>
   </section>
@@ -55,36 +52,33 @@
   <section id="precios" class="section section--muted">
     <div class="container">
       <h2 class="section__title">Precios</h2>
-      <p class="section__subtitle">Tarifas orientativas. Pasanos tu zona y horario para cotizar con traslado.</p>
-      <div class="cards">
+      <p class="section__subtitle">Tarifas en USD. La seña es del 10% al aceptar la reserva.</p>
+
+      <div class="cards cards--pricing">
         <article class="card">
-          <header class="card__head"><h3>Por hora</h3></header>
-          <p class="card__price">$80.000 <span>/hora</span></p>
+          <header class="card__head"><h3>1 hora</h3></header>
+          <p class="card__price">$300 <span>USD</span></p>
           <ul class="card__list">
-            <li>Operador incluido</li><li>Seguro y colchonetas</li><li>Traslado a domicilio*</li>
+            <li>Operador incluido</li>
+            <li>Colchonetas y seguridad</li>
+            <li>Traslado en AMBA*</li>
           </ul>
           <a href="#calendario" class="btn btn--block">Reservar</a>
-          <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
+          <p class="card__note">*Consultar zonas exactas.</p>
         </article>
+
         <article class="card card--featured">
           <header class="card__head">
-            <h3>Medio evento</h3><span class="badge">Más elegido</span>
+            <h3>2 horas</h3><span class="badge">Más pedido</span>
           </header>
-          <p class="card__price">$180.000 <span>/3 hs</span></p>
+          <p class="card__price">$500 <span>USD</span></p>
           <ul class="card__list">
-            <li>Operador incluido</li><li>Seguro y colchonetas</li><li>Traslado a domicilio*</li>
+            <li>Operador incluido</li>
+            <li>Colchonetas y seguridad</li>
+            <li>Traslado en AMBA*</li>
           </ul>
           <a href="#calendario" class="btn btn--block btn--primary">Reservar</a>
-          <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
-        </article>
-        <article class="card">
-          <header class="card__head"><h3>Evento completo</h3></header>
-          <p class="card__price">$300.000 <span>/5 hs</span></p>
-          <ul class="card__list">
-            <li>Operador incluido</li><li>Seguro y colchonetas</li><li>Traslado a domicilio*</li>
-          </ul>
-          <a href="#calendario" class="btn btn--block">Reservar</a>
-          <p class="card__note">*Dentro de AMBA. Consultá por otras zonas.</p>
+          <p class="card__note">*Consultar zonas exactas.</p>
         </article>
       </div>
     </div>
@@ -96,7 +90,7 @@
       <div class="section__header">
         <div>
           <h2 class="section__title">Disponibilidad</h2>
-          <p class="section__subtitle">Elegí una fecha y un horario tentativo. Confirmamos por email.</p>
+          <p class="section__subtitle">Elegí fecha y horario. Luego completás la reserva.</p>
         </div>
         <div class="cal__nav">
           <button id="prevMonth" class="btn btn--icon" aria-label="Mes anterior">←</button>
@@ -107,9 +101,7 @@
       <div class="grid">
         <!-- Calendario -->
         <div class="cal">
-          <div class="cal__head">
-            <h3 id="calTitle"></h3>
-          </div>
+          <div class="cal__head"><h3 id="calTitle"></h3></div>
           <div class="cal__week">
             <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
           </div>
@@ -127,57 +119,8 @@
           </div>
 
           <button id="goToForm" class="btn btn--block btn--primary">Reservar ahora</button>
-          <p class="hint">La confirmación y seña se coordinan por chat/email.</p>
+          <p class="hint">La confirmación y seña (10%) se coordinan por email.</p>
         </aside>
-      </div>
-    </div>
-  </section>
-
-  <!-- Galería -->
-  <section id="galeria" class="section section--muted">
-    <div class="container">
-      <h2 class="section__title">Galería</h2>
-      <div class="gallery">
-        <div class="gallery__item"></div><div class="gallery__item"></div><div class="gallery__item"></div>
-        <div class="gallery__item"></div><div class="gallery__item"></div><div class="gallery__item"></div>
-      </div>
-      <p class="hint">(Reemplazar por fotos reales: armado, gente jugando, colchonetas y operador)</p>
-    </div>
-  </section>
-
-  <!-- Testimonios -->
-  <section class="section">
-    <div class="container">
-      <h2 class="section__title">Lo que dicen</h2>
-      <div class="testis">
-        <article class="testi">“La estrella del cumple. Los chicos felices.”<div class="testi__who">— Cliente 1</div></article>
-        <article class="testi">“Puntuales y profesionales. Repetimos seguro.”<div class="testi__who">— Cliente 2</div></article>
-        <article class="testi">“Diversión para todos.”<div class="testi__who">— Cliente 3</div></article>
-      </div>
-    </div>
-  </section>
-
-  <!-- FAQ -->
-  <section id="faq" class="section section--muted">
-    <div class="container">
-      <h2 class="section__title">Preguntas frecuentes</h2>
-      <div class="faq">
-        <details class="faq__item">
-          <summary>¿Qué espacio necesito?</summary>
-          <p>Aproximadamente 5×5 m libres y una toma de 220V. Incluimos colchonetas alrededor para seguridad.</p>
-        </details>
-        <details class="faq__item">
-          <summary>¿Cómo se confirma la reserva?</summary>
-          <p>Por email coordinamos la seña y los datos del evento. Emitimos comprobante si necesitás.</p>
-        </details>
-        <details class="faq__item">
-          <summary>¿Es apto para niños?</summary>
-          <p>Sí, ajustamos la velocidad. Siempre con operador y normas de seguridad.</p>
-        </details>
-        <details class="faq__item">
-          <summary>¿Viajan al interior?</summary>
-          <p>Hacemos AMBA. Para otras zonas, consultanos para armar una propuesta.</p>
-        </details>
       </div>
     </div>
   </section>
@@ -186,18 +129,56 @@
   <section id="reserva" class="section">
     <div class="container">
       <h2 class="section__title">Reserva</h2>
-      <p class="section__subtitle">Completá tus datos. Solo mayores de 18.</p>
+      <p class="section__subtitle">Solo mayores de 18. Completar todos los campos.</p>
 
-      <form id="reserveForm" class="form" novalidate>
-        <label>Nombre y apellido
-          <input id="fName" type="text" placeholder="Juan Pérez" required />
-        </label>
-        <label>Email
-          <input id="fEmail" type="email" placeholder="mail@ejemplo.com" required />
-        </label>
-        <label>Edad (solo mayores)
-          <input id="fAge" type="number" min="18" step="1" placeholder="18" required />
-        </label>
+      <form id="reserveForm" class="form form--elevated" novalidate>
+        <div class="form__row">
+          <label>Nombre y apellido
+            <input id="fName" type="text" placeholder="Juan Pérez" required />
+          </label>
+          <label>Email
+            <input id="fEmail" type="email" placeholder="mail@ejemplo.com" required />
+          </label>
+        </div>
+
+        <div class="form__row">
+          <label>Edad (solo mayores)
+            <input id="fAge" type="number" min="18" step="1" placeholder="18" required />
+          </label>
+
+          <!-- Localidad / Partidos GBA -->
+          <label>Localidad (GBA)
+            <select id="fLocality" required>
+              <option value="">Elegí tu zona</option>
+              <option>Avellaneda</option>
+              <option>Lanús</option>
+              <option>Quilmes</option>
+              <option>Berazategui</option>
+              <option>Florencio Varela</option>
+              <option>Almirante Brown</option>
+              <option>Esteban Echeverría</option>
+              <option>Ezeiza</option>
+              <option>Lomas de Zamora</option>
+              <option>Vicente López</option>
+              <option>San Isidro</option>
+              <option>San Martín</option>
+              <option>Tres de Febrero</option>
+              <option>Hurlingham</option>
+              <option>Ituzaingó</option>
+              <option>Morón</option>
+              <option>Merlo</option>
+              <option>Moreno</option>
+              <option>Malvinas Argentinas</option>
+              <option>José C. Paz</option>
+              <option>San Miguel</option>
+              <option>San Fernando</option>
+              <option>Tigre</option>
+              <option>Pilar</option>
+              <option>Escobar</option>
+            </select>
+          </label>
+        </div>
+
         <div class="form__row">
           <label>Fecha
             <input id="formDate" type="date" required />
@@ -206,28 +187,61 @@
             <input id="formTime" type="time" required />
           </label>
         </div>
-        <label>Zona
-          <input id="fZone" type="text" placeholder="Lanús, San Isidro, etc." />
-        </label>
 
-        <fieldset class="plan">
-          <legend>Plan</legend>
-          <label class="plan__opt"><input type="radio" name="plan" value="hora" checked /> Por hora</label>
-          <label class="plan__opt"><input type="radio" name="plan" value="medio" /> Medio evento (3 hs)</label>
-          <label class="plan__opt"><input type="radio" name="plan" value="completo" /> Evento completo (5 hs)</label>
+        <!-- Plan / precio -->
+        <fieldset class="plan plan--pretty">
+          <legend>Elegí tu plan</legend>
+          <label class="plan__opt">
+            <input type="radio" name="plan" value="1h" checked />
+            <span class="plan__card">
+              <strong>1 hora</strong>
+              <em>USD 300</em>
+            </span>
+          </label>
+          <label class="plan__opt">
+            <input type="radio" name="plan" value="2h" />
+            <span class="plan__card plan__card--pop">
+              <strong>2 horas</strong>
+              <em>USD 500 (más pedido)</em>
+            </span>
+          </label>
         </fieldset>
 
         <label>Mensaje
-          <textarea id="fMsg" rows="3" placeholder="Contame del evento"></textarea>
+          <textarea id="fMsg" rows="3" placeholder="Contanos del evento"></textarea>
         </label>
 
-        <button type="submit" class="btn btn--primary">Enviar reserva</button>
-        <p id="formHint" class="hint">(Te responderemos por email.)</p>
+        <button type="submit" class="btn btn--primary btn--lg">Enviar reserva</button>
+        <p id="formHint" class="hint">(Te enviaremos un email para aceptar y señar el 10%).</p>
       </form>
     </div>
   </section>
 
-  <!-- Footer -->
+  <!-- Opiniones -->
+  <section id="opiniones" class="section section--muted">
+    <div class="container">
+      <h2 class="section__title">Opiniones</h2>
+      <p class="section__subtitle">Dejanos tu experiencia (máx 140 caracteres).</p>
+
+      <form id="reviewForm" class="form form--flat">
+        <div class="rating">
+          <input type="radio" name="stars" id="s5" value="5"><label for="s5">★</label>
+          <input type="radio" name="stars" id="s4" value="4"><label for="s4">★</label>
+          <input type="radio" name="stars" id="s3" value="3"><label for="s3">★</label>
+          <input type="radio" name="stars" id="s2" value="2"><label for="s2">★</label>
+          <input type="radio" name="stars" id="s1" value="1" checked><label for="s1">★</label>
+        </div>
+        <input id="reviewName" type="text" placeholder="Tu nombre" required />
+        <input id="reviewText" type="text" maxlength="140" placeholder="Comentario (máx 140)" required />
+        <button type="submit" class="btn">Enviar</button>
+        <span id="reviewHint" class="hint"></span>
+      </form>
+
+      <div id="reviewsList" class="reviews"></div>
+    </div>
+  </section>
+
+  <!-- Footer (soporte) -->
   <footer class="footer">
     <div class="container footer__inner">
       <p>© <span id="year"></span> Toro Mecánico — Eventos</p>
@@ -235,7 +249,6 @@
         <a href="https://wa.me/5491132895416" target="_blank" rel="noreferrer">Soporte por WhatsApp</a>
         <a href="#">Términos</a>
         <a href="#">Privacidad</a>
-        <a href="#">Admin</a>
       </div>
     </div>
   </footer>

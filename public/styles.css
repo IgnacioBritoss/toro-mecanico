@@ -1,7 +1,7 @@
 :root{
   --bg:#e8f1ff; --bg-2:#f6f9ff; --text:#0f172a; --muted:#475569;
   --surface:#ffffff; --surface-2:#f1f5f9; --border:#e2e8f0;
-  --accent:#facc15; --accent-dark:#eab308; --wa:#22c55e;
+  --accent:#facc15; --wa:#22c55e; --primary:#0f172a;
 }
 
 *{box-sizing:border-box}
@@ -26,15 +26,15 @@ body{
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
   gap:8px;background:#111827;color:#fff;border:1px solid #111827;
-  padding:10px 14px;border-radius:12px;text-decoration:none;cursor:pointer;
-  transition:.2s ease;font-weight:600
+  padding:12px 16px;border-radius:14px;text-decoration:none;cursor:pointer;
+  transition:.2s ease;font-weight:700
 }
-.btn--primary{background:#0f172a;border-color:#0f172a}
-.btn:hover{opacity:.9}
+.btn--primary{background:var(--primary);border-color:var(--primary)}
+.btn:hover{opacity:.92}
 .btn--ghost{background:#fff;color:var(--text);border:1px solid var(--border)}
 .btn--icon{background:#fff;color:var(--text);border:1px solid var(--border);padding:8px 12px}
-.btn--wa{background:var(--wa);border-color:var(--wa);color:#fff}
 .btn--block{width:100%}
+.btn--lg{padding:14px 18px;font-size:16px}
 
 /* Hero */
 .hero{padding:56px 0}
@@ -60,18 +60,20 @@ body{
 .section--muted{background:rgba(255,255,255,.6)}
 .section__title{font-size:28px;margin:0 0 8px}
 .section__subtitle{color:var(--muted);margin:0}
+.section__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 
 /* Cards (precios) */
 .cards{display:grid;gap:16px;margin-top:16px}
-@media(min-width:900px){.cards{grid-template-columns:repeat(3,1fr)}}
+.cards--pricing .card{position:relative;overflow:hidden}
+@media(min-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
 .card{
-  background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:18px;
+  background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;
   padding:18px;box-shadow:0 6px 18px rgba(0,0,0,.06)
 }
 .card--featured{background:#fff;border-color:#fde68a}
 .card__head{display:flex;align-items:center;justify-content:space-between}
 .badge{font-size:12px;background:#fde047;border-radius:999px;padding:3px 8px}
-.card__price{font-size:32px;font-weight:800;margin:10px 0}
+.card__price{font-size:36px;font-weight:900;margin:10px 0}
 .card__price span{font-size:14px;font-weight:600}
 .card__list{color:#374151;display:grid;gap:6px;margin:10px 0 14px;padding-left:18px}
 .card__note{color:#64748b;font-size:12px;margin-top:8px}
@@ -79,7 +81,7 @@ body{
 /* Calendar */
 .grid{display:grid;gap:20px}
 @media(min-width:900px){.grid{grid-template-columns:2fr 1fr}}
-.cal{background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:18px;padding:16px}
+.cal{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;padding:16px}
 .cal__head{display:flex;align-items:center;justify-content:space-between}
 .cal__week{margin-top:10px;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;color:#64748b;font-size:12px}
 .cal__grid{margin-top:6px;display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
@@ -93,19 +95,22 @@ body{
 .cal__day:hover{background:#eef2ff;border-color:#c7d2fe;color:#0f172a}
 .cal__day--muted{opacity:0;pointer-events:none}
 .cal__day--selected{background:#0f172a;color:#fff;border-color:#0f172a}
+.cal__day--selected:hover{background:#0f172a;color:#fff;border-color:#0f172a}
 .cal__day--full{background:#f1f5f9;color:#94a3b8;text-decoration:line-through;cursor:not-allowed;border-style:dashed}
+.cal__day--full:hover{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}
 
 .cal__nav{display:flex;gap:8px}
 
-.slot{background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:18px;padding:16px}
+.slot{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;padding:16px}
 .slot__title{margin:0 0 8px}
 .slot__hours{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .slot__btn{padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer}
 .slot__btn--active{background:#0f172a;color:#fff;border-color:#0f172a}
+.slot__btn--active:hover{background:#0f172a;color:#fff;border-color:#0f172a}
 .slot__btn--disabled{background:#f1f5f9;color:#94a3b8;border-style:dashed;cursor:not-allowed}
 .slot__summary{margin-top:14px;background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:12px}
 .summary__label{color:#475569}
-.summary__value{font-weight:600;margin-top:4px}
+.summary__value{font-weight:700;margin-top:4px}
 #goToForm{margin-top:14px}
 
 /* Gallery */
@@ -116,26 +121,38 @@ body{
   box-shadow:inset 0 2px 6px rgba(0,0,0,.05)
 }
 
-/* Testimonials */
-.testis{display:grid;gap:16px;margin-top:12px}
-@media(min-width:900px){.testis{grid-template-columns:repeat(3,1fr)}}
-.testi{background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:18px;padding:16px;color:#374151}
-.testi__who{margin-top:8px;color:#64748b;font-size:14px}
-
 /* FAQ */
 .faq{display:grid;gap:12px;margin-top:12px}
-.faq__item{background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:14px;padding:12px}
-.faq__item summary{cursor:pointer;font-weight:600}
+.faq__item{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:14px;padding:12px}
+.faq__item summary{cursor:pointer;font-weight:700}
 .faq__item p{color:#475569;margin:8px 0 0}
 
 /* Form */
-.grid--2{grid-template-columns:1fr}
-@media(min-width:900px){.grid--2{grid-template-columns:1fr 1fr}}
-.form{display:grid;gap:10px;background:rgba(255,255,255,.8);border:1px solid var(--border);border-radius:18px;padding:16px}
-.form input,.form textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fff}
-.form__row{display:grid;gap:10px;grid-template-columns:1fr 1fr}
-.plan{border:1px solid var(--border);border-radius:12px;padding:10px}
-.plan__opt{display:block;margin-top:6px}
+.form{display:grid;gap:12px;background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;padding:16px}
+.form--elevated{box-shadow:0 10px 26px rgba(0,0,0,.08)}
+.form--flat{box-shadow:none}
+.form input,.form textarea,.form select{width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:#fff}
+.form__row{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:900px){.form__row{grid-template-columns:1fr 1fr}}
+
+.plan{border:1px solid var(--border);border-radius:14px;padding:12px}
+.plan--pretty .plan__opt{display:block}
+.plan__card{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-top:8px;background:#fff;border:1px solid var(--border);
+  border-radius:12px;padding:12px 14px
+}
+.plan__card--pop{border-color:#fde68a;background:#fffbe8}
+.plan__opt input{margin-right:8px}
+
+/* Opiniones */
+.rating{display:flex;flex-direction:row-reverse;gap:6px}
+.rating input{display:none}
+.rating label{font-size:24px;cursor:pointer;color:#cbd5e1}
+.rating input:checked ~ label, .rating label:hover, .rating label:hover ~ label{color:#fbbf24}
+.reviews{margin-top:12px;display:grid;gap:12px}
+.review{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
+.review__meta{font-size:12px;color:#64748b}
 
 /* Footer */
 .footer{border-top:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.7);padding:24px 0}
@@ -143,32 +160,3 @@ body{
 @media(min-width:760px){.footer__inner{flex-direction:row}}
 .footer__links{display:flex;gap:16px}
 .footer__links a{text-decoration:none;color:var(--text);opacity:.85}
-
-/* --- Calendario: no cambiar al pasar el mouse si está seleccionado o completo --- */
-.cal__day--selected:hover {
-  background: #0f172a;   /* igual que seleccionado */
-  color: #fff;
-  border-color: #0f172a;
-}
-
-.cal__day--full:hover {
-  background: #f1f5f9;   /* igual que "día completo" */
-  color: #94a3b8;
-  border-color: #e2e8f0;
-}
-
-/* (opcional) si querés que los días vacíos NO cambien al hover, comenta la siguiente regla */
-/* .cal__day:hover { background: #fff; border-color: var(--border); color: #0f172a; } */
-
-/* --- Horas: no cambiar al pasar el mouse si está activa u ocupada --- */
-.slot__btn--active:hover {
-  background: #0f172a;   /* igual que activa */
-  color: #fff;
-  border-color: #0f172a;
-}
-
-.slot__btn--disabled:hover {
-  background: #f1f5f9;   /* igual que deshabilitada */
-  color: #94a3b8;
-  border-color: #e2e8f0;
-}
