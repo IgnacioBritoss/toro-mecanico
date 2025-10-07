@@ -48,13 +48,13 @@ body{
 .hero__bullets li{color:#1f2937}
 
 .hero__media .media__frame{
-  aspect-ratio:16/9;
   border-radius:18px;
-  background: #eef2ff;             /* fondo suave para las bandas */
+  background:#eef2ff; /* fondo suave por si la imagen no ocupa 100% en algún breakpoint */
   border:1px solid rgba(255,255,255,.7);
   box-shadow:0 10px 30px rgba(0,0,0,.08);
   overflow:hidden;
-  position:relative;
+  /* IMPORTANTE: quitamos el aspect-ratio fijo para que NO recorte */
+  /* aspect-ratio:16/9;  <-- eliminar si lo tenías */
 }
 /* Imagen de fondo que cubre y recorta bordes */
 .img-cover{background-image:var(--img);background-size:cover;background-position:center}
@@ -328,12 +328,21 @@ input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }
   position:relative;
 }
 
-/* Imagen que rellena el marco */
 .media__img{
-  width:100%;
-  height:100%;
-  object-fit:contain;               /* <- antes: cover */
-  object-position:center;
   display:block;
-  background:#eef2ff;               /* mismo fondo que el marco */
+  width:100%;
+  height:auto;        /* mantiene proporciones, no se deforma ni recorta */
+}
+
+/* Si querés limitar altura máxima en desktop (opcional), se achica manteniendo todo:
+   así nunca queda “gigante”. Ajustá el  max-height a gusto. */
+@media (min-width: 900px){
+  .media__img{
+    max-height: 520px;      /* opcional */
+    width:auto;             /* con max-height, dejá que el ancho se ajuste */
+  }
+  .hero__media .media__frame{
+    display:flex; justify-content:center; /* centra la imagen si width:auto */
+    background:#eef2ff;
+  }
 }
