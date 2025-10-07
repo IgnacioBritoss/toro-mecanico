@@ -223,3 +223,76 @@ input[type="number"] {
 /* color del placeholder (opción vacía) y de las opciones */
 #fLocality:invalid { color: #94a3b8; }   /* “Elegí tu zona” más suave */
 #fLocality option { color: var(--text); }
+
+
+/* === Select custom “lindo” ====================================== */
+.nice-select-wrap {
+  position: relative;
+}
+
+/* Escondemos el select nativo pero sigue recibiendo foco/validación */
+.nice-select-wrap select {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; pointer-events: none; /* el shell recibe los clics */
+}
+
+/* Botón cerrado */
+.nice-select-display{
+  width:100%; text-align:left; cursor:pointer;
+  background:#fff; color:var(--text);
+  border:1px solid var(--border); border-radius:12px;
+  padding:12px 44px 12px 12px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.04);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.nice-select-display:hover{ background:#f8fafc; border-color:#cbd5e1; }
+.nice-select-display:focus{ outline: none; }
+
+/* Indicador (flecha) */
+.nice-select-caret{
+  position:absolute; right:12px; top:50%; translate:0 -50%;
+  width:18px; height:18px; pointer-events:none;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'><path fill='%230f172a' d='M7 10l5 5 5-5'/></svg>")
+    no-repeat center / 18px 18px;
+  transition: transform .15s ease;
+}
+.nice-select-display[aria-expanded="true"] .nice-select-caret{
+  transform: rotate(180deg) translateY(50%);
+}
+
+/* Lista desplegable */
+.nice-select-list{
+  position:absolute; z-index:40; left:0; right:0; top:calc(100% + 6px);
+  list-style:none; margin:0; padding:6px;
+  background:#fff; border:1px solid var(--border); border-radius:12px;
+  box-shadow:0 16px 30px rgba(2,6,23,.12);
+  max-height:280px; overflow:auto; display:none;
+}
+.nice-select-display[aria-expanded="true"] + .nice-select-list{ display:block; }
+
+/* Item */
+.nice-select-list li{
+  padding:10px 12px; border-radius:10px; cursor:pointer;
+  transition: background .12s ease, color .12s ease;
+}
+.nice-select-list li[aria-selected="true"]{
+  background:#0f172a; color:#fff;
+}
+.nice-select-list li:hover{
+  background:#eef2ff;
+}
+
+/* Placeholder “Elegí tu zona” más suave cuando está vacío */
+.nice-select-wrap.is-empty .nice-select-text{ color:#94a3b8; }
+
+/* Accesibilidad foco visible */
+.nice-select-display:focus-visible{
+  box-shadow: 0 0 0 3px rgba(148,163,184,.25);
+  border-color:#94a3b8;
+}
+
+/* === (ya tenías) Quitar spinners de Edad ======================== */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }

@@ -242,3 +242,66 @@ async function onSecondStep(){
     secondStepBtn.disabled=false;
   }
 }
+
+
+// ===== Nice Select (Custom) =====
+(function initNiceSelect(){
+  const wrap = document.querySelector('.nice-select-wrap');
+  if(!wrap) return;
+  const sel = wrap.querySelector('select');
+  const btn = wrap.querySelector('.nice-select-display');
+  const list = wrap.querySelector('.nice-select-list');
+  const text = wrap.querySelector('.nice-select-text');
+
+  // Crea los <li> a partir de las <option>
+  function buildList(){
+    list.innerHTML = '';
+    [...sel.options].forEach(opt => {
+      if (opt.disabled) return;
+      const li = document.createElement('li');
+      li.textContent = opt.textContent;
+      li.setAttribute('role','option');
+      li.dataset.value = opt.value;
+      if (opt.selected) li.setAttribute('aria-selected','true');
+      li.addEventListener('click', () => {
+        sel.value = opt.value;  // sincroniza valor real
+        sel.dispatchEvent(new Event('change', { bubbles:true }));
+        close();
+      });
+      list.appendChild(li);
+    });
+  }
+
+  function syncFromSelect(){
+    const val = sel.value;
+    const opt = sel.querySelector(`option[value="${CSS.escape(val)}"]`);
+    text.textContent = opt ? opt.textContent : (sel.options[0]?.textContent || 'Elegí');
+    wrap.classList.toggle('is-empty', !val);
+    // marca seleccionado en la lista
+    list.querySelectorAll('li').forEach(li => {
+      li.toggleAttribute('aria-selected', li.dataset.value === val);
+    });
+  }
+
+  function open(){
+    btn.setAttribute('aria-expanded','true');
+    document.addEventListener('click', onDoc, { capture:true });
+    document.addEventListener('keydown', onKey);
+  }
+  function close(){
+    btn.setAttribute('aria-expanded','false');
+    document.removeEventListener('click', onDoc, { capture:true });
+    document.removeEventListener('keydown', onKey);
+  }
+  function toggle(){ (btn.getAttribute('aria-expanded') === 'true') ? close() : open(); }
+  function onDoc(e){ if (!wrap.contains(e.target)) close(); }
+  function onKey(e){ if (e.key === 'Escape') close(); }
+
+  // Eventos
+  btn.addEventListener('click', toggle);
+  sel.addEventListener('change', syncFromSelect);
+
+  // Init
+  buildList();
+  syncFromSelect();
+})();

@@ -153,21 +153,31 @@
           </label>
 
           <label>Localidad
-            <select id="fLocality" required>
-              <option value="">Elegí tu zona</option>
-              <option>Avellaneda</option><option>Lanús</option><option>Quilmes</option>
-              <option>Berazategui</option><option>Florencio Varela</option>
-              <option>Almirante Brown</option><option>Esteban Echeverría</option>
-              <option>Ezeiza</option><option>Lomas de Zamora</option>
-              <option>Vicente López</option><option>San Isidro</option>
-              <option>San Martín</option><option>Tres de Febrero</option>
-              <option>Hurlingham</option><option>Ituzaingó</option>
-              <option>Morón</option><option>Merlo</option><option>Moreno</option>
-              <option>Malvinas Argentinas</option><option>José C. Paz</option>
-              <option>San Miguel</option><option>San Fernando</option>
-              <option>Tigre</option><option>Pilar</option><option>Escobar</option>
-            </select>
-          </label>
+  <div class="nice-select-wrap">
+    <select id="fLocality" required>
+      <option value="">Elegí tu zona</option>
+      <option>Avellaneda</option><option>Lanús</option><option>Quilmes</option>
+      <option>Berazategui</option><option>Florencio Varela</option>
+      <option>Almirante Brown</option><option>Esteban Echeverría</option>
+      <option>Ezeiza</option><option>Lomas de Zamora</option>
+      <option>Vicente López</option><option>San Isidro</option>
+      <option>San Martín</option><option>Tres de Febrero</option>
+      <option>Hurlingham</option><option>Ituzaingó</option>
+      <option>Morón</option><option>Merlo</option><option>Moreno</option>
+      <option>Malvinas Argentinas</option><option>José C. Paz</option>
+      <option>San Miguel</option><option>San Fernando</option>
+      <option>Tigre</option><option>Pilar</option><option>Escobar</option>
+    </select>
+
+    <!-- Shell custom -->
+    <button type="button" class="nice-select-display" aria-haspopup="listbox" aria-expanded="false">
+      <span class="nice-select-text">Elegí tu zona</span>
+      <span class="nice-select-caret" aria-hidden="true"></span>
+    </button>
+    <ul class="nice-select-list" role="listbox"></ul>
+  </div>
+</label>
+
         </div>
 
         <div class="form__row">
