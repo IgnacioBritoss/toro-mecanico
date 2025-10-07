@@ -23,7 +23,6 @@ const fEmail = document.getElementById("fEmail");
 const fPhone = document.getElementById("fPhone");
 const fPostal = document.getElementById("fPostal");
 const fAge = document.getElementById("fAge");
-const fLocality = document.getElementById("fLocality");
 const fMsg = document.getElementById("fMsg");
 const formDate = document.getElementById("formDate");
 const formTime = document.getElementById("formTime");
@@ -34,8 +33,8 @@ const secondStepBlock = document.getElementById("secondStepBlock");
 const secondStepBtn = document.getElementById("secondStepBtn");
 const secondStepHint = document.getElementById("secondStepHint");
 const paymentBlockManual = document.getElementById("paymentBlockManual");
-const mpButtonWrap = document.getElementById("mp-button-wrap"); // contenedor del script embebido (si existe)
-const mpLink1ars = document.getElementById("mp-link-1ars");     // fallback link mpago.li
+const mpButtonWrap = document.getElementById("mp-button-wrap");
+const mpLink1ars = document.getElementById("mp-link-1ars");
 const payWarn = document.getElementById("payWarn");
 
 // ---- helpers fecha/hora
@@ -47,13 +46,11 @@ function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth
 // --- Bloquear edición directa de Fecha/Hora en el form ---
 function lockDateTimeFields() {
   if (!formDate || !formTime) return;
-
   const blockEv = (e) => e.preventDefault();
   ["keydown","keypress","keyup","wheel","paste","cut","contextmenu","beforeinput","input"].forEach(ev => {
     formDate.addEventListener(ev, blockEv);
     formTime.addEventListener(ev, blockEv);
   });
-
   formDate.style.pointerEvents = "none";
   formTime.style.pointerEvents = "none";
 }
@@ -64,10 +61,10 @@ function setFormDateTimeFromSelection() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  lockDateTimeFields();                  // bloquear edición en el form
+  lockDateTimeFields();
   await fetchAvailabilityForMonth(activeMonth);
   renderCalendar(); renderHours(); updateSummary();
-  setFormDateTimeFromSelection();        // por si ya hay selección
+  setFormDateTimeFromSelection();
 
   prevMonthBtn?.addEventListener("click", async () => {
     activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1);
@@ -79,7 +76,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   goToFormBtn?.addEventListener("click", () => {
-    setFormDateTimeFromSelection(); // aseguramos sincronización
+    setFormDateTimeFromSelection();
     document.getElementById("reserva").scrollIntoView({ behavior:"smooth" });
   });
 
@@ -172,9 +169,7 @@ const addrLng     = document.getElementById("addr_lng");
 const addrDisplay = document.getElementById("addr_display");
 const addrOsmId   = document.getElementById("addr_osm_id");
 
-// Centro inicial (CABA) + sesgo a AMBA
 const START = { lat: -34.6037, lng: -58.3816, zoom: 13 };
-// west, north, east, south
 const VIEWBOX = "-58.9,-34.2,-57.9,-34.9";
 const USE_VIEWBOX = true;
 
@@ -182,9 +177,7 @@ let addrMap, addrMarker, debounceTimer = null, selectedIndex = -1, currentData =
 
 function ensureMapVisible(){
   if (!addrMapEl) return;
-  if (addrMapEl.classList.contains("hidden")) {
-    addrMapEl.classList.remove("hidden");
-  }
+  if (addrMapEl.classList.contains("hidden")) addrMapEl.classList.remove("hidden");
   if (!addrMap && window.L){
     addrMap = L.map('addrMap').setView([START.lat, START.lng], START.zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -196,7 +189,6 @@ function ensureMapVisible(){
       const { lat, lng } = addrMarker.getLatLng();
       setHidden(lat, lng, addrDisplay?.value || "", addrOsmId?.value || "");
     });
-
     setTimeout(() => addrMap.invalidateSize(), 50);
   } else if (addrMap) {
     setTimeout(() => addrMap.invalidateSize(), 50);
@@ -294,13 +286,12 @@ async function onSubmitReservation(e){
     phone: fPhone.value.trim(),
     postal_code: fPostal.value.trim(),
     age: parseInt(fAge.value,10),
-    zone: fLocality.value.trim(),
     message: fMsg.value.trim(),
     date: formDate.value,
     time: formTime.value,
     plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h",
 
-    // NUEVO: ubicación precisa
+    // Ubicación precisa
     location: {
       address: (document.getElementById('fAddress')?.value || '').trim(),
       lat: Number(addrLat?.value || 0),
@@ -310,12 +301,11 @@ async function onSubmitReservation(e){
     }
   };
 
-  if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.zone||!payload.phone||!payload.postal_code){
+  if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.phone||!payload.postal_code){
     formHint.textContent="Completá todos los campos."; return;
   }
   if(payload.age<18){ formHint.textContent="Solo mayores de 18 años."; return; }
 
-  // Ubicación requerida
   if (!payload.location.lat || !payload.location.lng || !payload.location.display_name){
     formHint.textContent = "Indicá la dirección y elegí una sugerencia para fijar el punto en el mapa.";
     document.getElementById('fAddress')?.focus();
@@ -331,11 +321,9 @@ async function onSubmitReservation(e){
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
 
-    // Limpiar ubicación en ocultos y re-ocultar mapa (opcional)
     setHidden('', '', '', '');
     addrMapEl?.classList.add('hidden');
 
-    // Mostrar bloque de segundo paso y ocultar pago (hasta que confirme)
     secondStepBlock.classList.remove("hidden");
     secondStepHint.textContent="";
     paymentBlockManual.classList.add("hidden");
@@ -364,11 +352,9 @@ async function onSecondStep(){
     });
     const d = await r.json();
 
-    // Mostramos SIEMPRE el bloque de pago y ocultamos el de segundo paso
     secondStepBlock.classList.add("hidden");
     paymentBlockManual.classList.remove("hidden");
 
-    // Limpieza del contenedor embebido y del link
     if (mpButtonWrap) mpButtonWrap.innerHTML = "";
     if (mpLink1ars) {
       mpLink1ars.classList.add("hidden");
@@ -382,7 +368,6 @@ async function onSecondStep(){
       return;
     }
 
-    // 1) Si hay preference, renderizamos el botón embebido oficial
     if (d.mpPreferenceId && mpButtonWrap){
       const s = document.createElement("script");
       s.src = "https://www.mercadopago.com.ar/integrations/v1/web-payment-checkout.js";
@@ -390,18 +375,13 @@ async function onSecondStep(){
       s.dataset.source = "button";
       mpButtonWrap.appendChild(s);
     }
-
-    // 2) Fallback: si hay link mpago.li lo mostramos
     if (d.payLink && mpLink1ars){
       mpLink1ars.href = d.payLink;
       mpLink1ars.classList.remove("hidden");
     }
-
-    // 3) Si no hay nada configurado, avisamos
     if (!d.mpPreferenceId && !d.payLink){
       payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel.";
     }
-
     secondStepHint.textContent = "Listo. Abajo tenés el botón para señar.";
   }catch{
     secondStepHint.textContent="Error de red. Probá de nuevo.";
@@ -409,8 +389,8 @@ async function onSecondStep(){
   }
 }
 
-
 // ===== Nice Select (Custom) - FIX =====
+// (Si ya no existe el select, esto se auto-desactiva)
 (function initNiceSelect(){
   const wrap = document.querySelector('.nice-select-wrap');
   if(!wrap) return;
@@ -429,32 +409,15 @@ async function onSecondStep(){
       li.textContent = opt.textContent;
       li.setAttribute('role','option');
       if (opt.selected) li.setAttribute('aria-selected','true');
-
-      li.addEventListener('click', () => {
-        setSelectValue(v);
-        close();
-        btn.focus();
-      });
-
+      li.addEventListener('click', () => { setSelectValue(v); close(); btn.focus(); });
       list.appendChild(li);
     });
   }
-
   function setSelectValue(v){
     let foundIndex = -1;
-    for (let i=0; i<sel.options.length; i++){
-      if (sel.options[i].value === v){
-        foundIndex = i;
-        break;
-      }
-    }
+    for (let i=0; i<sel.options.length; i++){ if (sel.options[i].value === v){ foundIndex = i; break; } }
     if (foundIndex === -1){
-      for (let i=0; i<sel.options.length; i++){
-        if (sel.options[i].textContent.trim() === v){
-          foundIndex = i;
-          break;
-        }
-      }
+      for (let i=0; i<sel.options.length; i++){ if (sel.options[i].textContent.trim() === v){ foundIndex = i; break; } }
     }
     if (foundIndex !== -1){
       sel.selectedIndex = foundIndex;
@@ -463,30 +426,19 @@ async function onSecondStep(){
       syncFromSelect();
     }
   }
-
   function syncFromSelect(){
     const v = sel.value;
     const opt = sel.options[sel.selectedIndex] || sel.options[0];
     text.textContent = opt ? opt.textContent : 'Elegí tu zona';
     wrap.classList.toggle('is-empty', !v);
-
     const items = list.querySelectorAll('li');
     items.forEach(li => {
       li.toggleAttribute('aria-selected', li.dataset.value === v ||
         li.textContent.trim() === v);
     });
   }
-
-  function open(){
-    btn.setAttribute('aria-expanded','true');
-    document.addEventListener('click', onDoc, { capture:true });
-    document.addEventListener('keydown', onKey);
-  }
-  function close(){
-    btn.setAttribute('aria-expanded','false');
-    document.removeEventListener('click', onDoc, { capture:true });
-    document.removeEventListener('keydown', onKey);
-  }
+  function open(){ btn.setAttribute('aria-expanded','true'); document.addEventListener('click', onDoc, { capture:true }); document.addEventListener('keydown', onKey); }
+  function close(){ btn.setAttribute('aria-expanded','false'); document.removeEventListener('click', onDoc, { capture:true }); document.removeEventListener('keydown', onKey); }
   function toggle(){ (btn.getAttribute('aria-expanded') === 'true') ? close() : open(); }
   function onDoc(e){ if (!wrap.contains(e.target)) close(); }
   function onKey(e){ if (e.key === 'Escape') close(); }
