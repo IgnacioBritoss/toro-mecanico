@@ -34,7 +34,8 @@ const secondStepBlock = document.getElementById("secondStepBlock");
 const secondStepBtn = document.getElementById("secondStepBtn");
 const secondStepHint = document.getElementById("secondStepHint");
 const paymentBlockManual = document.getElementById("paymentBlockManual");
-const mpLink1ars = document.getElementById("mp-link-1ars");
+const mpButtonWrap = document.getElementById("mp-button-wrap"); // contenedor del script embebido (si existe)
+const mpLink1ars = document.getElementById("mp-link-1ars");     // fallback link mpago.li
 const payWarn = document.getElementById("payWarn");
 
 // ---- helpers fecha/hora
@@ -168,6 +169,7 @@ async function onSubmitReservation(e){
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
 
+    // Mostrar bloque de segundo paso y ocultar pago (hasta que confirme)
     secondStepBlock.classList.remove("hidden");
     secondStepHint.textContent="";
     paymentBlockManual.classList.add("hidden");
@@ -195,24 +197,48 @@ async function onSecondStep(){
       body:JSON.stringify({ id:lastReservation.id, token:lastReservation.token })
     });
     const d = await r.json();
-    if(!r.ok){ secondStepHint.textContent = d.error || "No se pudo preparar el pago."; secondStepBtn.disabled=false; return; }
 
-    // Mostrar botón de pago
-    if (d.payLink){
-      mpLink1ars.href = d.payLink;
-      payWarn.textContent = "";
-    }else{
-      mpLink1ars.removeAttribute("href");
-      payWarn.textContent = "El link de pago todavía no está configurado.";
-    }
+    // Mostramos SIEMPRE el bloque de pago y ocultamos el de segundo paso
+    secondStepBlock.classList.add("hidden");
     paymentBlockManual.classList.remove("hidden");
-    secondStepHint.textContent = "Listo. Apretá el botón para ir al pago.";
+
+    // Limpieza del contenedor embebido y del link
+    if (mpButtonWrap) mpButtonWrap.innerHTML = "";
+    if (mpLink1ars) {
+      mpLink1ars.classList.add("hidden");
+      mpLink1ars.textContent = "Señar $1 con Mercado Pago";
+    }
+    payWarn.textContent = "";
+
+    if(!r.ok){
+      payWarn.textContent = d.error || "No se pudo preparar el pago.";
+      secondStepBtn.disabled=false;
+      return;
+    }
+
+    // 1) Si hay preference, renderizamos el botón embebido oficial
+    if (d.mpPreferenceId && mpButtonWrap){
+      const s = document.createElement("script");
+      s.src = "https://www.mercadopago.com.ar/integrations/v1/web-payment-checkout.js";
+      s.dataset.preferenceId = d.mpPreferenceId;
+      s.dataset.source = "button";
+      mpButtonWrap.appendChild(s);
+    }
+
+    // 2) Fallback: si hay link mpago.li lo mostramos
+    if (d.payLink && mpLink1ars){
+      mpLink1ars.href = d.payLink;
+      mpLink1ars.classList.remove("hidden");
+    }
+
+    // 3) Si no hay nada configurado, avisamos
+    if (!d.mpPreferenceId && !d.payLink){
+      payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel.";
+    }
+
+    secondStepHint.textContent = "Listo. Abajo tenés el botón para señar.";
   }catch{
     secondStepHint.textContent="Error de red. Probá de nuevo.";
     secondStepBtn.disabled=false;
   }
-
-  secondStepBlock.classList.add('hidden');
-paymentBlockManual.classList.remove('hidden');
-
 }
