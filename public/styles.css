@@ -47,19 +47,29 @@ body{
 .hero__bullets{display:grid;gap:6px;margin:16px 0 0;padding-left:18px}
 .hero__bullets li{color:#1f2937}
 
+/* Marco que SE ADAPTA al alto de la imagen (sin recortes) */
+.hero__media{display:flex;align-items:center}
 .hero__media .media__frame{
-  border-radius:18px;
-  background:#eef2ff; /* fondo suave por si la imagen no ocupa 100% en algún breakpoint */
+  background:#eef2ff;             /* fondo suave */
   border:1px solid rgba(255,255,255,.7);
+  border-radius:18px;
   box-shadow:0 10px 30px rgba(0,0,0,.08);
-  overflow:hidden;
-  /* IMPORTANTE: quitamos el aspect-ratio fijo para que NO recorte */
-  /* aspect-ratio:16/9;  <-- eliminar si lo tenías */
+  overflow:hidden;                 /* bordes redondeados recortan la imagen */
+  /* IMPORTANTE: NO ponemos aspect-ratio aquí, así el alto sigue a la imagen */
 }
-/* Imagen de fondo que cubre y recorta bordes */
-.img-cover{background-image:var(--img);background-size:cover;background-position:center}
-.media__placeholder{color:#64748b;font-size:14px}
-.hint{color:#64748b;font-size:12px;margin-top:6px}
+.media__img{
+  display:block;
+  width:100%;      /* ocupa el ancho de la columna */
+  height:auto;     /* mantiene proporción y NO recorta */
+}
+
+/* Opcional: limitar altura máxima en desktop para que no quede gigante */
+@media (min-width: 900px){
+  .media__img{
+    max-height: 520px;   /* ajustable; elimina si querés todo su alto */
+    object-fit: contain; /* no recorta si llega al tope de altura */
+  }
+}
 
 /* Sections */
 .section{padding:56px 0}
@@ -84,15 +94,13 @@ body{
 .card__list{color:#374151;display:grid;gap:6px;margin:10px 0 14px;padding-left:18px}
 .card__note{color:#64748b;font-size:12px;margin-top:8px}
 
-/* Calendar */
+/* Calendar (no tocamos esto) */
 .grid{display:grid;gap:20px}
 @media(min-width:900px){.grid{grid-template-columns:2fr 1fr}}
 .cal{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;padding:16px}
 .cal__head{display:flex;align-items:center;justify-content:space-between}
 .cal__week{margin-top:10px;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;color:#64748b;font-size:12px}
 .cal__grid{margin-top:6px;display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-
-/* mejor contraste + estados */
 .cal__day{
   aspect-ratio:1/1;display:grid;place-items:center;border:1px solid var(--border);
   border-radius:12px;background:#fff;font-size:14px;cursor:pointer;color:#0f172a;
@@ -104,7 +112,6 @@ body{
 .cal__day--selected:hover{background:#0f172a;color:#fff;border-color:#0f172a}
 .cal__day--full{background:#f1f5f9;color:#94a3b8;text-decoration:line-through;cursor:not-allowed;border-style:dashed}
 .cal__day--full:hover{background:#f1f5f9;color:#94a3b8;border-color:#e2e8f0}
-
 .cal__nav{display:flex;gap:8px}
 
 .slot{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;padding:16px}
@@ -119,230 +126,9 @@ body{
 .summary__value{font-weight:700;margin-top:4px}
 #goToForm{margin-top:14px}
 
-/* Gallery */
-.gallery{margin-top:14px;display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
-@media(min-width:900px){.gallery{grid-template-columns:repeat(3,1fr)}}
-.gallery__item{
-  aspect-ratio:16/9;border-radius:16px;background:#e2e8f0;border:1px solid rgba(255,255,255,.7);
-  box-shadow:inset 0 2px 6px rgba(0,0,0,.05)
-}
-
-/* FAQ */
-.faq{display:grid;gap:12px;margin-top:12px}
-.faq__item{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:14px;padding:12px}
-.faq__item summary{cursor:pointer;font-weight:700}
-.faq__item p{color:#475569;margin:8px 0 0}
-
-/* Form */
-.form{display:grid;gap:12px;background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:18px;padding:16px}
-.form--elevated{box-shadow:0 10px 26px rgba(0,0,0,.08)}
-.form--flat{box-shadow:none}
-.form input,.form textarea,.form select{width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;background:#fff}
-.form__row{display:grid;gap:12px;grid-template-columns:1fr}
-@media(min-width:900px){.form__row{grid-template-columns:1fr 1fr}}
-
-/* Planes mejorados (sin radios rojos) */
-.plan{border:1px solid var(--border);border-radius:14px;padding:12px}
-.plan--pretty .plan__opt{display:block}
-.plan__opt input{display:none}
-.plan__card{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:12px;margin-top:8px;background:#fff;border:1px solid var(--border);
-  border-radius:12px;padding:14px 16px;cursor:pointer;transition:.2s
-}
-.plan__card strong{font-size:20px}
-.plan__card em{font-style:normal;color:#334155}
-.plan__card:hover{border-color:#cbd5e1;background:#f8fafc}
-.plan__card--pop{border-color:#fde68a;background:#fffbe8}
-.plan__opt input:checked + .plan__card{
-  background:var(--primary);color:#fff;border-color:var(--primary)
-}
-.plan__opt input:checked + .plan__card em{color:#e5e7eb}
-
-/* Opiniones */
-.rating{display:flex;flex-direction:row-reverse;gap:6px}
-.rating input{display:none}
-.rating label{font-size:24px;cursor:pointer;color:#cbd5e1}
-.rating input:checked ~ label, .rating label:hover, .rating label:hover ~ label{color:#fbbf24}
-.reviews{margin-top:12px;display:grid;gap:12px}
-.review{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px}
-.review__meta{font-size:12px;color:#64748b}
-
-/* Tarjetas del flujo (segundo paso / pago) */
-.flow-card{
-  margin-top:22px;background:#fff;border:1px solid var(--border);border-radius:16px;
-  padding:16px;box-shadow:0 10px 26px rgba(0,0,0,.08)
-}
-.hidden{display:none}
-
 /* Footer */
 .footer{border-top:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.7);padding:24px 0}
 .footer__inner{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:space-between}
 @media(min-width:760px){.footer__inner{flex-direction:row}}
 .footer__links{display:flex;gap:16px}
 .footer__links a{text-decoration:none;color:var(--text);opacity:.85}
-
-/* === 1) Quitar flechitas (spinners) del input de Edad === */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  appearance: textfield;      /* Firefox/estándar */
-  -moz-appearance: textfield; /* Firefox legacy */
-}
-
-/* === 2) Select de Localidad con estilo (tipo Petcare) === */
-#fLocality {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  cursor: pointer;
-
-  /* base */
-  background:
-    linear-gradient(#fff, #fff) padding-box, /* fondo del control */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'><path fill='%230f172a' d='M7 10l5 5 5-5'/></svg>") no-repeat right 14px center / 18px 18px; /* chevron */
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 44px 12px 12px; /* espacio para la flecha */
-  box-shadow: inset 0 2px 6px rgba(0,0,0,.04);
-  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
-  color: var(--text);
-  background-color: #fff;
-}
-
-/* hover/focus para feedback */
-#fLocality:hover {
-  border-color: #cbd5e1;
-  background-color: #f8fafc;
-}
-#fLocality:focus {
-  outline: none;
-  border-color: #94a3b8;
-  box-shadow: 0 0 0 3px rgba(148,163,184,.25);
-}
-
-/* color del placeholder (opción vacía) y de las opciones */
-#fLocality:invalid { color: #94a3b8; }   /* “Elegí tu zona” más suave */
-#fLocality option { color: var(--text); }
-
-
-/* === Select custom “lindo” ====================================== */
-.nice-select-wrap {
-  position: relative;
-}
-
-/* Escondemos el select nativo pero sigue recibiendo foco/validación */
-.nice-select-wrap select {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  opacity: 0; pointer-events: none; /* el shell recibe los clics */
-}
-
-/* Botón cerrado */
-.nice-select-display{
-  width:100%; text-align:left; cursor:pointer;
-  background:#fff; color:var(--text);
-  border:1px solid var(--border); border-radius:12px;
-  padding:12px 44px 12px 12px;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,.04);
-  transition: border-color .15s, box-shadow .15s, background .15s;
-}
-.nice-select-display:hover{ background:#f8fafc; border-color:#cbd5e1; }
-.nice-select-display:focus{ outline: none; }
-
-/* Indicador (flecha) */
-.nice-select-caret{
-  position:absolute; right:12px; top:50%; translate:0 -50%;
-  width:18px; height:18px; pointer-events:none;
-  background:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'><path fill='%230f172a' d='M7 10l5 5 5-5'/></svg>")
-    no-repeat center / 18px 18px;
-  transition: transform .15s ease;
-}
-.nice-select-display[aria-expanded="true"] .nice-select-caret{
-  transform: rotate(180deg) translateY(50%);
-}
-
-/* Lista desplegable */
-.nice-select-list{
-  position:absolute; z-index:40; left:0; right:0; top:calc(100% + 6px);
-  list-style:none; margin:0; padding:6px;
-  background:#fff; border:1px solid var(--border); border-radius:12px;
-  box-shadow:0 16px 30px rgba(2,6,23,.12);
-  max-height:280px; overflow:auto; display:none;
-}
-.nice-select-display[aria-expanded="true"] + .nice-select-list{ display:block; }
-
-/* Item */
-.nice-select-list li{
-  padding:10px 12px; border-radius:10px; cursor:pointer;
-  transition: background .12s ease, color .12s ease;
-}
-.nice-select-list li[aria-selected="true"]{
-  background:#0f172a; color:#fff;
-}
-.nice-select-list li:hover{
-  background:#eef2ff;
-}
-
-/* Placeholder “Elegí tu zona” más suave cuando está vacío */
-.nice-select-wrap.is-empty .nice-select-text{ color:#94a3b8; }
-
-/* Accesibilidad foco visible */
-.nice-select-display:focus-visible{
-  box-shadow: 0 0 0 3px rgba(148,163,184,.25);
-  border-color:#94a3b8;
-}
-
-/* === (ya tenías) Quitar spinners de Edad ======================== */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
-input[type="number"]{ appearance: textfield; -moz-appearance:textfield; }
-
-
-/* Campos bloqueados (fecha/hora en el form) */
-.locked-input{
-  background: #f8fafc;
-  color: var(--text);
-  border-color: var(--border);
-  cursor: not-allowed;
-}
-
-/* eliminamos cualquier spinner visual posible */
-.locked-input::-webkit-calendar-picker-indicator{
-  opacity: 0; pointer-events: none;
-}
-
-
-/* Marco del hero */
-.hero__media .media__frame{
-  aspect-ratio:16/9;
-  border-radius:18px;
-  /* quitamos el fondo gris para que no tape la foto */
-  background: transparent;
-  border:1px solid rgba(255,255,255,.7);
-  box-shadow:0 10px 30px rgba(0,0,0,.08);
-  overflow:hidden;
-  position:relative;
-}
-
-.media__img{
-  display:block;
-  width:100%;
-  height:auto;        /* mantiene proporciones, no se deforma ni recorta */
-}
-
-/* Si querés limitar altura máxima en desktop (opcional), se achica manteniendo todo:
-   así nunca queda “gigante”. Ajustá el  max-height a gusto. */
-@media (min-width: 900px){
-  .media__img{
-    max-height: 520px;      /* opcional */
-    width:auto;             /* con max-height, dejá que el ancho se ajuste */
-  }
-  .hero__media .media__frame{
-    display:flex; justify-content:center; /* centra la imagen si width:auto */
-    background:#eef2ff;
-  }
-}
