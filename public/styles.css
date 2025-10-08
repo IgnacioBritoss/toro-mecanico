@@ -355,7 +355,7 @@ input[type="number"] {
 /* Bajar un poco el texto del hero en desktop */
 @media (min-width: 900px){
   .hero__copy{
-    margin-top: 20px;   /* ajustá 10–32px a gusto */
+    margin-top: 27px;   /* ajustá 10–32px a gusto */
   }
 }
 
