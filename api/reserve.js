@@ -17,6 +17,16 @@ function isValidLatLng(lat, lng){
   return la >= -90 && la <= 90 && ln >= -180 && ln <= 180;
 }
 
+// === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
+function formatFechaCortaUTC(dateLike){
+  const d = new Date(dateLike);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }); // "Mon"
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${weekday} ${dd}/${mm}/${yy}`;
+}
+
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
@@ -100,6 +110,10 @@ export default async function handler(req, res){
       client.release();
     }
 
+    // === NUEVO: formateos reutilizables para los emails
+    const fechaCorta = formatFechaCortaUTC(reservation.event_date);
+    const horaStr = String(reservation.event_hour).padStart(2, "0");
+
     // ---- Emails ----
     let mailError = null;
     try {
@@ -145,10 +159,10 @@ export default async function handler(req, res){
           subject: "Nueva reserva — Toro Mecánico",
           html: `
           <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-            <h2>Nueva reserva</h2>
+            <h2>Nueva reserva del siguiente Cliente</h2>
             <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
             <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
-            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour)}</p>
+            <p><strong>${fechaCorta}</strong> — ${horaStr}</p>
             <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
             ${message ? `<p style="white-space:pre-wrap"> el mensaje del usuario sobre el evento es ${message}</p>` : ""}
             ${locHtml}
@@ -167,11 +181,11 @@ export default async function handler(req, res){
           text:
 `Hola ${user.name} este mersaje es para confirmarte que:
 
-Recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour)} (plan ${reservation.plan}).
+Recibimos tu solicitud para el ${fechaCorta} a las ${horaStr} (plan ${reservation.plan}).
 Ubicación: ${reservation.location_display}
 Mapa: https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}
 
-Te pedimos que en el confirmes siguiente paso y podras pagar de seña.  Saludos cordiales`
+Te pedimos que pages la seña en caso de querer confirmar nuestra precencia en el gran evento.  Saludos cordiales`
         });
       }
     } catch (e) {
