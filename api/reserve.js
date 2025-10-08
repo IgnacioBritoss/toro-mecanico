@@ -6,6 +6,7 @@ export const config = { runtime: "nodejs" };
 
 const PRICE_USD = { "1h": 300, "2h": 500 };
 
+/* ========== Helpers ========== */
 function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
@@ -16,6 +17,49 @@ function isValidLatLng(lat, lng){
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return false;
   return la >= -90 && la <= 90 && ln >= -180 && ln <= 180;
 }
+function pad2(n){ return String(n).padStart(2, "0"); }
+function safe(v){ return (v ?? "").toString().trim(); }
+function htmlEscape(str=""){
+  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatFechaAR(dateStr){
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  return new Intl.DateTimeFormat("es-AR", {
+    weekday: "short", day: "2-digit", month: "long", year: "numeric",
+    timeZone: "America/Argentina/Buenos_Aires"
+  }).format(d);
+}
+function datosUsuarioHTML(u){
+  return `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+    <tr><td style="padding:8px 0;font-weight:700">Datos del usuario</td></tr>
+    <tr><td style="padding:4px 0">Nombre: <strong>${htmlEscape(safe(u.name))}</strong></td></tr>
+    <tr><td style="padding:4px 0">Edad: <strong>${htmlEscape(safe(u.age))}</strong></td></tr>
+    <tr><td style="padding:4px 0">Email: <strong>${htmlEscape(safe(u.email))}</strong></td></tr>
+    <tr><td style="padding:4px 0">Teléfono: <strong>${htmlEscape(safe(u.phone)) || "-"}</strong></td></tr>
+    <tr><td style="padding:4px 0">Código postal: <strong>${htmlEscape(safe(u.postal_code)) || "-"}</strong></td></tr>
+  </table>`;
+}
+function ubicacionHTML(r){
+  const addr = safe(r.location_display);
+  const lat  = String(r.location_lat ?? "");
+  const lng  = String(r.location_lng ?? "");
+  const osm  = r.location_osm_id ? String(r.location_osm_id) : "";
+  const gmaps = (lat && lng) ? `https://www.google.com/maps?q=${encodeURIComponent(lat)},${encodeURIComponent(lng)}` : "";
+  return `
+  <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
+    <div><strong>Ubicación exacta</strong></div>
+    <div>${htmlEscape(addr || "-")}</div>
+    <div>Lat: ${htmlEscape(lat || "-")} &nbsp; Lng: ${htmlEscape(lng || "-")}${osm ? ` &nbsp; (OSM ${htmlEscape(osm)})` : ""}</div>
+    ${gmaps ? `<div style="margin-top:8px">
+      <a href="${gmaps}" target="_blank" rel="noreferrer"
+         style="display:inline-block;background:#0f172a;color:#fff;padding:10px 12px;border-radius:10px;text-decoration:none">
+        Abrir en Google Maps
+      </a>
+    </div>` : ``}
+  </div>`;
+}
+/* ============================================== */
 
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -69,7 +113,7 @@ export default async function handler(req, res){
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // Insert con ubicación (columnas de ubicación deben existir si corriste la migración)
+      // Insert con ubicación
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -123,55 +167,56 @@ export default async function handler(req, res){
         const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
         const price = PRICE_USD[reservation.plan];
 
-        const locHtml = `
-          <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
-            <div><strong>Ubicación exacta</strong></div>
-            <div>${reservation.location_display || "-"}</div>
-            <div>Lat: ${reservation.location_lat} &nbsp; Lng: ${reservation.location_lng}
-                &nbsp; (OSM ${reservation.location_osm_id || "-"})</div>
-            <div style="margin-top:8px">
-              <a href="https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}"
-                 target="_blank" rel="noreferrer"
-                 style="display:inline-block;background:#0ea5e9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">
-                Abrir en Google Maps
-              </a>
-            </div>
-          </div>`;
+        const fecha = formatFechaAR(reservation.event_date);
+        const hora  = `${pad2(reservation.event_hour)}:00`;
+        const planLabel = reservation.plan === "2h" ? "2 horas" : "1 hora";
 
-        // Mail al OWNER (sin "Localidad")
+        // Mail al OWNER (formal, con datos + ubicación + comentario, botones)
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
           subject: "Nueva reserva — Toro Mecánico",
           html: `
-          <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-            <h2>Nueva reserva</h2>
-            <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
-            <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
-            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
-            <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
-            ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
-            ${locHtml}
-            <p style="margin-top:16px">
-              <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
-              <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
-            </p>
+          <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans';color:#0f172a;line-height:1.55">
+            <div style="max-width:720px;margin:0 auto;padding:24px 16px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px">
+              <h1 style="margin:0 0 12px;font-size:22px">Nueva reserva</h1>
+
+              ${datosUsuarioHTML(user)}
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:12px">
+                <tr><td style="padding:4px 0">Fecha: <strong>${fecha}</strong> — <strong>${hora} hs</strong></td></tr>
+                <tr><td style="padding:4px 0">Plan: <strong>${planLabel}</strong> — USD ${price}</td></tr>
+                ${safe(message) ? `<tr><td style="padding:4px 0">Comentario: <strong>${htmlEscape(safe(message))}</strong></td></tr>` : ``}
+              </table>
+
+              ${ubicacionHTML(reservation)}
+
+              <p style="margin-top:16px">
+                <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
+                <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
+              </p>
+            </div>
+            <p style="max-width:720px;margin:10px auto 0;color:#64748b;font-size:12px">Este correo fue enviado automáticamente por el sistema de reservas.</p>
           </div>`
         });
 
-        // Mail al CLIENTE
+        // Mail al CLIENTE (formal, sin GMT/UTC, con ubicación y comentario)
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
-          subject: "Recibimos tu solicitud de reserva",
-          text:
-`Hola ${user.name},
-Recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}).
-
-Ubicación: ${reservation.location_display}
-Mapa: https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}
-
-En el siguiente paso podrás confirmar y ver el pago de seña.`
+          subject: "Hemos recibido su solicitud de reserva",
+          html: `
+          <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans';color:#0f172a;line-height:1.55">
+            <div style="max-width:720px;margin:0 auto;padding:24px 16px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px">
+              <h1 style="margin:0 0 12px;font-size:22px">Hemos recibido su solicitud</h1>
+              <p>Estimado/a ${htmlEscape(safe(user.name))},</p>
+              <p>Recibimos su solicitud de reserva para el <strong>${fecha}</strong> a las <strong>${hora} hs</strong> (plan <strong>${planLabel}</strong>).</p>
+              ${ubicacionHTML(reservation)}
+              ${safe(message) ? `<p style="margin-top:14px"><strong>Comentario:</strong> ${htmlEscape(safe(message))}</p>` : ``}
+              <p style="margin-top:16px">En el siguiente paso podrá confirmar la seña. Nos comunicaremos a la brevedad de ser necesario.</p>
+            </div>
+            <p style="max-width:720px;margin:10px auto 0;color:#64748b;font-size:12px">Este correo fue enviado automáticamente por el sistema de reservas.</p>
+          </div>`
         });
       }
     } catch (e) {

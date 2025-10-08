@@ -5,11 +5,27 @@ import crypto from "crypto";
 
 export const config = { runtime: "nodejs" };
 
-// firma simple para validar que el link pertenece a la reserva
+/* ========== Helpers ========== */
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
   return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
 }
+function pad2(n){ return String(n).padStart(2, "0"); }
+function safe(v){ return (v ?? "").toString().trim(); }
+function htmlEscape(str=""){
+  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatFechaAR(dateStr){
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  return new Intl.DateTimeFormat("es-AR", {
+    weekday: "short", day: "2-digit", month: "long", year: "numeric",
+    timeZone: "America/Argentina/Buenos_Aires"
+  }).format(d);
+}
+function datosUsuarioInline(r){
+  return `<strong>${htmlEscape(safe(r.name))}</strong> (${htmlEscape(safe(r.email))}) — Tel: ${htmlEscape(safe(r.phone) || "-")} — CP: ${htmlEscape(safe(r.postal_code) || "-")}`;
+}
+/* ================================= */
 
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -35,7 +51,7 @@ export default async function handler(req, res){
     // marcamos intención de seña (solo informativo)
     await pool.query(`UPDATE reservations SET deposit_intent_at = now() WHERE id = $1`, [r.id]);
 
-    // mail al owner para avisar que el cliente va a tratar de señar
+    // mail al owner para avisar que el cliente va a tratar de señar (formal/es-AR)
     try{
       if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
         const transporter = nodemailer.createTransport({
@@ -47,18 +63,26 @@ export default async function handler(req, res){
         const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
         const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
+        const fecha = formatFechaAR(r.event_date);
+        const hora  = `${pad2(r.event_hour)}:00`;
+        const plan  = r.plan === "2h" ? "2 horas" : "1 hora";
+
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
-          subject: "El cliente está iniciando el pago de la seña",
+          subject: "Cliente inició el pago de la seña",
           html: `
-            <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-              <h2>El cliente inició el pago de seña</h2>
-              <p><strong>${r.name}</strong> (${r.email}) — Tel: ${r.phone || "-"} — CP: ${r.postal_code || "-"}</p>
-              <p>Zona: ${r.zone || "-"}</p>
-              <p>Fecha: <strong>${r.event_date}</strong> — ${String(r.event_hour).padStart(2,"0")}:00</p>
-              <p>Plan: <strong>${r.plan}</strong></p>
-              <p>Revisá el ingreso en tu app de Mercado Pago.</p>
+            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans';color:#0f172a;line-height:1.55">
+              <div style="max-width:720px;margin:0 auto;padding:24px 16px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px">
+                <h1 style="margin:0 0 12px;font-size:22px">El cliente inició el pago de seña</h1>
+                <p>${datosUsuarioInline(r)}</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:8px">
+                  <tr><td style="padding:4px 0">Fecha: <strong>${fecha}</strong> — <strong>${hora} hs</strong></td></tr>
+                  <tr><td style="padding:4px 0">Plan: <strong>${plan}</strong></td></tr>
+                </table>
+                <p style="margin-top:8px">Revisá el ingreso en tu app de Mercado Pago.</p>
+              </div>
+              <p style="max-width:720px;margin:10px auto 0;color:#64748b;font-size:12px">Este correo fue enviado automáticamente por el sistema de reservas.</p>
             </div>`
         });
       }

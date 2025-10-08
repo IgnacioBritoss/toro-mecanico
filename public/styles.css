@@ -355,6 +355,33 @@ input[type="number"] {
 /* Bajar un poco el texto del hero en desktop */
 @media (min-width: 900px){
   .hero__copy{
-    margin-top: 40px;   /* ajustá 10–32px a gusto */
+    margin-top: 20px;   /* ajustá 10–32px a gusto */
   }
 }
+
+/* 1) Subtítulos (labels) 3px más separados del campo */
+.form label{
+  display:block;          /* asegura bloque */
+  margin-bottom: 0;       /* que no agregue huecos extra */
+}
+
+/* empuja el input/textarea/select 3px hacia abajo */
+.form label > input,
+.form label > textarea,
+.form label > select{
+  margin-top: 3px;
+}
+
+/* Subir más el mapa solo en desktop */
+@media (min-width: 900px){
+  /* sube ~20px respecto del original */
+  #addrMap{
+    margin-top: -53px;   /* ajustá a -18 / -22 si hace falta fino */
+  }
+}
+
+/* En mobile lo dejamos como estaba */
+@media (max-width: 899px){
+  #addrMap{ margin-top: 8px; }
+}
+
