@@ -358,7 +358,7 @@ async function onSecondStep(){
     if (mpButtonWrap) mpButtonWrap.innerHTML = "";
     if (mpLink1ars) {
       mpLink1ars.classList.add("hidden");
-      mpLink1ars.textContent = "Señar $1 con Mercado Pago";
+      mpLink1ars.textContent = "Señar con Mercado Pago";
     }
     payWarn.textContent = "";
 
