@@ -45,15 +45,15 @@ export default async function handler(req, res){
         const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
         await transporter.sendMail({
-          from: `Reservas Toro Mecánico <${fromEmail}>`,
+          from: `Desde el equipo de Reserva del Toro Mecánico <${fromEmail}>`,
           to: r.email,
-          subject: "¡Reserva aceptada!",
+          subject: "¡Tu Reserva fue aceptada!",
           html: `
             <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-              <h2>Tu reserva fue aceptada</h2>
-              <p><strong>Fecha:</strong> ${r.event_date} — ${String(r.event_hour).padStart(2,"0")}:00</p>
+              <h2>Tu reserva fue aceptada  te recordamos:</h2>
+              <p><strong>Fecha:</strong> ${r.event_date}</p>
               <p><strong>Plan:</strong> ${r.plan}</p>
-              <p>Todo listo. Nos pondremos en contacto para coordinar detalles.</p>
+              <p> Nos pondremos en contacto para coordinar detalles. Saludos y gracias por confiar en nosotros.</p>
             </div>`
         });
       }
@@ -63,9 +63,9 @@ export default async function handler(req, res){
     return res.end(`
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <div style="font-family:system-ui,Segoe UI,Roboto;padding:24px;max-width:720px;margin:0 auto">
-        <h2>Reserva aceptada ✅</h2>
+        <h2>Reserva aceptada</h2>
         <p>Se envió un email de confirmación al cliente.</p>
-        <p><a href="/">Volver al sitio</a></p>
+        <p><button type="button" onclick="window.location.href='/'">Volver al sitio</button></p>
       </div>
     `);
   }catch(e){

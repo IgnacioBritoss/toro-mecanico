@@ -148,9 +148,9 @@ export default async function handler(req, res){
             <h2>Nueva reserva</h2>
             <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
             <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
-            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
+            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour)}</p>
             <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
-            ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
+            ${message ? `<p style="white-space:pre-wrap"> el mensaje del usuario sobre el evento es ${message}</p>` : ""}
             ${locHtml}
             <p style="margin-top:16px">
               <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
@@ -161,17 +161,17 @@ export default async function handler(req, res){
 
         // Mail al CLIENTE
         await transporter.sendMail({
-          from: `Reservas Toro Mecánico <${fromEmail}>`,
+          from: `Desde el equipo de Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
           subject: "Recibimos tu solicitud de reserva",
           text:
-`Hola ${user.name},
-Recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}).
+`Hola ${user.name} este mersaje es para confirmarte que:
 
+Recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour)} (plan ${reservation.plan}).
 Ubicación: ${reservation.location_display}
 Mapa: https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}
 
-En el siguiente paso podrás confirmar y ver el pago de seña.`
+Te pedimos que en el confirmes siguiente paso y podras pagar de seña.  Saludos cordiales`
         });
       }
     } catch (e) {

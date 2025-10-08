@@ -50,15 +50,14 @@ export default async function handler(req, res){
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
-          subject: "El cliente está iniciando el pago de la seña",
+          subject: "El cliente inicio el pago de la seña",
           html: `
             <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
               <h2>El cliente inició el pago de seña</h2>
               <p><strong>${r.name}</strong> (${r.email}) — Tel: ${r.phone || "-"} — CP: ${r.postal_code || "-"}</p>
-              <p>Zona: ${r.zone || "-"}</p>
-              <p>Fecha: <strong>${r.event_date}</strong> — ${String(r.event_hour).padStart(2,"0")}:00</p>
+              <p>Fecha: <strong>${r.event_date}</strong> </p>
               <p>Plan: <strong>${r.plan}</strong></p>
-              <p>Revisá el ingreso en tu app de Mercado Pago.</p>
+              <p>Revisá el ingreso de la seña Mercado Pago.</p>
             </div>`
         });
       }

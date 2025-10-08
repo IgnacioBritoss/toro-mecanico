@@ -22,7 +22,7 @@ export default async function handler(req, res){
         <form method="POST" action="/api/reject">
           <input type="hidden" name="id" value="${Number(id)}" />
           <input type="hidden" name="token" value="${token}" />
-          <label>Motivo (se enviará al cliente):<br/>
+          <label>Motivo del rechazo:<br/>
             <textarea name="reason" rows="4" style="width:100%;padding:8px" required></textarea>
           </label>
           <div style="margin-top:12px">
@@ -76,7 +76,7 @@ export default async function handler(req, res){
               <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
                 <h2>Tu reserva fue rechazada</h2>
                 <p><strong>Motivo:</strong> ${escapeHtml(reason)}</p>
-                <p>Fecha solicitada: ${r.event_date} — ${String(r.event_hour).padStart(2,"0")}:00 — Plan ${r.plan}</p>
+                <p>Fecha solicitada: ${r.event_date} — Plan ${r.plan}</p>
               </div>`
           });
         }
@@ -86,9 +86,9 @@ export default async function handler(req, res){
       return res.end(`
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <div style="font-family:system-ui,Segoe UI,Roboto;padding:24px;max-width:720px;margin:0 auto">
-          <h2>Rechazo enviado ✅</h2>
+          <h2>Rechazo enviado</h2>
           <p>Se notificó al cliente con el motivo.</p>
-          <p><a href="/">Volver al sitio</a></p>
+          <p><button type="button" onclick="window.location.href='/'">Volver al sitio</button></p>
         </div>
       `);
     }catch(e){
