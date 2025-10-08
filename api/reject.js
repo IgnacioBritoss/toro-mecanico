@@ -4,35 +4,24 @@ import crypto from "crypto";
 
 export const config = { runtime: "nodejs" };
 
-/* ========== Helpers ========== */
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
   return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
 }
-function pad2(n){ return String(n).padStart(2, "0"); }
-function safe(v){ return (v ?? "").toString().trim(); }
-function htmlEscape(str=""){
-  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-function formatFechaAR(dateStr){
-  const d = new Date(`${dateStr}T12:00:00Z`);
-  return new Intl.DateTimeFormat("es-AR", {
-    weekday: "short", day: "2-digit", month: "long", year: "numeric",
-    timeZone: "America/Argentina/Buenos_Aires"
-  }).format(d);
-}
-function pageWrap({ title, bodyHtml, backHref="/" }){
+function esc(s=""){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+function pageHtml({ title, bodyHtml, backHref="/" }){
   return `
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans';padding:24px;max-width:720px;margin:0 auto">
-    <h2 style="margin:0 0 10px">${htmlEscape(title)}</h2>
+  <div style="font-family:system-ui,Segoe UI,Roboto;padding:24px;max-width:720px;margin:0 auto">
+    <h2 style="margin:0 0 10px">${esc(title)}</h2>
     ${bodyHtml}
     <div style="margin-top:14px">
       <a href="${backHref}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px">Volver al sitio</a>
     </div>
   </div>`;
 }
-/* ============================= */
 
 export default async function handler(req, res){
   if (req.method === "GET") {
@@ -41,11 +30,11 @@ export default async function handler(req, res){
     res.setHeader("Content-Type","text/html; charset=utf-8");
     return res.end(`
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans';padding:24px;max-width:720px;margin:0 auto">
+      <div style="font-family:system-ui,Segoe UI,Roboto;padding:24px;max-width:720px;margin:0 auto">
         <h2>Rechazar reserva</h2>
         <form method="POST" action="/api/reject">
           <input type="hidden" name="id" value="${Number(id)}" />
-          <input type="hidden" name="token" value="${htmlEscape(token)}" />
+          <input type="hidden" name="token" value="${esc(token)}" />
           <label>Motivo (se enviará al cliente):<br/>
             <textarea name="reason" rows="4" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px" required></textarea>
           </label>
@@ -81,7 +70,7 @@ export default async function handler(req, res){
 
       await pool.query(`UPDATE reservations SET status='rechazada', reject_reason=$2 WHERE id=$1`, [r.id, reason]);
 
-      // -------- Email al cliente (formal, es-AR, sin emojis/UTC) --------
+      // === ENVÍO DE EMAIL (MISMO MÉTODO) ===
       try{
         if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
           const transporter = nodemailer.createTransport({
@@ -93,21 +82,17 @@ export default async function handler(req, res){
           const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
           const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
-          const fecha = formatFechaAR(r.event_date);
-          const hora  = `${pad2(r.event_hour)}:00`;
-          const plan  = r.plan === "2h" ? "2 horas" : "1 hora";
-
           await transporter.sendMail({
             from: `Reservas Toro Mecánico <${fromEmail}>`,
             to: r.email,
             subject: "Su reserva fue rechazada",
             html: `
-              <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Noto Sans';color:#0f172a;line-height:1.55">
-                <div style="max-width:720px;margin:0 auto;padding:24px 16px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px">
+              <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5;color:#0f172a">
+                <div style="max-width:720px;margin:0 auto;padding:24px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:14px">
                   <h1 style="margin:0 0 12px;font-size:22px">Su reserva fue rechazada</h1>
-                  <p>Estimado/a ${htmlEscape(safe(r.name))},</p>
-                  <p>Le informamos que su reserva solicitada para el <strong>${fecha}</strong> a las <strong>${hora} hs</strong> (Plan <strong>${plan}</strong>) ha sido rechazada.</p>
-                  <p><strong>Motivo:</strong> ${htmlEscape(reason)}</p>
+                  <p>Estimado/a ${esc(r.name || "")},</p>
+                  <p>Le informamos que su reserva solicitada para el <strong>${esc(r.event_date)}</strong> a las <strong>${pad2(r.event_hour)}:00 hs</strong> (Plan <strong>${esc(r.plan === "2h" ? "2 horas" : "1 hora")}</strong>) ha sido rechazada.</p>
+                  <p><strong>Motivo:</strong> ${esc(reason)}</p>
                   <p>Quedamos a disposición por cualquier consulta.</p>
                 </div>
                 <p style="max-width:720px;margin:10px auto 0;color:#64748b;font-size:12px">Este correo fue enviado automáticamente por el sistema de reservas.</p>
@@ -117,7 +102,7 @@ export default async function handler(req, res){
       }catch(e){ console.error("MAIL CLIENT (reject) ERROR:", e); }
 
       res.setHeader("Content-Type","text/html; charset=utf-8");
-      return res.end(pageWrap({
+      return res.end(pageHtml({
         title: "Rechazo enviado",
         bodyHtml: `<p>Se notificó al cliente con el motivo indicado.</p>`
       }));
