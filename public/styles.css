@@ -350,3 +350,11 @@ input[type="number"] {
 @media (max-width: 420px){
   .cal__head{ padding: 0 48px; }
 }
+
+
+/* Bajar un poco el texto del hero en desktop */
+@media (min-width: 900px){
+  .hero__copy{
+    margin-top: 20px;   /* ajustá 10–32px a gusto */
+  }
+}
