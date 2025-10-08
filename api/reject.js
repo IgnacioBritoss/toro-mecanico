@@ -10,6 +10,16 @@ function signToken(id, email){
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
+// === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
+function formatFechaCortaUTC(dateLike){
+  const d = new Date(dateLike);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }); // "Mon"
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${weekday} ${dd}/${mm}/${yy}`;
+}
+
 export default async function handler(req, res){
   if (req.method === "GET") {
     const { id, token } = req.query || {};
@@ -68,6 +78,10 @@ export default async function handler(req, res){
           const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
           const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
+          // === NUEVO: fecha/hora formateadas
+          const fechaCorta = formatFechaCortaUTC(r.event_date);
+          const horaStr = String(r.event_hour).padStart(2, "0");
+
           await transporter.sendMail({
             from: `Reservas Toro Mecánico <${fromEmail}>`,
             to: r.email,
@@ -76,7 +90,8 @@ export default async function handler(req, res){
               <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
                 <h2>Tu reserva fue rechazada</h2>
                 <p><strong>Motivo:</strong> ${escapeHtml(reason)}</p>
-                <p>Fecha solicitada: ${r.event_date} — Plan ${r.plan}</p>
+                <p>Fecha solicitada: <strong>${fechaCorta}</strong> — ${horaStr}</p>
+                <p>Plan: <strong>${r.plan}</strong></p>
               </div>`
           });
         }

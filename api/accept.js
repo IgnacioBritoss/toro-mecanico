@@ -2,12 +2,21 @@ import { pool } from "./db.js";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 
-
 export const config = { runtime: "nodejs" };
 
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
   return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
+}
+
+// === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
+function formatFechaCortaUTC(dateLike){
+  const d = new Date(dateLike);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }); // "Mon"
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
 export default async function handler(req, res){
@@ -44,6 +53,10 @@ export default async function handler(req, res){
         const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
         const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
+        // === NUEVO: fecha/hora formateadas
+        const fechaCorta = formatFechaCortaUTC(r.event_date);
+        const horaStr = String(r.event_hour).padStart(2, "0");
+
         await transporter.sendMail({
           from: `Desde el equipo de Reserva del Toro Mecánico <${fromEmail}>`,
           to: r.email,
@@ -51,7 +64,7 @@ export default async function handler(req, res){
           html: `
             <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
               <h2>Tu reserva fue aceptada  te recordamos:</h2>
-              <p><strong>Fecha:</strong> ${r.event_date}</p>
+              <p><strong>Fecha:</strong> ${fechaCorta} — ${horaStr}</p>
               <p><strong>Plan:</strong> ${r.plan}</p>
               <p> Nos pondremos en contacto para coordinar detalles. Saludos y gracias por confiar en nosotros.</p>
             </div>`

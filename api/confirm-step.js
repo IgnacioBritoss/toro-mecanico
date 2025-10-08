@@ -11,6 +11,16 @@ function signToken(id, email){
   return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
 }
 
+// === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
+function formatFechaCortaUTC(dateLike){
+  const d = new Date(dateLike);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }); // "Mon"
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${weekday} ${dd}/${mm}/${yy}`;
+}
+
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
   const { id, token } = req.body || {};
@@ -35,6 +45,10 @@ export default async function handler(req, res){
     // marcamos intención de seña (solo informativo)
     await pool.query(`UPDATE reservations SET deposit_intent_at = now() WHERE id = $1`, [r.id]);
 
+    // === NUEVO: fecha/hora formateadas para el mail al owner
+    const fechaCorta = formatFechaCortaUTC(r.event_date);
+    const horaStr = String(r.event_hour).padStart(2, "0");
+
     // mail al owner para avisar que el cliente va a tratar de señar
     try{
       if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -55,7 +69,7 @@ export default async function handler(req, res){
             <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
               <h2>El cliente inició el pago de seña</h2>
               <p><strong>${r.name}</strong> (${r.email}) — Tel: ${r.phone || "-"} — CP: ${r.postal_code || "-"}</p>
-              <p>Fecha: <strong>${r.event_date}</strong> </p>
+              <p>Fecha: <strong>${fechaCorta}</strong> — ${horaStr}</p>
               <p>Plan: <strong>${r.plan}</strong></p>
               <p>Revisá el ingreso de la seña Mercado Pago.</p>
             </div>`

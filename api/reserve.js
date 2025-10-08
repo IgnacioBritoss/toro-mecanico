@@ -159,10 +159,10 @@ export default async function handler(req, res){
           subject: "Nueva reserva — Toro Mecánico",
           html: `
           <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-            <h2>Nueva reserva del siguiente Cliente</h2>
-            <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
+            <h2>Nueva reserva</h2>
+            <p>Datos del usuario: <strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
             <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
-            <p><strong>${fechaCorta}</strong> — ${horaStr}</p>
+            <p><strong>${fechaCorta}</strong> — la hora del evento: ${horaStr}</p>
             <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
             ${message ? `<p style="white-space:pre-wrap"> el mensaje del usuario sobre el evento es ${message}</p>` : ""}
             ${locHtml}
