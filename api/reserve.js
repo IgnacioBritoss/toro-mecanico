@@ -26,13 +26,12 @@ export default async function handler(req, res){
       location
     } = req.body || {};
 
-    // Validaciones básicas
-    if (!name || !email || !age || !date || !time || !zone || !phone || !postal_code)
+    // ⚠️ zone YA NO ES REQUERIDO
+    if (!name || !email || !age || !date || !time || !phone || !postal_code){
       return res.status(400).json({ error: "Faltan campos obligatorios" });
-    if (!isValidEmail(email)) return res.status(400).json({ error: "Email inválido" });
-    if (parseInt(age,10) < 18) return res.status(400).json({ error: "Solo mayores de 18 años" });
-
-    // Validación de ubicación exacta
+    }
+    if (!isValidEmail(email))        return res.status(400).json({ error: "Email inválido" });
+    if (parseInt(age,10) < 18)       return res.status(400).json({ error: "Solo mayores de 18 años" });
     if (!location || !location.display_name || !isValidLatLng(location.lat, location.lng)){
       return res.status(400).json({ error: "Falta ubicación exacta del evento." });
     }
@@ -47,7 +46,7 @@ export default async function handler(req, res){
     try{
       await client.query("BEGIN");
 
-      // upsert de user
+      // Upsert user (zone opcional)
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -59,7 +58,7 @@ export default async function handler(req, res){
       );
       user = u.rows[0];
 
-      // disponibilidad del día/hora
+      // Disponibilidad
       const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1`, [date]);
       if (qDay.rowCount >= 2){
         await client.query("ROLLBACK");
@@ -70,7 +69,7 @@ export default async function handler(req, res){
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // insert con ubicación
+      // Insert con ubicación (columnas de ubicación deben existir si corriste la migración)
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -139,7 +138,7 @@ export default async function handler(req, res){
             </div>
           </div>`;
 
-        // Mail al OWNER
+        // Mail al OWNER (sin "Localidad")
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
@@ -149,7 +148,6 @@ export default async function handler(req, res){
             <h2>Nueva reserva</h2>
             <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
             <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
-            <p>Localidad: ${user.zone || "-"}</p>
             <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
             <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
             ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
