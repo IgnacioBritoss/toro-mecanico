@@ -221,18 +221,34 @@
 
       <!-- Pago -->
       <section id="paymentBlockManual" class="flow-card hidden">
-        <h3>Seña</h3>
+  <h3>Seña</h3>
 
-        <!-- Botón embebido de MP si hay preference -->
-        <div id="mp-button-wrap" style="margin:12px 0;"></div>
+  <section class="pay-split">
+    <div class="pay-left">
+      <h4>Opción 1</h4>
+      <p class="pay-sub">Pagar desde la compu</p>
+      <a id="mp-link-1ars" class="btn btn--primary" target="_blank" rel="noreferrer">
+        Pagar con Mercado Pago
+      </a>
+      <small class="pay-brand">Pago mediante Mercado Pago</small>
+    </div>
 
-        <!-- Fallback link -->
-        <a id="mp-link-1ars" class="btn btn--primary hidden" target="_blank" rel="noreferrer">
-          Pagar con Mercado Pago
-        </a>
+    <div class="pay-divider" aria-hidden="true"></div>
 
-        <p id="payWarn" class="hint"></p>
-      </section>
+    <div class="pay-right">
+      <h4>Opción 2</h4>
+      <p class="pay-sub">Escaneá para pagar la seña</p>
+      <img id="mp-qr-1ars" alt="QR de pago Mercado Pago" />
+      <small class="pay-brand">Pago mediante Mercado Pago</small>
+    </div>
+  </section>
+
+  <!-- (Lo dejamos vacío, por si en el futuro usás el botón embebido oficial) -->
+  <div id="mp-button-wrap" style="margin:12px 0;"></div>
+
+  <p id="payWarn" class="hint"></p>
+</section>
+
     </div>
   </section>
 

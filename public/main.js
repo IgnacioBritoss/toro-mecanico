@@ -375,10 +375,23 @@ async function onSecondStep(){
       s.dataset.source = "button";
       mpButtonWrap.appendChild(s);
     }
-    if (d.payLink && mpLink1ars){
-      mpLink1ars.href = d.payLink;
-      mpLink1ars.classList.remove("hidden");
-    }
+    // 2) Link directo + QR (Opción A)
+// Si el endpoint devuelve d.payLink lo usamos; si no, fallback al link fijo
+const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN"; // <- tu env var, copiada aquí
+const payLink = d.payLink || FALLBACK_PAY_LINK;
+
+const btn = document.getElementById("mp-link-1ars");
+const qr  = document.getElementById("mp-qr-1ars");
+
+if (btn){
+  btn.href = payLink;
+  btn.classList.remove("hidden");
+}
+if (qr){
+  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(payLink);
+  qr.src = qrUrl;
+}
+
     if (!d.mpPreferenceId && !d.payLink){
       payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel.";
     }
