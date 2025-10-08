@@ -315,3 +315,38 @@ input[type="number"] {
   .pay-split{ grid-template-columns:1fr; }
   .pay-divider{ display:none; }
 }
+
+/* Header del calendario con flechas a los costados del mes */
+.cal__head{
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;   /* el mes centrado */
+  padding: 0 56px;           /* deja espacio para las flechas */
+  min-height: 44px;          /* alto cómodo para click/tap */
+}
+
+.cal__head h3{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* Misma pinta que los icon buttons actuales */
+.cal__arrow{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;               /* opcional: área táctil más grande */
+  height: 40px;
+  padding: 8px 0;            /* ya tiene estilos .btn--icon */
+}
+
+/* Izquierda y derecha */
+.cal__head .cal__arrow:first-of-type{ left: 8px; }
+.cal__head .cal__arrow:last-of-type{  right: 8px; }
+
+/* En mobile podés agrandar un toque el padding lateral si querés */
+@media (max-width: 420px){
+  .cal__head{ padding: 0 48px; }
+}
