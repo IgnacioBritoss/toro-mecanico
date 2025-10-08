@@ -16,9 +16,6 @@ function isValidLatLng(lat, lng){
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return false;
   return la >= -90 && la <= 90 && ln >= -180 && ln <= 180;
 }
-function pad2(n){ return String(n).padStart(2,"0"); }
-function esc(s=""){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-function safe(v){ return (v ?? "").toString().trim(); }
 
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -29,7 +26,7 @@ export default async function handler(req, res){
       location
     } = req.body || {};
 
-    // ⚠️ mismos chequeos
+    // ⚠️ zone YA NO ES REQUERIDO
     if (!name || !email || !age || !date || !time || !phone || !postal_code){
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
@@ -49,7 +46,7 @@ export default async function handler(req, res){
     try{
       await client.query("BEGIN");
 
-      // Upsert user
+      // Upsert user (zone opcional)
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -72,7 +69,7 @@ export default async function handler(req, res){
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // Insert con ubicación
+      // Insert con ubicación (columnas de ubicación deben existir si corriste la migración)
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -103,7 +100,7 @@ export default async function handler(req, res){
       client.release();
     }
 
-    // ---- Emails (misma mecánica) ----
+    // ---- Emails ----
     let mailError = null;
     try {
       if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -126,70 +123,55 @@ export default async function handler(req, res){
         const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
         const price = PRICE_USD[reservation.plan];
 
-        // OWNER: solo estética (Datos del usuario + Comentario + botón Maps)
+        const locHtml = `
+          <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
+            <div><strong>Ubicación exacta</strong></div>
+            <div>${reservation.location_display || "-"}</div>
+            <div>Lat: ${reservation.location_lat} &nbsp; Lng: ${reservation.location_lng}
+                &nbsp; (OSM ${reservation.location_osm_id || "-"})</div>
+            <div style="margin-top:8px">
+              <a href="https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}"
+                 target="_blank" rel="noreferrer"
+                 style="display:inline-block;background:#0ea5e9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">
+                Abrir en Google Maps
+              </a>
+            </div>
+          </div>`;
+
+        // Mail al OWNER (sin "Localidad")
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
           subject: "Nueva reserva — Toro Mecánico",
           html: `
-          <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5;color:#0f172a">
-            <div style="max-width:720px;margin:0 auto;padding:24px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:14px">
-              <h1 style="margin:0 0 12px;font-size:22px">Nueva reserva</h1>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-                <tr><td style="padding:8px 0;font-weight:700">Datos del usuario</td></tr>
-                <tr><td style="padding:4px 0">Nombre: <strong>${esc(user.name || "")}</strong></td></tr>
-                <tr><td style="padding:4px 0">Edad: <strong>${esc(String(user.age || ""))}</strong></td></tr>
-                <tr><td style="padding:4px 0">Email: <strong>${esc(user.email || "")}</strong></td></tr>
-                <tr><td style="padding:4px 0">Teléfono: <strong>${esc(user.phone || "-")}</strong></td></tr>
-                <tr><td style="padding:4px 0">Código postal: <strong>${esc(user.postal_code || "-")}</strong></td></tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:12px">
-                <tr><td style="padding:4px 0">Fecha: <strong>${esc(reservation.event_date)}</strong> — <strong>${pad2(reservation.event_hour)}:00 hs</strong></td></tr>
-                <tr><td style="padding:4px 0">Plan: <strong>${esc(reservation.plan === "2h" ? "2 horas" : "1 hora")}</strong> — USD ${price}</td></tr>
-                ${safe(message) ? `<tr><td style="padding:4px 0">Comentario: <strong>${esc(safe(message))}</strong></td></tr>` : ``}
-              </table>
-
-              <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
-                <div><strong>Ubicación exacta</strong></div>
-                <div>${esc(reservation.location_display || "-")}</div>
-                <div>Lat: ${esc(String(reservation.location_lat ?? "-"))} &nbsp; Lng: ${esc(String(reservation.location_lng ?? "-"))}${reservation.location_osm_id ? ` &nbsp; (OSM ${esc(String(reservation.location_osm_id))})` : ""}</div>
-                <div style="margin-top:8px">
-                  <a href="https://www.google.com/maps?q=${encodeURIComponent(String(reservation.location_lat))},${encodeURIComponent(String(reservation.location_lng))}"
-                     target="_blank" rel="noreferrer"
-                     style="display:inline-block;background:#0f172a;color:#fff;padding:10px 12px;border-radius:10px;text-decoration:none">
-                    Abrir en Google Maps
-                  </a>
-                </div>
-              </div>
-
-              <p style="margin-top:16px">
-                <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
-                <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
-              </p>
-            </div>
-            <p style="max-width:720px;margin:10px auto 0;color:#64748b;font-size:12px">Este correo fue enviado automáticamente por el sistema de reservas.</p>
+          <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
+            <h2>Nueva reserva</h2>
+            <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
+            <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
+            <p><strong>${reservation.event_date}</strong> — ${String(reservation.event_hour).padStart(2,"0")}:00</p>
+            <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
+            ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
+            ${locHtml}
+            <p style="margin-top:16px">
+              <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
+              <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
+            </p>
           </div>`
         });
 
-        // CLIENTE: mismo “texto plano” que ya usabas, solo más formal + “Comentario:”
+        // Mail al CLIENTE
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
-          subject: "Hemos recibido su solicitud de reserva",
+          subject: "Recibimos tu solicitud de reserva",
           text:
-`Estimado/a ${user.name},
+`Hola ${user.name},
+Recibimos tu solicitud para el ${reservation.event_date} a las ${String(reservation.event_hour).padStart(2,"0")}:00 (plan ${reservation.plan}).
 
-Hemos recibido su solicitud de reserva para el ${reservation.event_date} a las ${pad2(reservation.event_hour)}:00 hs (plan ${reservation.plan === "2h" ? "2 horas" : "1 hora"}).
+Ubicación: ${reservation.location_display}
+Mapa: https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}
 
-Ubicación:
-${reservation.location_display}
-
-Mapa:
-https://www.google.com/maps?q=${encodeURIComponent(String(reservation.location_lat))},${encodeURIComponent(String(reservation.location_lng))}
-
-${safe(message) ? `Comentario: ${safe(message)}\n\n` : ""}En el siguiente paso podrá confirmar la seña. Nos comunicaremos a la brevedad de ser necesario.`
+En el siguiente paso podrás confirmar y ver el pago de seña.`
         });
       }
     } catch (e) {
@@ -197,8 +179,8 @@ ${safe(message) ? `Comentario: ${safe(message)}\n\n` : ""}En el siguiente paso p
       mailError = e.message || "email failed";
     }
 
-    const tokenOut = signToken(reservation.id, user.email);
-    return res.status(200).json({ ok: true, reservation, token: tokenOut, mailError });
+    const token = signToken(reservation.id, user.email);
+    return res.status(200).json({ ok: true, reservation, token, mailError });
 
   }catch(err){
     console.error("GENERIC ERROR:", err);
