@@ -1,4 +1,4 @@
-import { pool } from "./db.js";
+import { pool } from "../db.js";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
