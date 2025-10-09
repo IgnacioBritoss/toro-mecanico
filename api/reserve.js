@@ -68,18 +68,36 @@ export default async function handler(req, res){
       );
       user = u.rows[0];
 
-      // Disponibilidad
-      const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1`, [date]);
-      if (qDay.rowCount >= 2){
+      // === NUEVO: Disponibilidad SOLO por estados que ocupan el calendario
+      // Regla 1: tope 2 turnos por día (solo pendiente/confirmada)
+      const dayCap = await client.query(
+        `SELECT COUNT(*)::int AS c
+           FROM reservations
+          WHERE event_date = $1
+            AND status IN ('pendiente','confirmada')`,
+        [date]
+      );
+      if (dayCap.rows[0].c >= 2){
         await client.query("ROLLBACK");
         return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." });
       }
-      if (new Set(qDay.rows.map(r=>r.event_hour)).has(hourInt)){
+
+      // Regla 2: la hora tiene que estar libre (solo pendiente/confirmada)
+      const hourTaken = await client.query(
+        `SELECT 1
+           FROM reservations
+          WHERE event_date = $1
+            AND event_hour = $2
+            AND status IN ('pendiente','confirmada')
+          LIMIT 1`,
+        [date, hourInt]
+      );
+      if (hourTaken.rowCount > 0){
         await client.query("ROLLBACK");
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // Insert con ubicación (columnas de ubicación deben existir si corriste la migración)
+      // Insert con ubicación
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -103,6 +121,7 @@ export default async function handler(req, res){
       await client.query("COMMIT");
     }catch(e){
       await client.query("ROLLBACK");
+      // Si añadís el índice único parcial, esto atrapará conflictos de doble-booking:
       if (e.code === "23505") return res.status(409).json({ error: "Ese horario ya está reservado." });
       console.error("DB ERROR:", e);
       return res.status(500).json({ error: "Error interno (DB)" });
@@ -152,7 +171,7 @@ export default async function handler(req, res){
             </div>
           </div>`;
 
-        // Mail al OWNER (sin "Localidad")
+        // Mail al OWNER
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
