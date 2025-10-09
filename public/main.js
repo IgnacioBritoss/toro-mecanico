@@ -82,6 +82,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   reserveForm?.addEventListener("submit", onSubmitReservation);
   secondStepBtn?.addEventListener("click", onSecondStep);
+
+  // ===== ADMIN: activar overlay si la ruta es /admin o si ya estaba logueado
+  initAdminUI();
 });
 
 // --------- calendario/horas/summary ----------
@@ -157,8 +160,7 @@ function updateSummary(){
 }
 
 // =======================
-// UBICACIÓN DEL EVENTO
-// (Leaflet + Nominatim)
+// UBICACIÓN DEL EVENTO (Leaflet + Nominatim)
 // =======================
 const fAddress    = document.getElementById("fAddress");
 const addrSuggest = document.getElementById("addrSuggest");
@@ -375,22 +377,21 @@ async function onSecondStep(){
       s.dataset.source = "button";
       mpButtonWrap.appendChild(s);
     }
-    // 2) Link directo + QR (Opción A)
-// Si el endpoint devuelve d.payLink lo usamos; si no, fallback al link fijo
-const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN"; // <- tu env var, copiada aquí
-const payLink = d.payLink || FALLBACK_PAY_LINK;
+    // Link directo + QR
+    const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN";
+    const payLink = d.payLink || FALLBACK_PAY_LINK;
 
-const btn = document.getElementById("mp-link-1ars");
-const qr  = document.getElementById("mp-qr-1ars");
+    const btn = document.getElementById("mp-link-1ars");
+    const qr  = document.getElementById("mp-qr-1ars");
 
-if (btn){
-  btn.href = payLink;
-  btn.classList.remove("hidden");
-}
-if (qr){
-  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(payLink);
-  qr.src = qrUrl;
-}
+    if (btn){
+      btn.href = payLink;
+      btn.classList.remove("hidden");
+    }
+    if (qr){
+      const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(payLink);
+      qr.src = qrUrl;
+    }
 
     if (!d.mpPreferenceId && !d.payLink){
       payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel.";
@@ -403,7 +404,6 @@ if (qr){
 }
 
 // ===== Nice Select (Custom) - FIX =====
-// (Si ya no existe el select, esto se auto-desactiva)
 (function initNiceSelect(){
   const wrap = document.querySelector('.nice-select-wrap');
   if(!wrap) return;
@@ -462,3 +462,152 @@ if (qr){
   buildList();
   syncFromSelect();
 })();
+
+/* =========================================================
+   ================   ADMIN (Overlay)   ====================
+   ========================================================= */
+function initAdminUI(){
+  const overlay = document.getElementById("adminOverlay");
+  const badge   = document.getElementById("adminBadge");
+
+  const stepEmail     = document.getElementById("stepEmail");
+  const stepCodeEmail = document.getElementById("stepCodeEmail");
+  const stepCodeSms   = document.getElementById("stepCodeSms");
+
+  const ovEmail      = document.getElementById("ovEmail");
+  const ovCodeEmail  = document.getElementById("ovCodeEmail");
+  const ovCodeSms    = document.getElementById("ovCodeSms");
+
+  const ovSendEmail  = document.getElementById("ovSendEmail");
+  const ovVerifyEmail= document.getElementById("ovVerifyEmail");
+  const ovVerifySms  = document.getElementById("ovVerifySms");
+  const ovBack1      = document.getElementById("ovBack1");
+  const ovBack2      = document.getElementById("ovBack2");
+
+  const hint1 = document.getElementById("ovHint1");
+  const hint2 = document.getElementById("ovHint2");
+  const hint3 = document.getElementById("ovHint3");
+
+  let adminSessionId = null;
+
+  const onAdmin = () => {
+    document.body.classList.add("is-admin");
+    badge?.classList.remove("hidden");
+  };
+  const offAdmin = () => {
+    document.body.classList.remove("is-admin");
+    badge?.classList.add("hidden");
+  };
+
+  function showStep(step){
+    [stepEmail, stepCodeEmail, stepCodeSms].forEach(el => el.classList.remove("active"));
+    if(step==="email") stepEmail.classList.add("active");
+    if(step==="codeEmail") stepCodeEmail.classList.add("active");
+    if(step==="codeSms") stepCodeSms.classList.add("active");
+  }
+
+  function openOverlay(){
+    overlay?.classList.remove("hidden");
+    showStep("email");
+    hint1.textContent = ""; hint2.textContent = ""; hint3.textContent = "";
+    ovEmail.value = ""; ovCodeEmail.value = ""; ovCodeSms.value = "";
+  }
+  function closeOverlay(){
+    overlay?.classList.add("hidden");
+  }
+
+  // Mostrar overlay si ruta es /admin
+  const isAdminRoute = location.pathname.replace(/\/+$/,'') === "/admin";
+  if (isAdminRoute) {
+    openOverlay();
+  }
+
+  // Si servidor confirma sesión admin (cookie), mostramos badge:
+  // (opcional: podrías llamar /api/admin/session; por simplicidad usamos localStorage)
+  if (localStorage.getItem("isAdmin")==="1") onAdmin();
+
+  // Botón salir (badge flecha)
+  badge?.addEventListener("click", async () => {
+    try{ await fetch("/api/admin/logout", { method:"POST" }); }catch{}
+    localStorage.removeItem("isAdmin");
+    offAdmin();
+    // Volver a home y cerrar overlay si estaba abierto
+    closeOverlay();
+    if (location.pathname !== "/") location.href = "/";
+  });
+
+  // === Paso 1: Enviar email
+  ovSendEmail?.addEventListener("click", async ()=>{
+    const email = ovEmail.value.trim();
+    if(!email){ hint1.textContent="Ingresá tu email."; return; }
+    ovSendEmail.disabled = true; hint1.textContent="Enviando código...";
+    try{
+      const r = await fetch("/api/admin/start", {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json();
+      if(!r.ok){ hint1.textContent = d.error || "No se pudo enviar el código."; ovSendEmail.disabled=false; return; }
+      adminSessionId = d.session_id;
+      hint1.textContent = "Te enviamos un código al email.";
+      showStep("codeEmail");
+    }catch{
+      hint1.textContent="Error de red.";
+    }finally{
+      ovSendEmail.disabled = false;
+    }
+  });
+
+  // === Paso 2: Verificar código email
+  ovVerifyEmail?.addEventListener("click", async ()=>{
+    const code = ovCodeEmail.value.trim();
+    if(code.length<4){ hint2.textContent="Ingresá el código recibido por email."; return; }
+    ovVerifyEmail.disabled = true; hint2.textContent="Verificando...";
+    try{
+      const r = await fetch("/api/admin/verify-email", {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ session_id: adminSessionId, code })
+      });
+      const d = await r.json();
+      if(!r.ok){ hint2.textContent = d.error || "Código inválido."; ovVerifyEmail.disabled=false; return; }
+      hint2.textContent = "Ok. Te enviamos un SMS al teléfono registrado.";
+      showStep("codeSms");
+    }catch{
+      hint2.textContent="Error de red.";
+    }finally{
+      ovVerifyEmail.disabled=false;
+    }
+  });
+
+  ovBack1?.addEventListener("click", ()=>{ showStep("email"); });
+
+  // === Paso 3: Verificar código SMS
+  ovVerifySms?.addEventListener("click", async ()=>{
+    const code = ovCodeSms.value.trim();
+    if(code.length<4){ hint3.textContent="Ingresá el código recibido por SMS."; return; }
+    ovVerifySms.disabled = true; hint3.textContent="Verificando...";
+    try{
+      const r = await fetch("/api/admin/verify-sms", {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ session_id: adminSessionId, code })
+      });
+      const d = await r.json();
+      if(!r.ok){ hint3.textContent = d.error || "Código inválido."; ovVerifySms.disabled=false; return; }
+
+      // Sesión admin OK (el server setea cookie). Reflejamos en UI:
+      localStorage.setItem("isAdmin","1");
+      onAdmin();
+      closeOverlay();
+
+      // Si estabas en /admin, al completar te quedás en la misma página pero ya en modo admin.
+      // Podés redirigir a "/" si querés:
+      // location.href="/";
+    }catch{
+      hint3.textContent="Error de red.";
+    }finally{
+      ovVerifySms.disabled=false;
+    }
+  });
+
+  ovBack2?.addEventListener("click", ()=>{ showStep("codeEmail"); });
+}
