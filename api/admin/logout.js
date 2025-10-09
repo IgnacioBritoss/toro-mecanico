@@ -1,3 +1,4 @@
+import { pool } from "../db.js";
 export const config = { runtime: "nodejs" };
 
 export default function handler(req, res){
