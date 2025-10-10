@@ -296,9 +296,13 @@
 
   <!-- ============== ADMIN UI ============== -->
   <!-- Badge/insignia para salir del modo admin -->
-  <button id="adminBadge" class="admin-badge hidden" title="Salir de modo admin">
-    <span class="admin-badge__arrow" aria-hidden="true"></span>
-  </button>
+  <button id="adminBadge" class="admin-badge hidden" aria-label="Salir del modo admin" title="Salir del modo admin">
+  <!-- Flecha hacia la izquierda (SVG) -->
+  <svg viewBox="0 0 24 24" aria-hidden="true" class="admin-badge__icon">
+    <path d="M15.5 19a1 1 0 0 1-.7-.3l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 1 1 1.4 1.4L10.9 12l5.3 5.3A1 1 0 0 1 15.5 19z"/>
+  </svg>
+</button>
+
 
   <!-- Overlay de login admin (tres pasos) -->
   <div id="adminOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
