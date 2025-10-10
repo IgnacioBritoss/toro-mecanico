@@ -1,6 +1,6 @@
-/* ================================
-   Config / Estado
-================================ */
+// ================================
+// Config & estado base
+// ================================
 const MAX_PER_DAY = 2;
 const HOURS = [12, 14, 16, 18, 20, 22];
 
@@ -10,54 +10,75 @@ let selectedHour = 18;
 let availability = {};
 let lastReservation = null; // { id, token }
 
-/* ================================
-   Helpers
-================================ */
+// ================================
+// Utilidades
+// ================================
 function pad2(n){ return String(n).padStart(2,"0"); }
 function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
 function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
 function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function isAdmin(){ return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || ""); }
 
-/* ================================
-   DOM refs
-================================ */
-const calTitle    = document.getElementById("calTitle");
-const calGrid     = document.getElementById("calGrid");
-const prevMonthBtn= document.getElementById("prevMonth");
-const nextMonthBtn= document.getElementById("nextMonth");
-const hourList    = document.getElementById("hourList");
+// ================================
+// Admin session helpers
+// ================================
+function hasAdminSession(){
+  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
+}
+function clearAdminSessionCookie(){
+  document.cookie = "admin_session=; Max-Age=0; path=/";
+}
+function saveAdminSessionId(id){
+  try { localStorage.setItem("admin_session_id", id); } catch {}
+}
+function getAdminSessionId(){
+  try { return localStorage.getItem("admin_session_id") || ""; } catch { return ""; }
+}
+function clearAdminSessionId(){
+  try { localStorage.removeItem("admin_session_id"); } catch {}
+}
+
+// ================================
+// DOM refs
+// ================================
+const calTitle = document.getElementById("calTitle");
+const calGrid = document.getElementById("calGrid");
+const prevMonthBtn = document.getElementById("prevMonth");
+const nextMonthBtn = document.getElementById("nextMonth");
+const hourList = document.getElementById("hourList");
 const summaryText = document.getElementById("summaryText");
 const goToFormBtn = document.getElementById("goToForm");
 
 const reserveForm = document.getElementById("reserveForm");
-const fName  = document.getElementById("fName");
+const fName = document.getElementById("fName");
 const fEmail = document.getElementById("fEmail");
 const fPhone = document.getElementById("fPhone");
-const fPostal= document.getElementById("fPostal");
-const fAge   = document.getElementById("fAge");
-const fMsg   = document.getElementById("fMsg");
+const fPostal = document.getElementById("fPostal");
+const fAge = document.getElementById("fAge");
+const fMsg = document.getElementById("fMsg");
 const formDate = document.getElementById("formDate");
 const formTime = document.getElementById("formTime");
 const formHint = document.getElementById("formHint");
 
-// Segundo paso / pago
+// Paso 2 + Pago
 const secondStepBlock = document.getElementById("secondStepBlock");
-const secondStepBtn   = document.getElementById("secondStepBtn");
-const secondStepHint  = document.getElementById("secondStepHint");
+const secondStepBtn = document.getElementById("secondStepBtn");
+const secondStepHint = document.getElementById("secondStepHint");
 const paymentBlockManual = document.getElementById("paymentBlockManual");
-const mpButtonWrap    = document.getElementById("mp-button-wrap");
-const mpLink1ars      = document.getElementById("mp-link-1ars");
-const payWarn         = document.getElementById("payWarn");
+const mpButtonWrap = document.getElementById("mp-button-wrap");
+const mpLink1ars = document.getElementById("mp-link-1ars");
+const payWarn = document.getElementById("payWarn");
 
-// Admin UI
-const adminBadge   = document.getElementById("adminBadge");
+// Admin UI mínimos (badge y overlay si existen en el DOM)
+const adminBadge = document.getElementById("adminBadge");
 const adminOverlay = document.getElementById("adminOverlay");
 
-/* ================================
-   Fecha/Hora bloqueados en form
-================================ */
+// Footer year
+const yearEl = document.getElementById("year");
+
+// ================================
+// Bloquear edición directa fecha/hora
+// ================================
 function lockDateTimeFields() {
   if (!formDate || !formTime) return;
   const blockEv = (e) => e.preventDefault();
@@ -68,14 +89,88 @@ function lockDateTimeFields() {
   formDate.style.pointerEvents = "none";
   formTime.style.pointerEvents = "none";
 }
+
 function setFormDateTimeFromSelection() {
   if (selectedDate) formDate.value = toInputDate(selectedDate);
   if (selectedHour) formTime.value = `${pad2(selectedHour)}:00`;
 }
 
-/* ================================
-   Calendario / Horas / Disponibilidad
-================================ */
+// ================================
+// Inicio
+// ================================
+document.addEventListener("DOMContentLoaded", async () => {
+  // año en footer
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  // Ajustar variable CSS del alto de la nav para centrar badge (tu CSS usa --nav-h y --badge)
+  (function setNavHeightVar(){
+    const el = document.querySelector('.nav__inner');
+    const h = el ? el.getBoundingClientRect().height : 64;
+    document.documentElement.style.setProperty('--nav-h', h + 'px');
+    // tamaño del badge (keep con tu CSS)
+    document.documentElement.style.setProperty('--badge', '48px');
+    window.addEventListener('resize', () => {
+      const el2 = document.querySelector('.nav__inner');
+      const h2 = el2 ? el2.getBoundingClientRect().height : 64;
+      document.documentElement.style.setProperty('--nav-h', h2 + 'px');
+    });
+  })();
+
+  // Mostrar/ocultar badge admin
+  if (adminBadge){
+    if (hasAdminSession()){ adminBadge.classList.remove("hidden"); }
+    else { adminBadge.classList.add("hidden"); }
+
+    adminBadge.addEventListener("click", async () => {
+      try { await fetch("/api/admin/logout"); } catch {}
+      clearAdminSessionCookie();
+      clearAdminSessionId();
+      window.location.href = "/";
+    });
+  }
+
+  // Si estás en /admin y no hay sesión admin, mostrás overlay
+  if (adminOverlay && location.pathname.replace(/\/+$/,'') === "/admin" && !hasAdminSession()){
+    adminOverlay.classList.remove("hidden");
+    document.body.classList.add("has-admin-overlay");
+  }
+
+  // Hookear overlay (login admin)
+  initAdminAuth();
+
+  lockDateTimeFields();
+
+  // ===== Planes dinámicos =====
+  const plans = await fetchPlans();
+  renderPricingCards(plans);
+  renderPlanRadios(plans);
+
+  // Disponibilidad
+  await fetchAvailabilityForMonth(activeMonth);
+  renderCalendar(); renderHours(); updateSummary();
+  setFormDateTimeFromSelection();
+
+  prevMonthBtn?.addEventListener("click", async () => {
+    activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1);
+    await fetchAvailabilityForMonth(activeMonth); renderCalendar();
+  });
+  nextMonthBtn?.addEventListener("click", async () => {
+    activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1);
+    await fetchAvailabilityForMonth(activeMonth); renderCalendar();
+  });
+
+  goToFormBtn?.addEventListener("click", () => {
+    setFormDateTimeFromSelection();
+    document.getElementById("reserva").scrollIntoView({ behavior:"smooth" });
+  });
+
+  reserveForm?.addEventListener("submit", onSubmitReservation);
+  secondStepBtn?.addEventListener("click", onSecondStep);
+});
+
+// ================================
+// Calendario / disponibilidad
+// ================================
 function buildMonthGrid(baseDate){
   const y=baseDate.getFullYear(), m=baseDate.getMonth();
   const first=new Date(y,m,1); const firstW=(first.getDay()+6)%7;
@@ -145,17 +240,19 @@ function renderHours(){
     hourList.appendChild(b);
   });
 }
+
 function updateSummary(){
   const dateStr = selectedDate ? toLocaleDate(selectedDate) : "Elegí un día";
   summaryText && (summaryText.textContent = `${dateStr} • ${pad2(selectedHour)}:00 hs`);
 }
 
-/* ================================
-   Ubicación (Autocomplete + Leaflet)
-================================ */
+// ================================
+// Ubicación (Leaflet + Nominatim)
+// ================================
 const fAddress    = document.getElementById("fAddress");
 const addrSuggest = document.getElementById("addrSuggest");
 const addrMapEl   = document.getElementById("addrMap");
+
 const addrLat     = document.getElementById("addr_lat");
 const addrLng     = document.getElementById("addr_lng");
 const addrDisplay = document.getElementById("addr_display");
@@ -175,6 +272,7 @@ function ensureMapVisible(){
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; OpenStreetMap'
     }).addTo(addrMap);
+
     addrMarker = L.marker([START.lat, START.lng], { draggable: true }).addTo(addrMap);
     addrMarker.on('dragend', () => {
       const { lat, lng } = addrMarker.getLatLng();
@@ -185,6 +283,7 @@ function ensureMapVisible(){
     setTimeout(() => addrMap.invalidateSize(), 50);
   }
 }
+
 function fetchSuggest(q){
   const base = 'https://nominatim.openstreetmap.org/search';
   const params = new URLSearchParams({
@@ -192,11 +291,13 @@ function fetchSuggest(q){
     countrycodes: 'ar', limit: '6', 'accept-language': 'es'
   });
   if (USE_VIEWBOX){ params.append('viewbox', VIEWBOX); params.append('bounded','1'); }
+
   fetch(`${base}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
     .then(r => r.json())
     .then(showSuggest)
     .catch(() => hideSuggest());
 }
+
 function showSuggest(list){
   currentData = list || [];
   if (!addrSuggest) return;
@@ -213,6 +314,7 @@ function showSuggest(list){
     });
   });
 }
+
 function hideSuggest(){
   if (!addrSuggest) return;
   addrSuggest.classList.add("hidden");
@@ -220,6 +322,7 @@ function hideSuggest(){
   currentData = [];
   selectedIndex = -1;
 }
+
 function moveActive(delta){
   const items = addrSuggest ? [...addrSuggest.querySelectorAll('.s-item')] : [];
   if (!items.length) return;
@@ -227,6 +330,7 @@ function moveActive(delta){
   items.forEach((el, idx) => el.classList.toggle('active', idx === selectedIndex));
   items[selectedIndex].scrollIntoView({ block: 'nearest' });
 }
+
 function choose(item){
   hideSuggest();
   ensureMapVisible();
@@ -237,12 +341,14 @@ function choose(item){
   if (addrMarker) addrMarker.setLatLng([lat, lng]);
   if (addrMap) addrMap.setView([lat, lng], 18);
 }
+
 function setHidden(lat, lng, displayName, osmId){
   if (addrLat) addrLat.value = lat ?? '';
   if (addrLng) addrLng.value = lng ?? '';
   if (addrDisplay) addrDisplay.value = displayName ?? '';
   if (addrOsmId) addrOsmId.value = osmId ?? '';
 }
+
 fAddress?.addEventListener('input', () => {
   const q = fAddress.value.trim();
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -257,9 +363,9 @@ fAddress?.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape'){ hideSuggest(); }
 });
 
-/* ================================
-   Reserva
-================================ */
+// ================================
+// Reserva
+// ================================
 async function onSubmitReservation(e){
   e.preventDefault();
   const payload = {
@@ -272,6 +378,7 @@ async function onSubmitReservation(e){
     date: formDate.value,
     time: formTime.value,
     plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h",
+
     location: {
       address: (document.getElementById('fAddress')?.value || '').trim(),
       lat: Number(addrLat?.value || 0),
@@ -280,15 +387,18 @@ async function onSubmitReservation(e){
       osm_id: addrOsmId?.value || ''
     }
   };
+
   if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.phone||!payload.postal_code){
     formHint.textContent="Completá todos los campos."; return;
   }
   if(payload.age<18){ formHint.textContent="Solo mayores de 18 años."; return; }
+
   if (!payload.location.lat || !payload.location.lng || !payload.location.display_name){
     formHint.textContent = "Indicá la dirección y elegí una sugerencia para fijar el punto en el mapa.";
     document.getElementById('fAddress')?.focus();
     return;
   }
+
   try{
     const res=await fetch("/api/reserve",{ method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(payload) });
     const data=await res.json();
@@ -297,6 +407,7 @@ async function onSubmitReservation(e){
     lastReservation = { id: data.reservation?.id, token: data.token };
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
+
     setHidden('', '', '', '');
     addrMapEl?.classList.add('hidden');
 
@@ -311,6 +422,9 @@ async function onSubmitReservation(e){
   }
 }
 
+// ================================
+// Segundo paso
+// ================================
 async function onSecondStep(){
   if(!lastReservation?.id || !lastReservation?.token){
     secondStepHint.textContent="No encontramos tu reserva. Volvé a enviarla.";
@@ -318,6 +432,7 @@ async function onSecondStep(){
   }
   secondStepBtn.disabled = true;
   secondStepHint.textContent = "Avisando al dueño...";
+
   try{
     const r = await fetch("/api/confirm-step",{
       method:"POST",
@@ -325,6 +440,7 @@ async function onSecondStep(){
       body:JSON.stringify({ id:lastReservation.id, token:lastReservation.token })
     });
     const d = await r.json();
+
     secondStepBlock.classList.add("hidden");
     paymentBlockManual.classList.remove("hidden");
 
@@ -340,6 +456,7 @@ async function onSecondStep(){
       secondStepBtn.disabled=false;
       return;
     }
+
     if (d.mpPreferenceId && mpButtonWrap){
       const s = document.createElement("script");
       s.src = "https://www.mercadopago.com.ar/integrations/v1/web-payment-checkout.js";
@@ -349,11 +466,22 @@ async function onSecondStep(){
     }
     const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN";
     const payLink = d.payLink || FALLBACK_PAY_LINK;
+
     const btn = document.getElementById("mp-link-1ars");
     const qr  = document.getElementById("mp-qr-1ars");
-    if (btn){ btn.href = payLink; btn.classList.remove("hidden"); }
-    if (qr){ qr.src = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(payLink); }
-    if (!d.mpPreferenceId && !d.payLink){ payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel."; }
+
+    if (btn){
+      btn.href = payLink;
+      btn.classList.remove("hidden");
+    }
+    if (qr){
+      const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(payLink);
+      qr.src = qrUrl;
+    }
+
+    if (!d.mpPreferenceId && !d.payLink){
+      payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel.";
+    }
     secondStepHint.textContent = "Listo. Abajo tenés el botón para señar.";
   }catch{
     secondStepHint.textContent="Error de red. Probá de nuevo.";
@@ -361,16 +489,18 @@ async function onSecondStep(){
   }
 }
 
-/* ================================
-   Nice Select (si lo usás)
-================================ */
+// ================================
+// Nice Select (si existe)
+// ================================
 (function initNiceSelect(){
   const wrap = document.querySelector('.nice-select-wrap');
   if(!wrap) return;
+
   const sel  = wrap.querySelector('select');
   const btn  = wrap.querySelector('.nice-select-display');
   const list = wrap.querySelector('.nice-select-list');
   const text = wrap.querySelector('.nice-select-text');
+
   function buildList(){
     list.innerHTML = '';
     Array.from(sel.options).forEach((opt) => {
@@ -413,15 +543,17 @@ async function onSecondStep(){
   function toggle(){ (btn.getAttribute('aria-expanded') === 'true') ? close() : open(); }
   function onDoc(e){ if (!wrap.contains(e.target)) close(); }
   function onKey(e){ if (e.key === 'Escape') close(); }
+
   btn.addEventListener('click', toggle);
   sel.addEventListener('change', syncFromSelect);
+
   buildList();
   syncFromSelect();
 })();
 
-/* ================================
-   PLANES (GET público)
-================================ */
+// ================================
+// PLANES / PRECIOS DINÁMICOS
+// ================================
 async function fetchPlans(){
   try{
     const r = await fetch('/api/plans');
@@ -431,146 +563,35 @@ async function fetchPlans(){
   }catch{ return []; }
 }
 
-/* ================================
-   PLANES (render UI público/admin)
-================================ */
-async function renderPricingCards(plans){
+function renderPricingCards(plans){
   const wrap = document.getElementById('pricingCards');
   if(!wrap) return;
-
-  const admin = isAdmin();
   wrap.innerHTML = '';
-
-  if(!plans?.length){
+  if(!plans.length){
     wrap.innerHTML = `<article class="card"><p>No hay planes activos.</p></article>`;
-  } else {
-    plans.forEach((p, idx) => {
-      const art = document.createElement('article');
-      art.className = 'card' + (idx===1 ? ' card--featured':'');
-
-      if (!admin){
-        // Público
-        art.innerHTML = `
-          <header class="card__head">
-            <h3>${escapeHtml(p.label)}</h3>
-            ${idx===1 ? '<span class="badge">Más pedido</span>' : ''}
-          </header>
-          <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>USD</span></p>
-          <ul class="card__list">
-            <li>Operador incluido</li>
-            <li>Colchonetas y seguridad</li>
-            <li>Traslado en AMBA*</li>
-          </ul>
-          <a href="#calendario" class="btn btn--block ${idx===1 ? 'btn--primary' : ''}">Reservar</a>
-        `;
-      } else {
-        // Admin editable
-        art.innerHTML = `
-          <header class="card__head">
-            <div class="plan-edit__row">
-              <label class="plan-edit__label">Etiqueta</label>
-              <input class="plan-edit__input" type="text" value="${escapeHtml(p.label)}" data-field="label">
-            </div>
-            ${idx===1 ? '<span class="badge">Más pedido</span>' : ''}
-          </header>
-
-          <div class="plan-edit__row" style="margin-top:8px">
-            <label class="plan-edit__label">Código (único)</label>
-            <input class="plan-edit__input" type="text" value="${escapeHtml(p.code)}" data-field="code">
-          </div>
-
-          <div class="plan-edit__row" style="margin-top:8px">
-            <label class="plan-edit__label">Precio (USD)</label>
-            <input class="plan-edit__input" type="number" min="0" step="1" value="${Number(p.price_usd).toFixed(0)}" data-field="price_usd">
-          </div>
-
-          <div class="plan-edit__actions">
-            <button class="btn btn--primary" data-action="save">Guardar</button>
-            <button class="btn btn--ghost" data-action="delete">Eliminar</button>
-          </div>
-        `;
-        art.querySelector('[data-action="save"]').addEventListener('click', async ()=>{
-          const payload = readPlanCardValues(art, p.id);
-          const ok = await upsertPlan(payload);
-          if (ok) await refreshPlansUI();
-        });
-        art.querySelector('[data-action="delete"]').addEventListener('click', async ()=>{
-          if (!confirm('¿Eliminar este plan?')) return;
-          const ok = await deletePlan(p.id);
-          if (ok) await refreshPlansUI();
-        });
-      }
-      wrap.appendChild(art);
-    });
+    return;
   }
+  plans.forEach((p, idx) => {
+    const art = document.createElement('article');
+    art.className = 'card' + (idx===1 ? ' card--featured':'');
 
-  if (admin){
-    const add = document.createElement('div');
-    add.className = 'card';
-    add.innerHTML = `
-      <div class="plan-edit__row">
-        <label class="plan-edit__label">Etiqueta</label>
-        <input class="plan-edit__input" type="text" placeholder="Ej: 3 horas" data-new="label">
-      </div>
-      <div class="plan-edit__row" style="margin-top:8px">
-        <label class="plan-edit__label">Código (único)</label>
-        <input class="plan-edit__input" type="text" placeholder="p3h" data-new="code">
-      </div>
-      <div class="plan-edit__row" style="margin-top:8px">
-        <label class="plan-edit__label">Precio (USD)</label>
-        <input class="plan-edit__input" type="number" min="0" step="1" placeholder="700" data-new="price_usd">
-      </div>
-      <div class="plan-edit__actions">
-        <button class="btn btn--primary" data-action="add">Agregar plan</button>
-      </div>
+    art.innerHTML = `
+      <header class="card__head">
+        <h3>${escapeHtml(p.label)}</h3>
+        ${idx===1 ? '<span class="badge">Más pedido</span>':''}
+      </header>
+      <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>USD</span></p>
+      <ul class="card__list">
+        <li>Operador incluido</li>
+        <li>Colchonetas y seguridad</li>
+        <li>Traslado en AMBA*</li>
+      </ul>
+      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}">Reservar</a>
     `;
-    add.querySelector('[data-action="add"]').addEventListener('click', async ()=>{
-      const label = add.querySelector('[data-new="label"]').value.trim();
-      const code  = add.querySelector('[data-new="code"]').value.trim();
-      const price = Number(add.querySelector('[data-new="price_usd"]').value);
-      if (!label || !code || !(price >= 0)) { alert('Completá etiqueta, código y precio'); return; }
-      const ok = await upsertPlan({ label, code, price_usd: price });
-      if (ok) await refreshPlansUI();
-    });
-    wrap.appendChild(add);
-  }
-}
-function readPlanCardValues(card, id){
-  const get = (sel) => (card.querySelector(sel)?.value || '').trim();
-  const n   = (sel) => Number(card.querySelector(sel)?.value || 0);
-  return { id, label: get('input[data-field="label"]'), code: get('input[data-field="code"]'), price_usd: n('input[data-field="price_usd"]') };
-}
-async function upsertPlan(payload){
-  try{
-    const r = await fetch('/api/admin/plans', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'upsert', ...payload })
-    });
-    const d = await r.json();
-    if (!r.ok || !d.ok){ alert(d.error || 'No se pudo guardar.'); return false; }
-    return true;
-  }catch{ alert('Error de red.'); return false; }
-}
-async function deletePlan(id){
-  try{
-    const r = await fetch('/api/admin/plans', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'delete', id })
-    });
-    const d = await r.json();
-    if (!r.ok || !d.ok){ alert(d.error || 'No se pudo eliminar.'); return false; }
-    return true;
-  }catch{ alert('Error de red.'); return false; }
-}
-async function refreshPlansUI(){
-  const plans = await fetchPlans();
-  renderPricingCards(plans);
-  renderPlanRadios(plans);
+    wrap.appendChild(art);
+  });
 }
 
-/* ================================
-   Radios de Plan en el Form
-================================ */
 function renderPlanRadios(plans){
   const wrap = document.getElementById('planOptions');
   if(!wrap) return;
@@ -580,13 +601,14 @@ function renderPlanRadios(plans){
     return;
   }
   const current = (document.querySelector('input[name="plan"]:checked')||{}).value;
+
   plans.forEach((p, idx) => {
     const checked = current ? (current === p.code) : (idx===0);
     const div = document.createElement('label');
     div.className = 'plan__opt';
     div.innerHTML = `
       <input type="radio" name="plan" value="${escapeHtml(p.code)}" ${checked?'checked':''} />
-      <span class="plan__card ${idx===0?'plan__card--pop':''}">
+      <span class="plan__card ${idx===1?'plan__card--pop':''}">
         <strong>${escapeHtml(p.label)}</strong>
         <em>USD ${Number(p.price_usd).toFixed(0)}</em>
       </span>
@@ -595,31 +617,33 @@ function renderPlanRadios(plans){
   });
 }
 
-/* ================================
-   ADMIN Overlay (email → código → TOTP)
-================================ */
-(function initAdminAuth(){
+// ================================
+// ADMIN OVERLAY: lógica de login
+// (Con session_id correcto)
+// ================================
+function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
   if (!overlay) return;
+
   const el = (id) => document.getElementById(id);
 
-  // Steps
+  // Pasos
   const stepEmail      = el('stepEmail');
   const stepCodeEmail  = el('stepCodeEmail');
   const stepCodeTotp   = el('stepCodeTotp');
 
-  // Step1
-  const emailInput = el('ovEmail');
-  const sendBtn    = el('ovSendEmail');
-  const hint1      = el('ovHint1');
+  // Paso 1 (email)
+  const emailInput     = el('ovEmail');
+  const sendBtn        = el('ovSendEmail');
+  const hint1          = el('ovHint1');
 
-  // Step2
+  // Paso 2 (código email)
   const codeEmailInput = el('ovCodeEmail');
   const verifyEmailBtn = el('ovVerifyEmail');
   const back1          = el('ovBack1');
   const hint2          = el('ovHint2');
 
-  // Step3
+  // Paso 3 (TOTP)
   const totpQR         = el('ovTotpQR');
   const codeTotpInput  = el('ovCodeTotp');
   const verifyTotpBtn  = el('ovVerifyTotp');
@@ -630,12 +654,14 @@ function renderPlanRadios(plans){
     [stepEmail, stepCodeEmail, stepCodeTotp].forEach(s => s?.classList.remove('active'));
     step?.classList.add('active');
   };
-  show(stepEmail);
+
+  show(stepEmail); // arranca en paso email
 
   async function startEmail(){
     hint1.textContent = '';
-    const email = (emailInput.value || '').trim();
+    const email = (emailInput.value || '').trim().toLowerCase();
     if (!email){ hint1.textContent = 'Ingresá un email.'; return; }
+
     sendBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/start', {
@@ -644,130 +670,107 @@ function renderPlanRadios(plans){
       });
       const d = await r.json();
       if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
+
+      // Guardar session_id para los siguientes pasos
+      if (d.session_id) saveAdminSessionId(d.session_id);
+
       show(stepCodeEmail);
       codeEmailInput.focus();
-    }catch{ hint1.textContent = 'Error de red.'; }
-    finally{ sendBtn.disabled = false; }
+    }catch(e){
+      hint1.textContent = 'Error de red.';
+    }finally{
+      sendBtn.disabled = false;
+    }
   }
 
   async function verifyEmail(){
     hint2.textContent = '';
-    const email = (emailInput.value || '').trim().toLowerCase();
+
+    const session_id = getAdminSessionId();
     const code  = ((codeEmailInput.value || '').replace(/\D/g, '')).slice(0, 6);
-    if (!email){ hint2.textContent = 'Ingresá tu email.'; return; }
+
+    if (!session_id){ hint2.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); return; }
     if (code.length !== 6){ hint2.textContent = 'Código de 6 dígitos.'; return; }
+
     verifyEmailBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/verify-email', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ email, code })
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
-      if (!r.ok || !d.ok){ hint2.textContent = d.error || 'Código incorrecto o vencido.'; return; }
 
-      // ¿ya estamos adentro?
-      if (d.session === 'ok' || d.done){
+      if (!r.ok || !d.ok){
+        hint2.textContent = d.error || 'Código incorrecto o vencido.';
+        return;
+      }
+
+      // Si TOTP está deshabilitado, el server puede dejarte entrar directo
+      if (d.totpDisabled || d.done || d.session === 'ok'){
         overlay.classList.add('hidden');
+        document.body.classList.remove('has-admin-overlay');
         document.getElementById('adminBadge')?.classList.remove('hidden');
         return;
       }
-      // TOTP: mostrar QR
-      const qr = d.totpQr || d.qrDataUrl || d.qr || d.provisioningUri || d.otpauth || d.otpauth_url;
-      if (qr){
-        totpQR.src = qr.startsWith('http')
-          ? qr
-          : 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qr);
+
+      // Mostrar QR para configurar TOTP si viene
+      const qrData = d.qrDataUrl || d.qr || d.qrData || d.qrDataURL || d.qrDataurl || d.qrDataUrl;
+      const otpauth = d.otpauth || d.provisioningUri;
+      if (totpQR){
+        if (qrData)        totpQR.src = qrData;
+        else if (otpauth)  totpQR.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(otpauth);
       }
+
       show(stepCodeTotp);
       codeTotpInput.focus();
-    }catch{ hint2.textContent = 'Error de red.'; }
-    finally{ verifyEmailBtn.disabled = false; }
+
+    }catch(e){
+      hint2.textContent = 'Error de red.';
+    }finally{
+      verifyEmailBtn.disabled = false;
+    }
   }
 
   async function verifyTotp(){
     hint3.textContent = '';
-    const code = (codeTotpInput.value||'').replace(/\D/g,'').slice(0,6);
-    if (code.length !== 6){ hint3.textContent='Código de 6 dígitos.'; return; }
+
+    const session_id = getAdminSessionId();
+    const code  = ((codeTotpInput.value || '').replace(/\D/g, '')).slice(0, 6);
+
+    if (!session_id){ hint3.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); return; }
+    if (code.length !== 6){ hint3.textContent = 'Código de 6 dígitos.'; return; }
+
     verifyTotpBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/verify-totp', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ code })
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
-      if (!r.ok || !d.ok){ hint3.textContent = d.error || 'Código inválido.'; return; }
+
+      if (!r.ok || !d.ok){
+        hint3.textContent = d.error || 'Código inválido.';
+        return;
+      }
+
+      // Éxito: el server setea la cookie admin_session=ok
       overlay.classList.add('hidden');
+      document.body.classList.remove('has-admin-overlay');
       document.getElementById('adminBadge')?.classList.remove('hidden');
-    }catch{ hint3.textContent = 'Error de red.'; }
-    finally{ verifyTotpBtn.disabled = false; }
+
+    }catch(e){
+      hint3.textContent = 'Error de red.';
+    }finally{
+      verifyTotpBtn.disabled = false;
+    }
   }
 
+  // Eventos
   sendBtn?.addEventListener('click', startEmail);
   verifyEmailBtn?.addEventListener('click', verifyEmail);
   verifyTotpBtn?.addEventListener('click', verifyTotp);
-  back1?.addEventListener('click', ()=> show(stepEmail));
-  back2?.addEventListener('click', ()=> show(stepCodeEmail));
-})();
-
-/* ================================
-   Badge admin (logout)
-================================ */
-function clearAdminSession(){
-  document.cookie = "admin_session=; Max-Age=0; path=/";
+  back1?.addEventListener('click', () => show(stepEmail));
+  back2?.addEventListener('click', () => show(stepCodeEmail));
 }
-
-/* ================================
-   Init
-================================ */
-document.addEventListener("DOMContentLoaded", async () => {
-  // Centrar badge en barra
-  (function centerAdminBadge(){
-    function setNavHeightVar(){
-      const el = document.querySelector('.nav__inner');
-      const h = el ? el.getBoundingClientRect().height : 64;
-      document.documentElement.style.setProperty('--nav-h', h + 'px');
-      document.documentElement.style.setProperty('--badge', '48px');
-    }
-    setNavHeightVar();
-    window.addEventListener('resize', setNavHeightVar);
-  })();
-
-  if (adminBadge){
-    if (isAdmin()) adminBadge.classList.remove("hidden"); else adminBadge.classList.add("hidden");
-    adminBadge.addEventListener("click", async () => {
-      try{ await fetch('/api/admin/logout', { method:'POST' }); }catch{}
-      clearAdminSession();
-      location.href = "/";
-    });
-  }
-
-  // Bloquear edición manual de fecha/hora y pintar según selección
-  lockDateTimeFields();
-
-  // Planes dinámicos
-  const plans = await fetchPlans();
-  renderPricingCards(plans);
-  renderPlanRadios(plans);
-
-  // Disponibilidad inicial
-  await fetchAvailabilityForMonth(activeMonth);
-  renderCalendar(); renderHours(); updateSummary();
-  setFormDateTimeFromSelection();
-
-  prevMonthBtn?.addEventListener("click", async () => {
-    activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1);
-    await fetchAvailabilityForMonth(activeMonth); renderCalendar();
-  });
-  nextMonthBtn?.addEventListener("click", async () => {
-    activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1);
-    await fetchAvailabilityForMonth(activeMonth); renderCalendar();
-  });
-
-  goToFormBtn?.addEventListener("click", () => {
-    setFormDateTimeFromSelection();
-    document.getElementById("reserva").scrollIntoView({ behavior:"smooth" });
-  });
-
-  reserveForm?.addEventListener("submit", onSubmitReservation);
-  secondStepBtn?.addEventListener("click", onSecondStep);
-});
