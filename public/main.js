@@ -576,3 +576,146 @@ function renderPlanRadios(plans){
 }
 
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+
+/* ================================
+   ADMIN OVERLAY: lógica de login
+   ================================ */
+(function initAdminAuth(){
+  const overlay = document.getElementById('adminOverlay');
+  if (!overlay) return;
+
+  const el = (id) => document.getElementById(id);
+
+  // Pasos
+  const stepEmail      = el('stepEmail');
+  const stepCodeEmail  = el('stepCodeEmail');
+  const stepCodeTotp   = el('stepCodeTotp');
+
+  // Paso 1 (email)
+  const emailInput     = el('ovEmail');
+  const sendBtn        = el('ovSendEmail');
+  const hint1          = el('ovHint1');
+
+  // Paso 2 (código email)
+  const codeEmailInput = el('ovCodeEmail');
+  const verifyEmailBtn = el('ovVerifyEmail');
+  const back1          = el('ovBack1');
+  const hint2          = el('ovHint2');
+
+  // Paso 3 (TOTP)
+  const totpQR         = el('ovTotpQR');
+  const codeTotpInput  = el('ovCodeTotp');
+  const verifyTotpBtn  = el('ovVerifyTotp');
+  const back2          = el('ovBack2');
+  const hint3          = el('ovHint3');
+
+  const show = (step) => {
+    [stepEmail, stepCodeEmail, stepCodeTotp].forEach(s => s?.classList.remove('active'));
+    step?.classList.add('active');
+  };
+
+  show(stepEmail); // arranca en paso email
+
+  async function startEmail(){
+    hint1.textContent = '';
+    const email = (emailInput.value || '').trim();
+    if (!email){ hint1.textContent = 'Ingresá un email.'; return; }
+
+    sendBtn.disabled = true;
+    try{
+      const r = await fetch('/api/admin/start', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
+
+      show(stepCodeEmail);
+      codeEmailInput.focus();
+    }catch(e){
+      hint1.textContent = 'Error de red.';
+    }finally{
+      sendBtn.disabled = false;
+    }
+  }
+
+  async function verifyEmail(){
+    hint2.textContent = '';
+    const email = (emailInput.value || '').trim();
+    const code  = (codeEmailInput.value || '').trim();
+    if (code.length < 6){ hint2.textContent = 'Código inválido.'; return; }
+
+    verifyEmailBtn.disabled = true;
+    try{
+      const r = await fetch('/api/admin/verify-email', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, code })
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok){ hint2.textContent = d.error || 'Código incorrecto.'; return; }
+
+      // Si el server ya dejó la sesión activa y NO requiere TOTP:
+      if (d.session === 'ok' || d.done){
+        overlay.classList.add('hidden');
+        document.body.classList.remove('has-admin-overlay');
+        document.getElementById('adminBadge')?.classList.remove('hidden');
+        return;
+      }
+
+      // Si requiere TOTP, mostramos QR (aceptamos varias claves por compatibilidad)
+      const qr = d.totpQr || d.qr || d.totp_qr;
+      if (qr){
+        totpQR.src = qr;
+      }else if (d.provisioningUri){
+        totpQR.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(d.provisioningUri);
+      }
+
+      show(stepCodeTotp);
+      codeTotpInput.focus();
+    }catch(e){
+      hint2.textContent = 'Error de red.';
+    }finally{
+      verifyEmailBtn.disabled = false;
+    }
+  }
+
+  async function verifyTotp(){
+    hint3.textContent = '';
+    const code = (codeTotpInput.value || '').trim();
+    if (code.length < 6){ hint3.textContent = 'Código de 6 dígitos.'; return; }
+
+    verifyTotpBtn.disabled = true;
+    try{
+      const r = await fetch('/api/admin/verify-totp', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ code })
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok){ hint3.textContent = d.error || 'Código incorrecto.'; return; }
+
+      // OK: el backend ya setea la cookie de sesión
+      overlay.classList.add('hidden');
+      document.body.classList.remove('has-admin-overlay');
+      document.getElementById('adminBadge')?.classList.remove('hidden');
+      // Si preferís recargar:
+      // location.replace('/');
+    }catch(e){
+      hint3.textContent = 'Error de red.';
+    }finally{
+      verifyTotpBtn.disabled = false;
+    }
+  }
+
+  // Clicks
+  sendBtn?.addEventListener('click', startEmail);
+  verifyEmailBtn?.addEventListener('click', verifyEmail);
+  verifyTotpBtn?.addEventListener('click', verifyTotp);
+  back1?.addEventListener('click', () => show(stepEmail));
+  back2?.addEventListener('click', () => show(stepCodeEmail));
+
+  // Enter en inputs
+  emailInput?.addEventListener('keydown',     e => { if (e.key==='Enter'){ e.preventDefault(); startEmail(); }});
+  codeEmailInput?.addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); verifyEmail(); }});
+  codeTotpInput?.addEventListener('keydown',  e => { if (e.key==='Enter'){ e.preventDefault(); verifyTotp(); }});
+})();
