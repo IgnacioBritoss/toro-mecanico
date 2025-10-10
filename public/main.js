@@ -641,44 +641,54 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&am
   }
 
   async function verifyEmail(){
-    hint2.textContent = '';
-    const email = (emailInput.value || '').trim();
-    const code  = (codeEmailInput.value || '').trim();
-    if (code.length < 6){ hint2.textContent = 'Código inválido.'; return; }
+  hint2.textContent = '';
 
-    verifyEmailBtn.disabled = true;
-    try{
-      const r = await fetch('/api/admin/verify-email', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ email, code })
-      });
-      const d = await r.json();
-      if (!r.ok || !d.ok){ hint2.textContent = d.error || 'Código incorrecto.'; return; }
+  // normalizamos email y limpiamos el código (solo dígitos)
+  const email = (emailInput.value || '').trim().toLowerCase();
+  const code  = ((codeEmailInput.value || '').replace(/\D/g, '')).slice(0, 6);
 
-      // Si el server ya dejó la sesión activa y NO requiere TOTP:
-      if (d.session === 'ok' || d.done){
-        overlay.classList.add('hidden');
-        document.body.classList.remove('has-admin-overlay');
-        document.getElementById('adminBadge')?.classList.remove('hidden');
-        return;
-      }
+  if (!email){ hint2.textContent = 'Ingresá tu email.'; return; }
+  if (code.length !== 6){ hint2.textContent = 'Código de 6 dígitos.'; return; }
 
-      // Si requiere TOTP, mostramos QR (aceptamos varias claves por compatibilidad)
-      const qr = d.totpQr || d.qr || d.totp_qr;
-      if (qr){
-        totpQR.src = qr;
-      }else if (d.provisioningUri){
-        totpQR.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(d.provisioningUri);
-      }
+  verifyEmailBtn.disabled = true;
+  try{
+    const r = await fetch('/api/admin/verify-email', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, code })
+    });
+    const d = await r.json();
 
-      show(stepCodeTotp);
-      codeTotpInput.focus();
-    }catch(e){
-      hint2.textContent = 'Error de red.';
-    }finally{
-      verifyEmailBtn.disabled = false;
+    if (!r.ok || !d.ok){
+      hint2.textContent = d.error || 'Código incorrecto o vencido.';
+      return;
     }
+
+    // Si ya quedó logueado, cerramos overlay
+    if (d.session === 'ok' || d.done){
+      overlay.classList.add('hidden');
+      document.body.classList.remove('has-admin-overlay');
+      document.getElementById('adminBadge')?.classList.remove('hidden');
+      return;
+    }
+
+    // Si requiere TOTP, mostramos QR
+    const qr = d.totpQr || d.qr || d.totp_qr || d.provisioningUri;
+    if (qr){
+      totpQR.src = qr.startsWith('http')
+        ? qr
+        : 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qr);
+    }
+    show(stepCodeTotp);
+    codeTotpInput.focus();
+
+  }catch(e){
+    hint2.textContent = 'Error de red.';
+  }finally{
+    verifyEmailBtn.disabled = false;
   }
+}
+
 
   async function verifyTotp(){
     hint3.textContent = '';
