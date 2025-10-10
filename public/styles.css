@@ -388,10 +388,10 @@ input[type="number"] {
 /* ===== Admin Floating Badge ===== */
 .admin-badge {
   position: fixed;
-  top: max(14px, env(safe-area-inset-top, 14px));
-  left: max(14px, env(safe-area-inset-left, 14px));
+  top: max(14px, env(safe-area-inset-top, 8px));
+  left: max(14px, env(safe-area-inset-left, 8px));
   z-index: 9999;                 /* por encima de todo */
-  width: 46px;
+  width: 46px;  
   height: 46px;
   display: grid;
   place-items: center;
