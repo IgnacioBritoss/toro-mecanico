@@ -18,6 +18,7 @@ function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pa
 function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
 function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function getQS(name){ return new URLSearchParams(location.search).get(name); }
 
 // ================================
 // Admin session helpers
@@ -107,7 +108,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const el = document.querySelector('.nav__inner');
     const h = el ? el.getBoundingClientRect().height : 64;
     document.documentElement.style.setProperty('--nav-h', h + 'px');
-    // tamaño del badge (keep con tu CSS)
     document.documentElement.style.setProperty('--badge', '48px');
     window.addEventListener('resize', () => {
       const el2 = document.querySelector('.nav__inner');
@@ -115,6 +115,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.documentElement.style.setProperty('--nav-h', h2 + 'px');
     });
   })();
+
+  // ===== FIX ANTI-BUCLE /admin =====
+  // Si estoy en /admin y ya tengo sesión admin => redirijo directo a editar precios
+  if (location.pathname.replace(/\/+$/,'') === "/admin") {
+    if (hasAdminSession()) {
+      window.location.replace("/?editprices=1#precios");
+      return; // detenemos el resto para evitar overlay
+    } else {
+      // no logueado: mostrar overlay de login
+      if (adminOverlay){
+        adminOverlay.classList.remove("hidden");
+        document.body.classList.add("has-admin-overlay");
+      }
+    }
+  }
 
   // Mostrar/ocultar badge admin
   if (adminBadge){
@@ -127,12 +142,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       clearAdminSessionId();
       window.location.href = "/";
     });
-  }
-
-  // Si estás en /admin y no hay sesión admin, mostrás overlay
-  if (adminOverlay && location.pathname.replace(/\/+$/,'') === "/admin" && !hasAdminSession()){
-    adminOverlay.classList.remove("hidden");
-    document.body.classList.add("has-admin-overlay");
   }
 
   // Hookear overlay (login admin)
@@ -574,7 +583,6 @@ function renderPricingCards(plans){
   plans.forEach((p, idx) => {
     const art = document.createElement('article');
     art.className = 'card' + (idx===1 ? ' card--featured':'');
-
     art.innerHTML = `
       <header class="card__head">
         <h3>${escapeHtml(p.label)}</h3>
@@ -619,7 +627,7 @@ function renderPlanRadios(plans){
 
 // ================================
 // ADMIN OVERLAY: lógica de login
-// (Con session_id correcto)
+// (Con session_id correcto) + REDIRECT POST-LOGIN
 // ================================
 function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
@@ -706,11 +714,10 @@ function initAdminAuth(){
         return;
       }
 
-      // Si TOTP está deshabilitado, el server puede dejarte entrar directo
+      // Si TOTP está deshabilitado, o el server decide que ya estás logueado, redirigí
       if (d.totpDisabled || d.done || d.session === 'ok'){
-        overlay.classList.add('hidden');
-        document.body.classList.remove('has-admin-overlay');
-        document.getElementById('adminBadge')?.classList.remove('hidden');
+        // redirección directa post-login
+        window.location.replace("/?editprices=1#precios");
         return;
       }
 
@@ -756,9 +763,8 @@ function initAdminAuth(){
       }
 
       // Éxito: el server setea la cookie admin_session=ok
-      overlay.classList.add('hidden');
-      document.body.classList.remove('has-admin-overlay');
-      document.getElementById('adminBadge')?.classList.remove('hidden');
+      // Redirigimos DIRECTO a la edición de precios
+      window.location.replace("/?editprices=1#precios");
 
     }catch(e){
       hint3.textContent = 'Error de red.';
@@ -768,89 +774,9 @@ function initAdminAuth(){
   }
 
   // Eventos
-  sendBtn?.addEventListener('click', startEmail);
-  verifyEmailBtn?.addEventListener('click', verifyEmail);
-  verifyTotpBtn?.addEventListener('click', verifyTotp);
-  back1?.addEventListener('click', () => show(stepEmail));
-  back2?.addEventListener('click', () => show(stepCodeEmail));
+  el('ovSendEmail')?.addEventListener('click', startEmail);
+  el('ovVerifyEmail')?.addEventListener('click', verifyEmail);
+  el('ovVerifyTotp')?.addEventListener('click', verifyTotp);
+  el('ovBack1')?.addEventListener('click', () => show(stepEmail));
+  el('ovBack2')?.addEventListener('click', () => show(stepCodeEmail));
 }
-
-/* ==========================================================
-   ADMIN ROUTER: /admin => login si no hay sesión; editor si hay
-   (pegar completo al final de public/main.js)
-   ========================================================== */
-
-(function adminRouterBoot(){
-  const ADMIN_PATH = '/admin';
-
-  function normPath(p){ return (p || location.pathname).replace(/\/+$/,'') || '/'; }
-
-  // --- Sesión admin: cookie "admin_session=ok"
-  function hasAdminSession(){
-    return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
-  }
-
-  // --- Mostrar overlay login (si existe en el DOM)
-  function showAdminOverlay(){
-    const ov = document.getElementById('adminOverlay');
-    if (ov) {
-      ov.classList.remove('hidden');
-      document.body.classList.add('has-admin-overlay');
-      // foco amable
-      setTimeout(()=> document.getElementById('ovEmail')?.focus(), 50);
-    }
-  }
-
-  // --- Abrir editor de precios (usa el módulo admin-prices.js)
-  function openPriceEditor(){
-    if (window.AdminPrices && typeof window.AdminPrices.open === 'function') {
-      window.AdminPrices.open();     // muestra el panel flotante
-    }
-    // bajamos a la sección precios por las dudas
-    const precios = document.getElementById('precios');
-    if (precios) precios.scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-
-  // --- Si estás en /admin, decidimos qué hacer
-  function bootAdminRoute(){
-    if (normPath() !== ADMIN_PATH) return;
-
-    // ¿tenés sesión ya?
-    if (hasAdminSession()){
-      // directo al editor
-      openPriceEditor();
-      return;
-    }
-
-    // sin sesión => overlay de login
-    showAdminOverlay();
-  }
-
-  // --- Enlazamos con tu flujo de verificación existente:
-  // Interceptamos el submit exitoso del TOTP y redirigimos SIEMPRE a /admin.
-  // Esto no rompe nada: si ya estás en /admin, recarga y abre editor.
-  const _fetch = window.fetch;
-  window.fetch = async function(url, opts){
-    try{
-      const r = await _fetch(url, opts);
-      // Si es el verify-totp y respondió ok, mandamos a /admin
-      const isVerifyTotp = (typeof url === 'string') && url.startsWith('/api/admin/verify-totp');
-      if (isVerifyTotp) {
-        // Clonamos para inspeccionar sin consumir body
-        const clone = r.clone();
-        let okJson = null;
-        try { okJson = await clone.json(); } catch(_) {}
-        if (r.ok && okJson && okJson.ok) {
-          // Forzá ir a /admin para que se abra el editor automáticamente
-          setTimeout(() => { location.assign('/admin'); }, 0);
-        }
-      }
-      return r;
-    }catch(e){
-      throw e;
-    }
-  };
-
-  // --- Al cargar la página, resolvemos /admin
-  document.addEventListener('DOMContentLoaded', bootAdminRoute);
-})();
