@@ -527,3 +527,12 @@ header .admin-badge{ position: fixed !important; }
 
 /* Evitar scroll del body cuando el overlay está visible (opcional) */
 body.has-admin-overlay{ overflow:hidden; }
+
+
+.plan-edit__row{ display:flex; flex-direction:column; gap:6px }
+.plan-edit__label{ font-size:13px; color:#475569 }
+.plan-edit__input{
+  width:100%; padding:10px 12px; border:1px solid var(--border);
+  border-radius:12px; background:#fff; font-size:16px;
+}
+.plan-edit__actions{ display:flex; gap:10px; margin-top:12px }
