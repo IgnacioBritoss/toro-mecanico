@@ -385,36 +385,39 @@ input[type="number"] {
   #addrMap{ margin-top: 8px; }
 }
 
-/* ===== Admin Floating Badge (centrado perfecto) ===== */
+/* ===== Admin Floating Badge — centrado en la navbar ===== */
+:root{
+  /* alto de la barra (tu .nav__inner) y tamaño del badge */
+  --nav-h: 64px;
+  --badge: 48px;
+}
+
 .admin-badge{
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 1px);
-  left: calc(env(safe-area-inset-left, 0px) + 1px);
+  /* centrado vertical en la barra: (nav-h - badge)/2 */
+  top: calc(env(safe-area-inset-top, 0px) + (var(--nav-h) - var(--badge))/2);
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
   z-index: 10000;
 
-  /* tamaño y círculo */
-  width: 48px;
-  height: 48px;
+  width: var(--badge);
+  height: var(--badge);
   border-radius: 9999px;
 
-  /* reset de botón para que no desplace el ícono */
   padding: 0;
   margin: 0;
   border: 2px solid #111827;
   box-sizing: border-box;
   background: rgba(255,255,255,0.94);
-  appearance: none;            /* quita estilos nativos */
+  appearance: none;
   -webkit-appearance: none;
   line-height: 1;
   outline: none;
   -webkit-tap-highlight-color: transparent;
 
-  /* centrar el ícono 100% */
   display: flex;
   align-items: center;
   justify-content: center;
 
-  /* flotante lindo */
   box-shadow: 0 6px 18px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
   backdrop-filter: saturate(160%) blur(6px);
   -webkit-backdrop-filter: saturate(160%) blur(6px);
@@ -429,30 +432,28 @@ input[type="number"] {
   box-shadow: 0 10px 22px rgba(0,0,0,.16), 0 4px 10px rgba(0,0,0,.08);
   background: rgba(255,255,255,0.98);
 }
-
 .admin-badge:active{
   transform: translateY(0);
   box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
-
 .admin-badge:focus-visible{
   box-shadow: 0 0 0 3px rgba(59,130,246,.35), 0 6px 18px rgba(0,0,0,.12);
 }
 
-/* Ícono (flecha a la izquierda) */
+/* Ícono (flecha) */
 .admin-badge__icon{
   width: 22px;
   height: 22px;
-  display: block;   /* evita espacios extra */
+  display: block;
   fill: #111827;
-  pointer-events: none; /* clic solo en el botón */
+  pointer-events: none;
 }
 
-/* por si el botón termina dentro del header, forzamos que no afecte el layout */
+/* por si el botón está dentro del header en el DOM, igual que no afecte el layout */
 header .admin-badge{ position: fixed !important; }
 
-/* móvil: apenas más chico */
+/* móvil: badge apenas más chico */
 @media (max-width: 420px){
-  .admin-badge{ width:44px; height:44px; }
-  .admin-badge__icon{ width:20px; height:20px; }
+  :root{ --badge: 44px; }
+  .admin-badge__icon{ width: 20px; height: 20px; }
 }

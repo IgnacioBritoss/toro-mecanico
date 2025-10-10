@@ -8,56 +8,6 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/favicon.ico" />
   <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas de seguridad y traslado en AMBA. Reservá fecha y horario para tu evento." />
-  <style>
-    /* ==== Estilos mínimos para Admin (sin tocar tu styles.css) ==== */
-    .admin-badge {
-      position: fixed; top: 16px; left: 16px; z-index: 1100;
-      background:#fff; border:2px solid #0f172a33;
-      border-radius:14px; width:44px; height:44px;
-      display:flex; align-items:center; justify-content:center;
-      box-shadow:0 4px 12px rgba(0,0,0,.08); cursor:pointer;
-    }
-    .admin-badge.hidden { display:none; }
-    .admin-badge__arrow {
-      width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent;
-      border-right: 10px solid #000; /* flecha negra apuntando a la derecha */
-      transform: rotate(180deg); /* la queremos apuntando a la izquierda */
-    }
-
-    .overlay {
-      position: fixed; inset:0; z-index: 1000;
-      background: rgba(10, 15, 25, .45);
-      display:flex; align-items:center; justify-content:center;
-      padding:24px;
-    }
-    .overlay.hidden { display:none; }
-    .ov-card {
-      width:100%; max-width:520px; background:#fff; border-radius:16px;
-      box-shadow:0 20px 60px rgba(0,0,0,.25);
-      padding:24px 20px 16px;
-      font-family: system-ui, Segoe UI, Roboto, Arial;
-    }
-    .ov-title { font-size:22px; margin:0 0 6px 0; }
-    .ov-sub { color:#475569; margin:0 0 16px 0; }
-    .ov-row { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
-    .ov-input {
-      width:100%; padding:12px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:16px;
-    }
-    .ov-btn {
-      display:inline-block; width:100%; padding:12px 14px; border-radius:12px; border:none; cursor:pointer;
-      background:#0f172a; color:#fff; font-weight:600; font-size:16px;
-    }
-    .ov-btn[disabled] { opacity:.6; cursor:not-allowed; }
-    .ov-hint { color:#475569; font-size:13px; margin-top:6px; min-height:18px; }
-    .ov-actions { display:flex; gap:10px; margin-top:8px; }
-    .ov-ghost { background:#fff; color:#0f172a; border:1px solid #cbd5e1; }
-    .ov-step { display:none; }
-    .ov-step.active { display:block; }
-    .ov-code {
-      letter-spacing: .35em; text-align:center; font-weight:700; font-size:20px;
-    }
-    body.is-admin .nav { padding-left:72px; } /* para no tapar la navbar con el badge */
-  </style>
 </head>
 <body>
   <!-- Navbar -->
