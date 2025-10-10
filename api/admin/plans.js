@@ -1,4 +1,4 @@
-import { pool } from "../db.js";
+import { pool } from "../../lib/db.js";
 import { ensureAdmin } from "./_auth.js";
 
 export const config = { runtime: "nodejs" };

@@ -1,5 +1,5 @@
 // api/plans.js
-import { pool } from "./db.js";
+import { pool } from "../lib/db.js";
 
 export const config = { runtime: "nodejs" };
 

@@ -1,5 +1,5 @@
 // api/admin/verify-email.js
-import { pool } from "../db.js";
+import { pool } from "../../lib/db.js";
 import { authenticator } from "otplib";
 import QRCode from "qrcode";
 

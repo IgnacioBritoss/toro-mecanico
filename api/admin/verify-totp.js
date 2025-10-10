@@ -1,5 +1,5 @@
 // api/admin/verify-totp.js
-import { pool } from "../db.js";
+import { pool } from "../../lib/db.js";
 import crypto from "crypto";
 import { authenticator } from "otplib";
 
