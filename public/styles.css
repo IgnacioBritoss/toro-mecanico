@@ -457,3 +457,73 @@ header .admin-badge{ position: fixed !important; }
   :root{ --badge: 44px; }
   .admin-badge__icon{ width: 20px; height: 20px; }
 }
+
+
+/* ===== Admin: overlay a pantalla completa ===== */
+.overlay{
+  position: fixed;               /* <-- clave: fuera del flujo normal */
+  inset: 0;                      /* top:0 right:0 bottom:0 left:0 */
+  z-index: 2000;                 /* por encima de navbar y resto */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10,15,25,.45); /* oscurece el fondo */
+  backdrop-filter: blur(2px);
+}
+.overlay.hidden{ display:none; }
+
+.ov-card{
+  width: 100%;
+  max-width: 520px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  padding: 24px 20px 16px;
+  font-family: inherit;
+}
+.ov-title{ font-size: 22px; margin: 0 0 6px; }
+.ov-sub{ color:#475569; margin:0 0 16px; }
+.ov-row{ display:flex; flex-direction:column; gap:8px; margin:12px 0; }
+.ov-input{
+  width:100%; padding:12px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:16px;
+}
+.ov-code{ letter-spacing:.35em; text-align:center; font-weight:700; font-size:20px; }
+.ov-btn{
+  display:inline-block; width:100%; padding:12px 14px; border-radius:12px; border:none; cursor:pointer;
+  background:#0f172a; color:#fff; font-weight:600; font-size:16px;
+}
+.ov-btn[disabled]{ opacity:.6; cursor:not-allowed; }
+.ov-ghost{ background:#fff; color:#0f172a; border:1px solid #cbd5e1; }
+.ov-actions{ display:flex; gap:10px; margin-top:8px; }
+.ov-hint{ color:#475569; font-size:13px; margin-top:6px; min-height:18px; }
+.ov-step{ display:none; }
+.ov-step.active{ display:block; }
+
+/* ===== Admin: badge flotante (flecha) ===== */
+:root{
+  --nav-h: 64px;  /* fallback; JS lo sobreescribe con el alto real */
+  --badge: 48px;
+}
+.admin-badge{
+  position: fixed;
+  top: calc(env(safe-area-inset-top,0px) + (var(--nav-h) - var(--badge))/2);
+  left: calc(env(safe-area-inset-left,0px) + 12px);
+  z-index: 10000;
+  width: var(--badge);
+  height: var(--badge);
+  border-radius: 9999px;
+  padding: 0; margin: 0;
+  border: 2px solid #111827;
+  background: rgba(255,255,255,.94);
+  display: flex; align-items:center; justify-content:center;
+  box-shadow: 0 6px 18px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, background .15s;
+}
+.admin-badge.hidden{ display:none; }
+.admin-badge:hover{ transform: translateY(-1px); }
+.admin-badge__icon{ width:22px; height:22px; display:block; fill:#111827; }
+
+/* Evitar scroll del body cuando el overlay está visible (opcional) */
+body.has-admin-overlay{ overflow:hidden; }
