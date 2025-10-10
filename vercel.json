@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/admin",  "destination": "/?editprices=1#precios" },
-    { "source": "/admin/", "destination": "/?editprices=1#precios" }
+    { "source": "/admin",  "destination": "/" },
+    { "source": "/admin/", "destination": "/" }
   ]
 }

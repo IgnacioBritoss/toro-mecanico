@@ -18,25 +18,22 @@
   function money(v){ return Number(v || 0).toFixed(0); }
   function num(v){ const n = parseFloat(String(v).replace(/[^\d.]/g, "")); return Number.isFinite(n) ? n : 0; }
 
-  // Requiere venir con ?editprices=1 (que inyecta /admin vía vercel.json)
+  // Detectar /admin o ?editprices (las rewrites de Vercel NO cambian la barra del navegador)
   const url = new URL(window.location.href);
-  const showFlag = url.searchParams.has("editprices");
+  const onAdminPath = url.pathname.replace(/\/+$/,'') === "/admin";
+  const hasEditParam = url.searchParams.has("editprices");
+  const shouldShow = onAdminPath || hasEditParam;
 
-  // Si no venís por /admin, no cargamos nada:
-  if (!showFlag) return;
-
-  // Si no sos admin, no mostramos el panel. (Tu overlay de login corre aparte)
-  if (!hasAdminSession()) {
-    // Opcional: podés mostrar un mensajito suave en consola
+  if (!shouldShow) return;           // no estamos en /admin ni con flag
+  if (!hasAdminSession()) {          // sin sesión admin, nada (tu overlay se encarga)
     console.info("[admin-prices] Falta sesión admin. Logueate en /admin y volvés acá.");
     return;
   }
 
-  // --- anclar cerca de la sección de precios ---
+  // Ir a la sección precios (suave)
   const anchor = document.getElementById("precios") || qs("#precios");
   if (anchor) {
-    try { anchor.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    catch {}
+    try { anchor.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
   }
 
   // --- UI flotante ---
@@ -62,37 +59,24 @@
     </div>
   `);
 
-  // estilos mínimos incrustados (no tocan tu styles.css)
+  // estilos mínimos
   const style = el("style", {}, `
     .admin-price-panel{
-      position: fixed;
-      right: 18px;
-      top: 88px;
-      z-index: 1050;
-      width: 320px;
-      border-radius: 14px;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
+      position: fixed; right: 18px; top: 88px; z-index: 1050; width: 320px;
+      border-radius: 14px; background:#fff; border:1px solid #e5e7eb;
       box-shadow: 0 16px 38px rgba(0,0,0,.18);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
     }
-    .ap-head{
-      display:flex; align-items:center; justify-content:space-between;
-      padding: 10px 12px; border-bottom:1px solid #e5e7eb; background:#f8fafc;
-    }
+    .ap-head{ display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-bottom:1px solid #e5e7eb; background:#f8fafc; }
     .ap-head strong{ font-weight:800; font-size:14px; }
     .ap-close{ border:0; background:transparent; font-size:20px; cursor:pointer; line-height:1; padding:4px; }
-    .ap-body{ padding: 12px; }
+    .ap-body{ padding:12px; }
     .ap-row{ display:grid; gap:6px; margin-bottom:10px; }
     .ap-row label{ font-size:13px; color:#334155; }
-    .ap-row input{
-      border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 12px;
-      font-size: 14px; width: 100%;
-    }
+    .ap-row input{ border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px; font-size:14px; width:100%; }
     .ap-actions{ display:flex; gap:8px; margin-top:8px; }
-    .ap-btn{
-      border-radius: 10px; padding: 10px 12px; border:1px solid #cbd5e1; background:#fff; cursor:pointer;
-    }
+    .ap-btn{ border-radius:10px; padding:10px 12px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
     .ap-btn--primary{ background:#0f172a; color:#fff; border-color:#0f172a; }
     .ap-hint{ margin-top:10px; font-size:12px; color:#475569; min-height:16px; }
   `);
@@ -115,16 +99,12 @@
       const r = await fetch("/api/plans");
       const d = await r.json();
       if (!r.ok) { $hint.textContent = d.error || "No se pudo cargar."; return; }
-
-      // Buscamos planes por code ("1h" y "2h"). Si no existen, usamos fallback 300/500
       const one = (d.plans || []).find(p => p.code === "1h");
       const two = (d.plans || []).find(p => p.code === "2h");
       $one.value = one ? money(one.price_usd) : "300";
       $two.value = two ? money(two.price_usd) : "500";
       $hint.textContent = "Listo.";
-    }catch(e){
-      $hint.textContent = "Error de red.";
-    }
+    }catch{ $hint.textContent = "Error de red."; }
   }
 
   async function savePrice(code, price){
@@ -143,15 +123,12 @@
     const v1 = num($one.value);
     const v2 = num($two.value);
     if (v1 <= 0 || v2 <= 0){ $hint.textContent = "Ingresá valores mayores a 0."; return; }
-
     $save.disabled = true;
     $hint.textContent = "Guardando...";
     try{
       await savePrice("1h", v1);
       await savePrice("2h", v2);
       $hint.textContent = "Precios actualizados.";
-      // opcional refrescar cards visibles si tu main.js las lee de /api/plans
-      // window.location.reload(); // si querés refrescar toda la página
     }catch(e){
       $hint.textContent = e.message || "No autorizado (logueate en /admin).";
       alert($hint.textContent);
@@ -160,6 +137,5 @@
     }
   });
 
-  // Carga inicial
   loadPrices();
 })();
