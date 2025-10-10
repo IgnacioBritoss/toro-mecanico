@@ -8,6 +8,15 @@ let selectedHour = 18;
 let availability = {};
 let lastReservation = null; // { id, token }
 
+// ======= Admin (mínimo) =======
+function hasAdminSession(){
+  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
+}
+function clearAdminSession(){
+  // Borra la cookie admin_session (si tu server la puso como HttpOnly/SameSite, se borra en el servidor al salir)
+  document.cookie = "admin_session=; Max-Age=0; path=/";
+}
+
 // DOM
 const calTitle = document.getElementById("calTitle");
 const calGrid = document.getElementById("calGrid");
@@ -37,6 +46,10 @@ const mpButtonWrap = document.getElementById("mp-button-wrap");
 const mpLink1ars = document.getElementById("mp-link-1ars");
 const payWarn = document.getElementById("payWarn");
 
+// Admin UI mínimos (badge y overlay si existen en el DOM)
+const adminBadge = document.getElementById("adminBadge");
+const adminOverlay = document.getElementById("adminOverlay");
+
 // ---- helpers fecha/hora
 function pad2(n){ return String(n).padStart(2,"0"); }
 function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
@@ -61,7 +74,40 @@ function setFormDateTimeFromSelection() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // Centrar el admin badge según el alto real del header (opcional, pero útil)
+  (function centerAdminBadge(){
+    function setNavHeightVar(){
+      const el = document.querySelector('.nav__inner');
+      const h = el ? el.getBoundingClientRect().height : 64;
+      document.documentElement.style.setProperty('--nav-h', h + 'px');
+    }
+    setNavHeightVar();
+    window.addEventListener('resize', setNavHeightVar);
+  })();
+
+  // Mostrar/ocultar badge admin
+  if (adminBadge){
+    if (hasAdminSession()){ adminBadge.classList.remove("hidden"); }
+    else { adminBadge.classList.add("hidden"); }
+
+    adminBadge.addEventListener("click", () => {
+      clearAdminSession();
+      window.location.href = "/";
+    });
+  }
+
+  // Si estás en /admin y no hay sesión admin, mostrás overlay si existe (la lógica/flujo de auth la manejás vos)
+  if (adminOverlay && location.pathname.replace(/\/+$/,'') === "/admin" && !hasAdminSession()){
+    adminOverlay.classList.remove("hidden");
+  }
+
   lockDateTimeFields();
+
+  // ===== Planes dinámicos =====
+  const plans = await fetchPlans();
+  renderPricingCards(plans);
+  renderPlanRadios(plans);
+
   await fetchAvailabilityForMonth(activeMonth);
   renderCalendar(); renderHours(); updateSummary();
   setFormDateTimeFromSelection();
@@ -82,9 +128,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   reserveForm?.addEventListener("submit", onSubmitReservation);
   secondStepBtn?.addEventListener("click", onSecondStep);
-
-  // ===== ADMIN: activar overlay si la ruta es /admin o si ya estaba logueado
-  initAdminUI();
 });
 
 // --------- calendario/horas/summary ----------
@@ -160,7 +203,8 @@ function updateSummary(){
 }
 
 // =======================
-// UBICACIÓN DEL EVENTO (Leaflet + Nominatim)
+// UBICACIÓN DEL EVENTO
+// (Leaflet + Nominatim)
 // =======================
 const fAddress    = document.getElementById("fAddress");
 const addrSuggest = document.getElementById("addrSuggest");
@@ -262,7 +306,7 @@ function setHidden(lat, lng, displayName, osmId){
   if (addrOsmId) addrOsmId.value = osmId ?? '';
 }
 
-function esc(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // Eventos del input
 fAddress?.addEventListener('input', () => {
@@ -377,7 +421,7 @@ async function onSecondStep(){
       s.dataset.source = "button";
       mpButtonWrap.appendChild(s);
     }
-    // Link directo + QR
+    // 2) Link directo + QR
     const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN";
     const payLink = d.payLink || FALLBACK_PAY_LINK;
 
@@ -404,6 +448,7 @@ async function onSecondStep(){
 }
 
 // ===== Nice Select (Custom) - FIX =====
+// (Si ya no existe el select, esto se auto-desactiva)
 (function initNiceSelect(){
   const wrap = document.querySelector('.nice-select-wrap');
   if(!wrap) return;
@@ -463,147 +508,71 @@ async function onSecondStep(){
   syncFromSelect();
 })();
 
-/* =========================================================
-   ================   ADMIN (Overlay)   ====================
-   ========================================================= */
-function initAdminUI(){
-  const overlay = document.getElementById("adminOverlay");
-  const badge   = document.getElementById("adminBadge");
 
-  const stepEmail     = document.getElementById("stepEmail");
-  const stepCodeEmail = document.getElementById("stepCodeEmail");
-  const stepCodeTotp  = document.getElementById("stepCodeTotp");
+// ============================
+// PLANES / PRECIOS DINÁMICOS
+// ============================
+async function fetchPlans(){
+  try{
+    const r = await fetch('/api/plans');
+    if(!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d.plans) ? d.plans : [];
+  }catch{ return []; }
+}
 
-  const ovEmail      = document.getElementById("ovEmail");
-  const ovCodeEmail  = document.getElementById("ovCodeEmail");
-  const ovCodeTotp   = document.getElementById("ovCodeTotp");
-  const ovTotpQR     = document.getElementById("ovTotpQR");
-
-  const ovSendEmail   = document.getElementById("ovSendEmail");
-  const ovVerifyEmail = document.getElementById("ovVerifyEmail");
-  const ovVerifyTotp  = document.getElementById("ovVerifyTotp");
-  const ovBack1       = document.getElementById("ovBack1");
-  const ovBack2       = document.getElementById("ovBack2");
-
-  const hint1 = document.getElementById("ovHint1");
-  const hint2 = document.getElementById("ovHint2");
-  const hint3 = document.getElementById("ovHint3");
-
-  let adminSessionId = null;
-
-  const onAdmin = () => {
-    document.body.classList.add("is-admin");
-    badge?.classList.remove("hidden");
-  };
-  const offAdmin = () => {
-    document.body.classList.remove("is-admin");
-    badge?.classList.add("hidden");
-  };
-
-  function showStep(step){
-    [stepEmail, stepCodeEmail, stepCodeTotp].forEach(el => el?.classList.remove("active"));
-    if(step==="email")     stepEmail?.classList.add("active");
-    if(step==="codeEmail") stepCodeEmail?.classList.add("active");
-    if(step==="codeTotp")  stepCodeTotp?.classList.add("active");
+function renderPricingCards(plans){
+  const wrap = document.getElementById('pricingCards');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  if(!plans.length){
+    wrap.innerHTML = `<article class="card"><p>No hay planes activos.</p></article>`;
+    return;
   }
-
-  function openOverlay(){
-    overlay?.classList.remove("hidden");
-    showStep("email");
-    hint1.textContent = ""; hint2.textContent = ""; hint3.textContent = "";
-    ovEmail.value = ""; ovCodeEmail.value = ""; ovCodeTotp.value = "";
-    if (ovTotpQR) ovTotpQR.src = "";
-  }
-  function closeOverlay(){
-    overlay?.classList.add("hidden");
-  }
-
-  // Mostrar overlay si ruta es /admin
-  const isAdminRoute = location.pathname.replace(/\/+$/,'') === "/admin";
-  if (isAdminRoute) openOverlay();
-
-  // Si servidor confirma sesión admin (cookie), podemos reflejar; por simplicidad usamos localStorage:
-  if (localStorage.getItem("isAdmin")==="1") onAdmin();
-
-  // Botón salir (badge flecha)
-  badge?.addEventListener("click", async () => {
-    try{ await fetch("/api/admin/logout", { method:"POST" }); }catch{}
-    localStorage.removeItem("isAdmin");
-    offAdmin();
-    closeOverlay();
-    if (location.pathname !== "/") location.href = "/";
-  });
-
-  // === Paso 1: Enviar email
-  ovSendEmail?.addEventListener("click", async ()=>{
-    const email = ovEmail.value.trim();
-    if(!email){ hint1.textContent="Ingresá tu email."; return; }
-    ovSendEmail.disabled = true; hint1.textContent="Enviando código...";
-    try{
-      const r = await fetch("/api/admin/start", {
-        method:"POST", headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ email })
-      });
-      const d = await r.json();
-      if(!r.ok){ hint1.textContent = d.error || "No se pudo enviar el código."; ovSendEmail.disabled=false; return; }
-      adminSessionId = d.session_id;
-      hint1.textContent = "Te enviamos un código al email.";
-      showStep("codeEmail");
-    }catch{
-      hint1.textContent="Error de red.";
-    }finally{
-      ovSendEmail.disabled = false;
-    }
-  });
-
-  // === Paso 2: Verificar código email -> mostrar QR y pasar a TOTP
-  ovVerifyEmail?.addEventListener("click", async ()=>{
-    const code = ovCodeEmail.value.trim();
-    if(code.length<4){ hint2.textContent="Ingresá el código recibido por email."; return; }
-    ovVerifyEmail.disabled = true; hint2.textContent="Verificando...";
-    try{
-      const r = await fetch("/api/admin/verify-email", {
-        method:"POST", headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ session_id: adminSessionId, code })
-      });
-      const d = await r.json();
-      if(!r.ok){ hint2.textContent = d.error || "Código inválido."; ovVerifyEmail.disabled=false; return; }
-
-      if (d.qrDataUrl && ovTotpQR){
-        ovTotpQR.src = d.qrDataUrl;
-      }
-      hint2.textContent = "Listo. Escaneá el QR y cargá el código de tu app.";
-      showStep("codeTotp");
-    }catch{
-      hint2.textContent="Error de red.";
-    }finally{
-      ovVerifyEmail.disabled=false;
-    }
-  });
-
-  ovBack1?.addEventListener("click", ()=>{ showStep("email"); });
-  ovBack2?.addEventListener("click", ()=>{ showStep("codeEmail"); });
-
-  // === Paso 3: Verificar TOTP
-  ovVerifyTotp?.addEventListener("click", async ()=>{
-    const code = ovCodeTotp.value.trim();
-    if(code.length<6){ hint3.textContent="Ingresá el código de la app (6 dígitos)."; return; }
-    ovVerifyTotp.disabled = true; hint3.textContent="Verificando...";
-    try{
-      const r = await fetch("/api/admin/verify-totp", {
-        method:"POST", headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ session_id: adminSessionId, code })
-      });
-      const d = await r.json();
-      if(!r.ok){ hint3.textContent = d.error || "Código inválido."; ovVerifyTotp.disabled=false; return; }
-
-      localStorage.setItem("isAdmin","1");
-      onAdmin();
-      closeOverlay();
-    }catch{
-      hint3.textContent="Error de red.";
-    }finally{
-      ovVerifyTotp.disabled=false;
-    }
+  plans.forEach((p, idx) => {
+    const art = document.createElement('article');
+    art.className = 'card' + (idx===0 ? ' card--featured':'');
+    art.innerHTML = `
+      <header class="card__head">
+        <h3>${escapeHtml(p.label)}</h3>
+        ${idx===0 ? '<span class="badge">Más pedido</span>':''}
+      </header>
+      <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>USD</span></p>
+      <ul class="card__list">
+        <li>Operador incluido</li>
+        <li>Colchonetas y seguridad</li>
+        <li>Traslado en AMBA*</li>
+      </ul>
+      <a href="#calendario" class="btn btn--block ${idx===0?'btn--primary':''}">Reservar</a>
+    `;
+    wrap.appendChild(art);
   });
 }
+
+function renderPlanRadios(plans){
+  const wrap = document.getElementById('planOptions');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  if(!plans.length){
+    wrap.innerHTML = `<p class="hint">No hay planes activos.</p>`;
+    return;
+  }
+  // Si ya hay uno seleccionado, conservarlo si existe
+  const current = (document.querySelector('input[name="plan"]:checked')||{}).value;
+
+  plans.forEach((p, idx) => {
+    const checked = current ? (current === p.code) : (idx===0);
+    const div = document.createElement('label');
+    div.className = 'plan__opt';
+    div.innerHTML = `
+      <input type="radio" name="plan" value="${escapeHtml(p.code)}" ${checked?'checked':''} />
+      <span class="plan__card ${idx===0?'plan__card--pop':''}">
+        <strong>${escapeHtml(p.label)}</strong>
+        <em>USD ${Number(p.price_usd).toFixed(0)}</em>
+      </span>
+    `;
+    wrap.appendChild(div);
+  });
+}
+
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

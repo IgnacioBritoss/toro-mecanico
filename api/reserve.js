@@ -4,8 +4,6 @@ import crypto from "crypto";
 
 export const config = { runtime: "nodejs" };
 
-const PRICE_USD = { "1h": 300, "2h": 500 };
-
 function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
@@ -47,7 +45,18 @@ export default async function handler(req, res){
     }
 
     const planKey = (plan || "1h").toLowerCase();
-    if (!["1h","2h"].includes(planKey)) return res.status(400).json({ error: "Plan inválido" });
+
+    // === NUEVO: buscar plan y precio en DB
+    const qPlan = await pool.query(
+      `SELECT code, label, price_usd::float
+         FROM plans
+        WHERE code = $1 AND active = TRUE`,
+      [planKey]
+    );
+    if (qPlan.rowCount === 0){
+      return res.status(400).json({ error: "Plan inválido o no disponible" });
+    }
+    const planRow = qPlan.rows[0];
 
     const hourInt = parseInt(String(time).split(":")[0], 10);
 
@@ -68,31 +77,13 @@ export default async function handler(req, res){
       );
       user = u.rows[0];
 
-      // === NUEVO: Disponibilidad SOLO por estados que ocupan el calendario
-      // Regla 1: tope 2 turnos por día (solo pendiente/confirmada)
-      const dayCap = await client.query(
-        `SELECT COUNT(*)::int AS c
-           FROM reservations
-          WHERE event_date = $1
-            AND status IN ('pendiente','confirmada')`,
-        [date]
-      );
-      if (dayCap.rows[0].c >= 2){
+      // Disponibilidad
+      const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1 AND status <> 'rechazada'`, [date]);
+      if (qDay.rowCount >= 2){
         await client.query("ROLLBACK");
         return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." });
       }
-
-      // Regla 2: la hora tiene que estar libre (solo pendiente/confirmada)
-      const hourTaken = await client.query(
-        `SELECT 1
-           FROM reservations
-          WHERE event_date = $1
-            AND event_hour = $2
-            AND status IN ('pendiente','confirmada')
-          LIMIT 1`,
-        [date, hourInt]
-      );
-      if (hourTaken.rowCount > 0){
+      if (new Set(qDay.rows.map(r=>r.event_hour)).has(hourInt)){
         await client.query("ROLLBACK");
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
@@ -108,7 +99,7 @@ export default async function handler(req, res){
          RETURNING id, event_date, event_hour, plan, zone, message, created_at,
                    location_display, location_address, location_lat, location_lng, location_osm_id`,
         [
-          user.id, date, hourInt, planKey, zone || null, message || null,
+          user.id, date, hourInt, planRow.code, zone || null, message || null,
           location.display_name || null,
           (location.address || location.display_name || null),
           Number(location.lat),
@@ -121,7 +112,6 @@ export default async function handler(req, res){
       await client.query("COMMIT");
     }catch(e){
       await client.query("ROLLBACK");
-      // Si añadís el índice único parcial, esto atrapará conflictos de doble-booking:
       if (e.code === "23505") return res.status(409).json({ error: "Ese horario ya está reservado." });
       console.error("DB ERROR:", e);
       return res.status(500).json({ error: "Error interno (DB)" });
@@ -154,7 +144,7 @@ export default async function handler(req, res){
 
         const acceptUrl = `${baseUrl}/api/accept?id=${reservation.id}&token=${token}`;
         const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
-        const price = PRICE_USD[reservation.plan];
+        const price = planRow.price_usd;
 
         const locHtml = `
           <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
