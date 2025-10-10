@@ -1,227 +1,219 @@
-// public/admin-prices.js
-(function () {
-  // --- solo admins: buscamos cookie admin_session=ok ---
-  function hasAdminSession() {
-    return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
-  }
-  if (!hasAdminSession()) return;
+/* public/admin-prices.js
+   Editor liviano para modificar precios de planes desde el sitio.
+   - Lee planes públicos desde /api/plans
+   - Guarda cambios (de a uno) en /api/admin/plans  { action:'update', id, price_usd }
+   - Muestra UI solo si hay sesión admin (cookie) o si la URL tiene ?editprices (debug)
+*/
 
-  // ---- helpers ----
-  const $ = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  function el(tag, attrs = {}, html) {
-    const n = document.createElement(tag);
-    for (const k in attrs) {
-      if (k === "class") n.className = attrs[k];
-      else if (k === "style") Object.assign(n.style, attrs[k]);
-      else n.setAttribute(k, attrs[k]);
-    }
-    if (html != null) n.innerHTML = html;
-    return n;
-  }
+// ---- DEBUG: ?editprices fuerza el editor aunque no haya cookie ----
+const __DEBUG_SHOW_PRICES__ = new URLSearchParams(location.search).has("editprices");
 
-  // ---- estilos mínimos inyectados ----
+function hasAdminSession() {
+  if (__DEBUG_SHOW_PRICES__) return true;
+  const c = document.cookie || "";
+  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(c);
+}
+
+function $id(id){ return document.getElementById(id); }
+function esc(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function fetchPublicPlans(){
+  try{
+    const r = await fetch('/api/plans');
+    if(!r.ok) return [];
+    const d = await r.json();
+    return Array.isArray(d.plans) ? d.plans : [];
+  }catch{
+    return [];
+  }
+}
+
+async function savePlanPrice(id, price){
+  const body = { action:'update', id, price_usd: Number(price) };
+  const r = await fetch('/api/admin/plans', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(body)
+  });
+  const d = await r.json().catch(()=> ({}));
+  return { ok: r.ok && d?.ok, data: d };
+}
+
+function injectStylesOnce(){
+  if ($id('apc-styles')) return;
   const css = `
-  .ap-panel{
+  .apc-wrap{
     position: relative;
-    margin-top: 12px;
-    background:#fff;
-    border:1px solid #e5e7eb;
-    border-radius:14px;
+  }
+  .apc-btn{
+    position: absolute;
+    top: -8px;
+    right: 0;
+    transform: translateY(-100%);
+    background:#111827; color:#fff; border:0; border-radius:12px;
+    padding:10px 12px; font-weight:700; cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,.12);
+  }
+  .apc-panel{
+    margin:12px 0 4px;
+    border:1px solid #e2e8f0; border-radius:14px; background:#fff;
+    box-shadow:0 8px 24px rgba(15,23,42,.08);
     padding:12px;
-    box-shadow:0 10px 26px rgba(0,0,0,.06);
   }
-  .ap-header{
-    display:flex; justify-content:space-between; align-items:center; gap:10px;
-    margin-bottom: 6px;
+  .apc-row{
+    display:grid; grid-template-columns: 1fr auto 110px; gap:10px; align-items:center;
+    padding:8px; border-radius:10px;
   }
-  .ap-title{font-weight:800}
-  .ap-row{
-    display:grid; grid-template-columns:1fr 120px 120px; gap:10px; align-items:center;
-    padding:8px 0; border-top:1px dashed #e5e7eb;
+  .apc-row + .apc-row{ margin-top:6px; }
+  .apc-row:hover{ background:#f8fafc; }
+  .apc-label{ font-weight:700; }
+  .apc-input{
+    width:120px; max-width:100%;
+    border:1px solid #cbd5e1; border-radius:10px; padding:8px 10px; text-align:right;
   }
-  .ap-row:first-of-type{ border-top:0; }
-  .ap-label{ font-weight:600 }
-  .ap-input{
-    width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:12px;
-    font-size:14px;
+  .apc-save{
+    background:#0f172a; color:#fff; border:0; border-radius:10px; padding:8px 10px; cursor:pointer; font-weight:700;
   }
-  .ap-btn{ cursor:pointer; border:0; border-radius:10px; padding:10px 12px; font-weight:700 }
-  .ap-btn--save{ background:#0f172a; color:#fff }
-  .ap-btn--reload{ background:#fff; border:1px solid #cbd5e1; }
-  .ap-hint{ font-size:12px; color:#64748b; margin-top:6px; min-height:18px }
-  .ap-badge{
-    display:inline-flex; align-items:center; gap:8px;
-    padding:8px 10px; border:1px solid #cbd5e1; border-radius:999px;
-    background:#fff; cursor:pointer; font-weight:700;
+  .apc-hint{ color:#475569; font-size:12px; margin-top:8px; }
+  @media (max-width: 560px){
+    .apc-row{ grid-template-columns: 1fr 1fr; }
+    .apc-input{ width:100%; }
   }
-  .ap-wrap{
-    margin:8px 0 0 0;
-  }
-  .ap-ok{ color:#16a34a; }
-  .ap-err{ color:#b91c1c; }
   `;
-  const style = el("style", {}, css);
-  document.head.appendChild(style);
+  const el = document.createElement('style');
+  el.id = 'apc-styles';
+  el.textContent = css;
+  document.head.appendChild(el);
+}
 
-  // ---- UI: botón “Editar precios” y panel ----
-  const preciosSection = document.getElementById("precios");
-  if (!preciosSection) return;
+function formatMoney(n){
+  const v = Number(n||0);
+  return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
 
-  const container = preciosSection.querySelector(".container") || preciosSection;
-  const badge = el("button", { class: "ap-badge", type: "button" }, "✎ Editar precios");
-  const wrap = el("div", { class: "ap-wrap" });
-  container.insertBefore(badge, container.firstElementChild?.nextSibling || null);
-  container.insertBefore(wrap, badge.nextSibling);
+function patchPricingCards(plans){
+  // Si tus tarjetas ya se renderizan con main.js desde /api/plans, no hace falta tocar nada.
+  // Este refuerzo asegura que los precios del HTML visible coincidan con el último fetch.
+  const cardsWrap = document.querySelector('#precios .cards');
+  if (!cardsWrap) return;
 
-  let open = false;
-  badge.addEventListener("click", () => {
-    open = !open;
-    if (open) openPanel();
-    else wrap.innerHTML = "";
+  // Map por label (1 hora, 2 horas) y por code si lo tenés.
+  const mapByLabel = new Map(plans.map(p => [String(p.label||'').trim().toLowerCase(), p]));
+  const priceEls = cardsWrap.querySelectorAll('.card');
+
+  priceEls.forEach(card => {
+    const title = (card.querySelector('h3')?.textContent || '').trim().toLowerCase();
+    const p = mapByLabel.get(title);
+    if (p){
+      const priceEl = card.querySelector('.card__price');
+      if (priceEl){
+        // Reemplaza solo el número grande
+        const strong = priceEl.querySelector('strong');
+        if (strong) strong.textContent = `$${formatMoney(p.price_usd)}`;
+        else priceEl.innerHTML = `<strong>$${formatMoney(p.price_usd)}</strong> <span>USD</span>`;
+      }
+    }
+  });
+}
+
+function buildEditor(plans){
+  const preciosSec = $id('precios');
+  if (!preciosSec) return;
+
+  injectStylesOnce();
+
+  // envoltorio para posicionar el botón
+  let wrap = preciosSec.querySelector('.apc-wrap');
+  if (!wrap){
+    wrap = document.createElement('div');
+    wrap.className = 'apc-wrap';
+    // insertamos al comienzo del contenedor para que el botón quede encima del bloque
+    const cont = preciosSec.querySelector('.container') || preciosSec;
+    cont.prepend(wrap);
+  }
+
+  // Botón
+  let btn = wrap.querySelector('.apc-btn');
+  if (!btn){
+    btn = document.createElement('button');
+    btn.className = 'apc-btn';
+    btn.type = 'button';
+    btn.textContent = '✎ Editar precios';
+    wrap.appendChild(btn);
+  }
+
+  // Panel (oculto por defecto)
+  let panel = wrap.querySelector('.apc-panel');
+  if (!panel){
+    panel = document.createElement('div');
+    panel.className = 'apc-panel';
+    panel.style.display = 'none';
+    wrap.appendChild(panel);
+  }
+
+  // Render filas
+  panel.innerHTML = '';
+  plans.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'apc-row';
+    row.innerHTML = `
+      <div class="apc-label">${esc(p.label)} <small style="color:#64748b">(${esc(p.code || p.id)})</small></div>
+      <input class="apc-input" type="number" min="0" step="1" value="${Number(p.price_usd).toFixed(0)}" />
+      <button class="apc-save" type="button">Guardar</button>
+    `;
+    const input = row.querySelector('.apc-input');
+    const save  = row.querySelector('.apc-save');
+
+    save.addEventListener('click', async () => {
+      const val = Number(input.value);
+      if (Number.isNaN(val) || val < 0){ alert('Precio inválido'); return; }
+      save.disabled = true; save.textContent = '...';
+      try{
+        const res = await savePlanPrice(p.id, val);
+        if(!res.ok){
+          const err = res.data?.error || 'No se pudo guardar. ¿Sesión admin?';
+          alert(err);
+        }else{
+          // Refrescar tarjetas visibles y feedback
+          p.price_usd = val;
+          patchPricingCards(plans);
+          save.textContent = 'Guardado ✓';
+          setTimeout(()=> save.textContent = 'Guardar', 1200);
+        }
+      }catch{
+        alert('Error de red');
+      }finally{
+        save.disabled = false;
+      }
+    });
+
+    panel.appendChild(row);
   });
 
-  async function openPanel() {
-    wrap.innerHTML = "";
-    const panel = el("div", { class: "ap-panel" });
-    const head = el(
-      "div",
-      { class: "ap-header" },
-      `<div class="ap-title">Editar precios (USD)</div>
-       <div style="display:flex;gap:8px">
-        <button type="button" class="ap-btn ap-btn--reload" id="apReload">Recargar</button>
-       </div>`
-    );
-    const hint = el("div", { class: "ap-hint", id: "apHint" });
+  const hint = document.createElement('div');
+  hint.className = 'apc-hint';
+  hint.textContent = 'Los cambios impactan en toda la web. Guardá plan por plan.';
+  panel.appendChild(hint);
 
-    panel.appendChild(head);
+  // Toggle
+  btn.addEventListener('click', () => {
+    panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+    btn.textContent = panel.style.display === 'none' ? '✎ Editar precios' : '✕ Cerrar editor';
+  });
+}
 
-    // traer planes actuales
-    const plans = await fetchPlans();
-    if (!plans.length) {
-      panel.appendChild(el("div", {}, "<em>No hay planes para editar.</em>"));
-      panel.appendChild(hint);
-      wrap.appendChild(panel);
-      return;
-    }
+document.addEventListener('DOMContentLoaded', async () => {
+  // Si no hay sesión admin y no está el flag de debug, no mostramos nada
+  if (!hasAdminSession()) return;
 
-    plans.forEach((p) => {
-      const row = el("div", { class: "ap-row" });
-      const label = el("div", { class: "ap-label" }, escapeHtml(p.label || p.code));
-      const input = el("input", {
-        class: "ap-input",
-        type: "number",
-        step: "1",
-        min: "0",
-        value: Number(p.price_usd || 0).toFixed(0),
-      });
-      const save = el("button", { class: "ap-btn ap-btn--save", type: "button" }, "Guardar");
+  const plans = await fetchPublicPlans();
+  if (!plans.length) return;
 
-      save.addEventListener("click", async () => {
-        hint.classList.remove("ap-ok", "ap-err");
-        hint.textContent = "Guardando…";
-        save.disabled = true;
-        try {
-          const ok = await savePrice({
-            id: p.id,
-            code: p.code,
-            label: p.label,
-            price_usd: Number(input.value),
-          });
-          if (ok) {
-            hint.classList.add("ap-ok");
-            hint.textContent = "Guardado. Actualizando tarjetas…";
-            // refrescar tarjetas visibles (si las arma main.js) o recargar
-            try {
-              await refreshPricingCards();
-              hint.textContent = "Listo ✅";
-            } catch {
-              location.reload();
-            }
-          } else {
-            hint.classList.add("ap-err");
-            hint.textContent = "No se pudo guardar.";
-          }
-        } catch {
-          hint.classList.add("ap-err");
-          hint.textContent = "Error de red al guardar.";
-        } finally {
-          save.disabled = false;
-        }
-      });
+  // Asegurar que las tarjetas coincidan con lo que vamos a editar (por si aún no estaban render)
+  patchPricingCards(plans);
 
-      row.appendChild(label);
-      row.appendChild(input);
-      row.appendChild(save);
-      panel.appendChild(row);
-    });
+  // Construir UI de edición
+  buildEditor(plans);
 
-    panel.appendChild(hint);
-    wrap.appendChild(panel);
-
-    $("#apReload", panel)?.addEventListener("click", async () => {
-      wrap.innerHTML = "";
-      await openPanel();
-    });
-  }
-
-  async function fetchPlans() {
-    try {
-      const r = await fetch("/api/plans");
-      const d = await r.json();
-      return Array.isArray(d.plans) ? d.plans : [];
-    } catch {
-      return [];
-    }
-  }
-
-  // En tu backend ya tenés /api/admin/plans (por tus capturas).
-  // Esta llamada intenta upsert por id o code con action=update.
-  async function savePrice({ id, code, label, price_usd }) {
-    const body = { action: "update", price_usd };
-    if (id != null) body.id = id;
-    if (code != null) body.code = code;
-    if (label != null) body.label = label;
-
-    const r = await fetch("/api/admin/plans", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const d = await r.json();
-    return r.ok && d.ok;
-  }
-
-  // Si tus tarjetas de precios las arma main.js desde /api/plans,
-  // tratamos de re-render sin recargar (si existe esa función pública).
-  async function refreshPricingCards() {
-    // 1) si main.js expone render dinámico (como en tu proyecto), rehacemos:
-    const cardsWrap = document.getElementById("pricingCards");
-    if (!cardsWrap) return;
-
-    const plans = await fetchPlans();
-    // reconstrucción simple (igual a como se muestran)
-    cardsWrap.innerHTML = "";
-    plans.forEach((p, idx) => {
-      const art = el("article", { class: "card" + (idx === 1 ? " card--featured" : "") });
-      art.innerHTML = `
-        <header class="card__head">
-          <h3>${escapeHtml(p.label || p.code)}</h3>
-          ${idx === 1 ? '<span class="badge">Más pedido</span>' : ""}
-        </header>
-        <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>USD</span></p>
-        <ul class="card__list">
-          <li>Operador incluido</li>
-          <li>Colchonetas y seguridad</li>
-          <li>Traslado en AMBA*</li>
-        </ul>
-        <a href="#calendario" class="btn btn--block ${idx === 1 ? "btn--primary" : ""}">Reservar</a>
-      `;
-      cardsWrap.appendChild(art);
-    });
-  }
-
-  function escapeHtml(s) {
-    return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
-})();
+  console.debug('[admin-prices] listo. planes:', plans);
+});
