@@ -472,17 +472,18 @@ function initAdminUI(){
 
   const stepEmail     = document.getElementById("stepEmail");
   const stepCodeEmail = document.getElementById("stepCodeEmail");
-  const stepCodeSms   = document.getElementById("stepCodeSms");
+  const stepCodeTotp  = document.getElementById("stepCodeTotp");
 
   const ovEmail      = document.getElementById("ovEmail");
   const ovCodeEmail  = document.getElementById("ovCodeEmail");
-  const ovCodeSms    = document.getElementById("ovCodeSms");
+  const ovCodeTotp   = document.getElementById("ovCodeTotp");
+  const ovTotpQR     = document.getElementById("ovTotpQR");
 
-  const ovSendEmail  = document.getElementById("ovSendEmail");
-  const ovVerifyEmail= document.getElementById("ovVerifyEmail");
-  const ovVerifySms  = document.getElementById("ovVerifySms");
-  const ovBack1      = document.getElementById("ovBack1");
-  const ovBack2      = document.getElementById("ovBack2");
+  const ovSendEmail   = document.getElementById("ovSendEmail");
+  const ovVerifyEmail = document.getElementById("ovVerifyEmail");
+  const ovVerifyTotp  = document.getElementById("ovVerifyTotp");
+  const ovBack1       = document.getElementById("ovBack1");
+  const ovBack2       = document.getElementById("ovBack2");
 
   const hint1 = document.getElementById("ovHint1");
   const hint2 = document.getElementById("ovHint2");
@@ -500,17 +501,18 @@ function initAdminUI(){
   };
 
   function showStep(step){
-    [stepEmail, stepCodeEmail, stepCodeSms].forEach(el => el.classList.remove("active"));
-    if(step==="email") stepEmail.classList.add("active");
-    if(step==="codeEmail") stepCodeEmail.classList.add("active");
-    if(step==="codeSms") stepCodeSms.classList.add("active");
+    [stepEmail, stepCodeEmail, stepCodeTotp].forEach(el => el?.classList.remove("active"));
+    if(step==="email")     stepEmail?.classList.add("active");
+    if(step==="codeEmail") stepCodeEmail?.classList.add("active");
+    if(step==="codeTotp")  stepCodeTotp?.classList.add("active");
   }
 
   function openOverlay(){
     overlay?.classList.remove("hidden");
     showStep("email");
     hint1.textContent = ""; hint2.textContent = ""; hint3.textContent = "";
-    ovEmail.value = ""; ovCodeEmail.value = ""; ovCodeSms.value = "";
+    ovEmail.value = ""; ovCodeEmail.value = ""; ovCodeTotp.value = "";
+    if (ovTotpQR) ovTotpQR.src = "";
   }
   function closeOverlay(){
     overlay?.classList.add("hidden");
@@ -518,12 +520,9 @@ function initAdminUI(){
 
   // Mostrar overlay si ruta es /admin
   const isAdminRoute = location.pathname.replace(/\/+$/,'') === "/admin";
-  if (isAdminRoute) {
-    openOverlay();
-  }
+  if (isAdminRoute) openOverlay();
 
-  // Si servidor confirma sesión admin (cookie), mostramos badge:
-  // (opcional: podrías llamar /api/admin/session; por simplicidad usamos localStorage)
+  // Si servidor confirma sesión admin (cookie), podemos reflejar; por simplicidad usamos localStorage:
   if (localStorage.getItem("isAdmin")==="1") onAdmin();
 
   // Botón salir (badge flecha)
@@ -531,7 +530,6 @@ function initAdminUI(){
     try{ await fetch("/api/admin/logout", { method:"POST" }); }catch{}
     localStorage.removeItem("isAdmin");
     offAdmin();
-    // Volver a home y cerrar overlay si estaba abierto
     closeOverlay();
     if (location.pathname !== "/") location.href = "/";
   });
@@ -558,7 +556,7 @@ function initAdminUI(){
     }
   });
 
-  // === Paso 2: Verificar código email
+  // === Paso 2: Verificar código email -> mostrar QR y pasar a TOTP
   ovVerifyEmail?.addEventListener("click", async ()=>{
     const code = ovCodeEmail.value.trim();
     if(code.length<4){ hint2.textContent="Ingresá el código recibido por email."; return; }
@@ -570,8 +568,12 @@ function initAdminUI(){
       });
       const d = await r.json();
       if(!r.ok){ hint2.textContent = d.error || "Código inválido."; ovVerifyEmail.disabled=false; return; }
-      hint2.textContent = "Ok. Te enviamos un SMS al teléfono registrado.";
-      showStep("codeSms");
+
+      if (d.qrDataUrl && ovTotpQR){
+        ovTotpQR.src = d.qrDataUrl;
+      }
+      hint2.textContent = "Listo. Escaneá el QR y cargá el código de tu app.";
+      showStep("codeTotp");
     }catch{
       hint2.textContent="Error de red.";
     }finally{
@@ -580,34 +582,28 @@ function initAdminUI(){
   });
 
   ovBack1?.addEventListener("click", ()=>{ showStep("email"); });
+  ovBack2?.addEventListener("click", ()=>{ showStep("codeEmail"); });
 
-  // === Paso 3: Verificar código SMS
-  ovVerifySms?.addEventListener("click", async ()=>{
-    const code = ovCodeSms.value.trim();
-    if(code.length<4){ hint3.textContent="Ingresá el código recibido por SMS."; return; }
-    ovVerifySms.disabled = true; hint3.textContent="Verificando...";
+  // === Paso 3: Verificar TOTP
+  ovVerifyTotp?.addEventListener("click", async ()=>{
+    const code = ovCodeTotp.value.trim();
+    if(code.length<6){ hint3.textContent="Ingresá el código de la app (6 dígitos)."; return; }
+    ovVerifyTotp.disabled = true; hint3.textContent="Verificando...";
     try{
-      const r = await fetch("/api/admin/verify-sms", {
+      const r = await fetch("/api/admin/verify-totp", {
         method:"POST", headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ session_id: adminSessionId, code })
       });
       const d = await r.json();
-      if(!r.ok){ hint3.textContent = d.error || "Código inválido."; ovVerifySms.disabled=false; return; }
+      if(!r.ok){ hint3.textContent = d.error || "Código inválido."; ovVerifyTotp.disabled=false; return; }
 
-      // Sesión admin OK (el server setea cookie). Reflejamos en UI:
       localStorage.setItem("isAdmin","1");
       onAdmin();
       closeOverlay();
-
-      // Si estabas en /admin, al completar te quedás en la misma página pero ya en modo admin.
-      // Podés redirigir a "/" si querés:
-      // location.href="/";
     }catch{
       hint3.textContent="Error de red.";
     }finally{
-      ovVerifySms.disabled=false;
+      ovVerifyTotp.disabled=false;
     }
   });
-
-  ovBack2?.addEventListener("click", ()=>{ showStep("codeEmail"); });
 }

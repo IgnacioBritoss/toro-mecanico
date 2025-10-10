@@ -1,15 +1,9 @@
 // api/admin/verify-email.js
 import { pool } from "../db.js";
+import { authenticator } from "otplib";
+import QRCode from "qrcode";
 
 export const config = { runtime: "nodejs" };
-
-// helper para leer distintos nombres de env
-function twilioCreds(){
-  const sid   = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN;
-  const from  = process.env.TWILIO_FROM;
-  return { sid, token, from };
-}
 
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -18,7 +12,7 @@ export default async function handler(req, res){
 
   try{
     const s = await pool.query(`
-      SELECT a.id, a.email, a.email_code, a.sms_code, a.status, a.expires_at, u.phone
+      SELECT a.id, a.email, a.email_code, a.status, a.expires_at, u.totp_secret, u.totp_enabled
         FROM admin_sessions a
         JOIN admin_users   u ON u.email = a.email
        WHERE a.id = $1
@@ -26,38 +20,32 @@ export default async function handler(req, res){
     if(!s.rowCount) return res.status(404).json({ error:"Sesión no encontrada" });
 
     const row = s.rows[0];
-    if (new Date(row.expires_at) < new Date()) return res.status(410).json({ error:"Sesión expirada" });
-    if (row.status !== "email_sent")          return res.status(409).json({ error:"Estado inválido" });
-    if (String(code) !== String(row.email_code)) return res.status(401).json({ error:"Código incorrecto" });
+    if (new Date(row.expires_at) < new Date())   return res.status(410).json({ error:"Sesión expirada" });
+    if (row.status !== "email_sent")              return res.status(409).json({ error:"Estado inválido" });
+    if (String(code) !== String(row.email_code))  return res.status(401).json({ error:"Código incorrecto" });
 
+    // Marcar email ok
     await pool.query(`UPDATE admin_sessions SET status='email_ok' WHERE id=$1`, [session_id]);
 
-    // ====== SMS ======
-    const { sid, token, from } = twilioCreds();
-    let smsSent = false;
-
-    if (sid && token && from) {
-      try{
-        // import dinámico (no rompe si no está instalado)
-        const twilioMod = await import("twilio");
-        const client = twilioMod.default ? twilioMod.default(sid, token) : twilioMod(sid, token);
-        await client.messages.create({
-          body: `Código SMS admin: ${row.sms_code}`,
-          from,
-          to: row.phone
-        });
-        smsSent = true;
-      }catch(e){
-        console.error("TWILIO SEND ERROR:", e);
-      }
+    // Si TOTP está deshabilitado (por alguna razón), dejar pasar sin 2do factor
+    if (row.totp_enabled === false) {
+      return res.status(200).json({ ok:true, next:"verify-totp", totpDisabled:true });
     }
 
-    if (!smsSent) {
-      // Fallback: mostramos el código en logs (para poder avanzar en pruebas)
-      console.log("ADMIN SMS CODE:", row.sms_code, "to:", row.phone);
+    // Asegurar secreto TOTP (si no existe, crearlo y guardarlo)
+    let secret = row.totp_secret;
+    if (!secret) {
+      secret = authenticator.generateSecret();
+      await pool.query(`UPDATE admin_users SET totp_secret=$2 WHERE email=$1`, [row.email, secret]);
     }
 
-    return res.status(200).json({ ok:true, next:"verify-sms" });
+    // Armar otpauth URI y QR (para que lo escanees 1 sola vez)
+    const issuer = "Toro Mecanico Admin";
+    const otpauth = authenticator.keyuri(row.email, issuer, secret);
+    const qrDataUrl = await QRCode.toDataURL(otpauth);
+
+    // Devolver datos para el paso TOTP
+    return res.status(200).json({ ok:true, next:"verify-totp", otpauth, qrDataUrl });
   }catch(e){
     console.error(e);
     return res.status(500).json({ error:"Error interno" });

@@ -260,11 +260,11 @@
 
       <!-- Pago -->
       <section id="paymentBlockManual" class="flow-card hidden">
-        <h3>Seña</h3>
+        
         <section class="pay-split">
           <div class="pay-left">
             <h4>Opción 1</h4>
-            <p class="pay-sub">Pagar desde la compu</p>
+            <p class="pay-sub">Pagar desde el dispositivo</p>
             <a id="mp-link-1ars" class="btn btn--primary" target="_blank" rel="noreferrer">Pagar con Mercado Pago</a>
             <small class="pay-brand">Pago mediante Mercado Pago</small>
           </div>
@@ -331,18 +331,26 @@
       </div>
 
       <!-- Paso 3: Código SMS -->
-      <div id="stepCodeSms" class="ov-step" data-step="codeSms">
-        <p class="ov-sub">Te enviamos un SMS al teléfono registrado. Ingresá el código.</p>
-        <div class="ov-row">
-          <label>Código por SMS</label>
-          <input id="ovCodeSms" inputmode="numeric" maxlength="6" class="ov-input ov-code" placeholder="______" />
-        </div>
-        <div class="ov-actions">
-          <button id="ovBack2" class="ov-btn ov-ghost">Volver</button>
-          <button id="ovVerifySms" class="ov-btn">Ingresar al modo admin</button>
-        </div>
-        <div id="ovHint3" class="ov-hint"></div>
-      </div>
+      <!-- Paso 3: Código TOTP -->
+<div id="stepCodeTotp" class="ov-step" data-step="codeTotp">
+  <p class="ov-sub">
+    Escaneá el QR con Google Authenticator / Authy.<br/>
+    Luego ingresá el código de 6 dígitos que te da la app.
+  </p>
+  <div class="ov-row" style="align-items:center">
+    <img id="ovTotpQR" alt="QR para configurar Authenticator" style="max-width:220px;border:1px solid #e5e7eb;border-radius:12px;padding:8px;background:#fff"/>
+  </div>
+  <div class="ov-row">
+    <label>Código de la app</label>
+    <input id="ovCodeTotp" inputmode="numeric" maxlength="6" class="ov-input ov-code" placeholder="______" />
+  </div>
+  <div class="ov-actions">
+    <button id="ovBack2" class="ov-btn ov-ghost">Volver</button>
+    <button id="ovVerifyTotp" class="ov-btn">Ingresar al modo admin</button>
+  </div>
+  <div id="ovHint3" class="ov-hint"></div>
+</div>
+
     </div>
   </div>
 
