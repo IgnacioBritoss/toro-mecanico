@@ -1,9 +1,15 @@
-import { pool } from "../db.js";
+// api/admin/logout.js
 export const config = { runtime: "nodejs" };
 
-export default function handler(req, res){
-  if (req.method !== "POST") return res.status(405).json({ error:"Método no permitido" });
-  // Expira cookie
-  res.setHeader("Set-Cookie", "ADMIN_TOKEN=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax");
+export default async function handler(req, res){
+  if (req.method !== "POST" && req.method !== "GET"){
+    return res.status(405).json({ ok:false, error:"Método no permitido" });
+  }
+
+  // Borrar cookie
+  res.setHeader("Set-Cookie", [
+    "admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure"
+  ]);
+
   return res.status(200).json({ ok:true });
 }

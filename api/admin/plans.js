@@ -1,55 +1,43 @@
 // api/admin/plans.js
-import { pool } from "../../lib/db.js"; // <- así con DOS niveles hacia arriba
+import { pool } from "../../lib/db.js";
+import { requireAdmin } from "./_auth.js";
 
 export const config = { runtime: "nodejs" };
 
-function isAdmin(req) {
-  const cookie = req.headers.cookie || "";
-  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(cookie);
-}
-
-export default async function handler(req, res) {
-  if (!isAdmin(req)) return res.status(401).json({ ok:false, error:"Unauthorized" });
-
+export default async function handler(req, res){
   try {
-    if (req.method === "GET") {
+    if (req.method === "GET"){
+      // Podés dejar GET público, pero lo hacemos admin para el editor
+      if (!requireAdmin(req, res)) return;
       const q = await pool.query(
-        "SELECT id, code, label, price_usd FROM plans WHERE active=true ORDER BY order_index NULLS LAST, id"
+        "SELECT id, code, label, price_usd FROM plans ORDER BY id"
       );
       return res.status(200).json({ ok:true, plans:q.rows });
     }
 
-    if (req.method === "POST") {
-      const { action, id, code, label, price_usd } = req.body || {};
-      if (action !== "update") return res.status(400).json({ ok:false, error:"Acción inválida" });
+    if (req.method === "POST"){
+      if (!requireAdmin(req, res)) return;
 
-      const price = Number(price_usd);
-      if (Number.isNaN(price)) return res.status(400).json({ ok:false, error:"Precio inválido" });
+      const { id, price_usd } = req.body || {};
+      const pid = parseInt(id, 10);
+      const p   = Number(price_usd);
 
-      if (id) {
-        const q = await pool.query("UPDATE plans SET price_usd=$2, updated_at=NOW() WHERE id=$1 RETURNING id", [id, price]);
-        if (!q.rowCount) return res.status(404).json({ ok:false, error:"Plan no encontrado" });
-        return res.status(200).json({ ok:true, id });
-      } else if (code) {
-        const sel = await pool.query("SELECT id FROM plans WHERE code=$1", [code]);
-        if (sel.rowCount) {
-          const pid = sel.rows[0].id;
-          await pool.query("UPDATE plans SET price_usd=$2, updated_at=NOW() WHERE id=$1", [pid, price]);
-          return res.status(200).json({ ok:true, id: pid });
-        } else {
-          const ins = await pool.query(
-            "INSERT INTO plans (code,label,price_usd,active) VALUES ($1,$2,$3,true) RETURNING id",
-            [code, label || code, price]
-          );
-          return res.status(200).json({ ok:true, id: ins.rows[0].id });
-        }
-      } else {
-        return res.status(400).json({ ok:false, error:"Falta id o code" });
+      if (!pid || !Number.isFinite(p) || p <= 0){
+        return res.status(400).json({ ok:false, error:"Datos inválidos" });
       }
+
+      const up = await pool.query(
+        "UPDATE plans SET price_usd=$1 WHERE id=$2 RETURNING id, code, label, price_usd",
+        [p, pid]
+      );
+      if (!up.rowCount){
+        return res.status(404).json({ ok:false, error:"Plan no encontrado" });
+      }
+      return res.status(200).json({ ok:true, plan:up.rows[0] });
     }
 
     return res.status(405).json({ ok:false, error:"Método no permitido" });
-  } catch (e) {
+  } catch (e){
     console.error("ADMIN plans error:", e);
     return res.status(500).json({ ok:false, error:"Error interno" });
   }
