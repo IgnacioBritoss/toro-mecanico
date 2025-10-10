@@ -1,4 +1,6 @@
-// ======= Config =======
+// ================================
+// Config & estado base
+// ================================
 const MAX_PER_DAY = 2;
 const HOURS = [12, 14, 16, 18, 20, 22];
 
@@ -8,16 +10,37 @@ let selectedHour = 18;
 let availability = {};
 let lastReservation = null; // { id, token }
 
-// ======= Admin (mínimo) =======
+// ================================
+// Utilidades
+// ================================
+function pad2(n){ return String(n).padStart(2,"0"); }
+function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
+function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ================================
+// Admin session helpers
+// ================================
 function hasAdminSession(){
   return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
 }
-function clearAdminSession(){
-  // Borra la cookie admin_session (si tu server la puso como HttpOnly/SameSite, se borra en el servidor al salir)
+function clearAdminSessionCookie(){
   document.cookie = "admin_session=; Max-Age=0; path=/";
 }
+function saveAdminSessionId(id){
+  try { localStorage.setItem("admin_session_id", id); } catch {}
+}
+function getAdminSessionId(){
+  try { return localStorage.getItem("admin_session_id") || ""; } catch { return ""; }
+}
+function clearAdminSessionId(){
+  try { localStorage.removeItem("admin_session_id"); } catch {}
+}
 
-// DOM
+// ================================
+// DOM refs
+// ================================
 const calTitle = document.getElementById("calTitle");
 const calGrid = document.getElementById("calGrid");
 const prevMonthBtn = document.getElementById("prevMonth");
@@ -50,13 +73,12 @@ const payWarn = document.getElementById("payWarn");
 const adminBadge = document.getElementById("adminBadge");
 const adminOverlay = document.getElementById("adminOverlay");
 
-// ---- helpers fecha/hora
-function pad2(n){ return String(n).padStart(2,"0"); }
-function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
-function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
-function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
+// Footer year
+const yearEl = document.getElementById("year");
 
-// --- Bloquear edición directa de Fecha/Hora en el form ---
+// ================================
+// Bloquear edición directa fecha/hora
+// ================================
 function lockDateTimeFields() {
   if (!formDate || !formTime) return;
   const blockEv = (e) => e.preventDefault();
@@ -73,16 +95,25 @@ function setFormDateTimeFromSelection() {
   if (selectedHour) formTime.value = `${pad2(selectedHour)}:00`;
 }
 
+// ================================
+// Inicio
+// ================================
 document.addEventListener("DOMContentLoaded", async () => {
-  // Centrar el admin badge según el alto real del header (opcional, pero útil)
-  (function centerAdminBadge(){
-    function setNavHeightVar(){
-      const el = document.querySelector('.nav__inner');
-      const h = el ? el.getBoundingClientRect().height : 64;
-      document.documentElement.style.setProperty('--nav-h', h + 'px');
-    }
-    setNavHeightVar();
-    window.addEventListener('resize', setNavHeightVar);
+  // año en footer
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  // Ajustar variable CSS del alto de la nav para centrar badge (tu CSS usa --nav-h y --badge)
+  (function setNavHeightVar(){
+    const el = document.querySelector('.nav__inner');
+    const h = el ? el.getBoundingClientRect().height : 64;
+    document.documentElement.style.setProperty('--nav-h', h + 'px');
+    // tamaño del badge (keep con tu CSS)
+    document.documentElement.style.setProperty('--badge', '48px');
+    window.addEventListener('resize', () => {
+      const el2 = document.querySelector('.nav__inner');
+      const h2 = el2 ? el2.getBoundingClientRect().height : 64;
+      document.documentElement.style.setProperty('--nav-h', h2 + 'px');
+    });
   })();
 
   // Mostrar/ocultar badge admin
@@ -90,16 +121,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (hasAdminSession()){ adminBadge.classList.remove("hidden"); }
     else { adminBadge.classList.add("hidden"); }
 
-    adminBadge.addEventListener("click", () => {
-      clearAdminSession();
+    adminBadge.addEventListener("click", async () => {
+      try { await fetch("/api/admin/logout"); } catch {}
+      clearAdminSessionCookie();
+      clearAdminSessionId();
       window.location.href = "/";
     });
   }
 
-  // Si estás en /admin y no hay sesión admin, mostrás overlay si existe (la lógica/flujo de auth la manejás vos)
+  // Si estás en /admin y no hay sesión admin, mostrás overlay
   if (adminOverlay && location.pathname.replace(/\/+$/,'') === "/admin" && !hasAdminSession()){
     adminOverlay.classList.remove("hidden");
+    document.body.classList.add("has-admin-overlay");
   }
+
+  // Hookear overlay (login admin)
+  initAdminAuth();
 
   lockDateTimeFields();
 
@@ -108,6 +145,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderPricingCards(plans);
   renderPlanRadios(plans);
 
+  // Disponibilidad
   await fetchAvailabilityForMonth(activeMonth);
   renderCalendar(); renderHours(); updateSummary();
   setFormDateTimeFromSelection();
@@ -130,7 +168,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   secondStepBtn?.addEventListener("click", onSecondStep);
 });
 
-// --------- calendario/horas/summary ----------
+// ================================
+// Calendario / disponibilidad
+// ================================
 function buildMonthGrid(baseDate){
   const y=baseDate.getFullYear(), m=baseDate.getMonth();
   const first=new Date(y,m,1); const firstW=(first.getDay()+6)%7;
@@ -140,6 +180,7 @@ function buildMonthGrid(baseDate){
   while(cells.length%7!==0) cells.push(null);
   return cells;
 }
+
 async function fetchAvailabilityForMonth(date){
   const start=new Date(date.getFullYear(), date.getMonth(), 1);
   const end=new Date(date.getFullYear(), date.getMonth()+1, 0);
@@ -149,6 +190,7 @@ async function fetchAvailabilityForMonth(date){
     availability = res.ok ? (await res.json()).days || {} : {};
   }catch{ availability = {}; }
 }
+
 function renderCalendar(){
   const grid = buildMonthGrid(activeMonth);
   if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
@@ -179,6 +221,7 @@ function renderCalendar(){
     calGrid.appendChild(btn);
   });
 }
+
 function renderHours(){
   hourList.innerHTML = "";
   const key = selectedDate ? toInputDate(selectedDate) : null;
@@ -197,15 +240,15 @@ function renderHours(){
     hourList.appendChild(b);
   });
 }
+
 function updateSummary(){
   const dateStr = selectedDate ? toLocaleDate(selectedDate) : "Elegí un día";
   summaryText && (summaryText.textContent = `${dateStr} • ${pad2(selectedHour)}:00 hs`);
 }
 
-// =======================
-// UBICACIÓN DEL EVENTO
-// (Leaflet + Nominatim)
-// =======================
+// ================================
+// Ubicación (Leaflet + Nominatim)
+// ================================
 const fAddress    = document.getElementById("fAddress");
 const addrSuggest = document.getElementById("addrSuggest");
 const addrMapEl   = document.getElementById("addrMap");
@@ -260,7 +303,7 @@ function showSuggest(list){
   if (!addrSuggest) return;
   if (!currentData.length) { hideSuggest(); return; }
   addrSuggest.innerHTML = currentData.map((it, i) =>
-    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${esc(it.display_name||'')}</div>`
+    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${escapeHtml(it.display_name||'')}</div>`
   ).join('');
   selectedIndex = 0;
   addrSuggest.classList.remove("hidden");
@@ -306,9 +349,6 @@ function setHidden(lat, lng, displayName, osmId){
   if (addrOsmId) addrOsmId.value = osmId ?? '';
 }
 
-function esc(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-// Eventos del input
 fAddress?.addEventListener('input', () => {
   const q = fAddress.value.trim();
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -323,7 +363,9 @@ fAddress?.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape'){ hideSuggest(); }
 });
 
-// --------- enviar reserva ----------
+// ================================
+// Reserva
+// ================================
 async function onSubmitReservation(e){
   e.preventDefault();
   const payload = {
@@ -337,7 +379,6 @@ async function onSubmitReservation(e){
     time: formTime.value,
     plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h",
 
-    // Ubicación precisa
     location: {
       address: (document.getElementById('fAddress')?.value || '').trim(),
       lat: Number(addrLat?.value || 0),
@@ -381,7 +422,9 @@ async function onSubmitReservation(e){
   }
 }
 
-// --------- segundo paso ----------
+// ================================
+// Segundo paso
+// ================================
 async function onSecondStep(){
   if(!lastReservation?.id || !lastReservation?.token){
     secondStepHint.textContent="No encontramos tu reserva. Volvé a enviarla.";
@@ -421,7 +464,6 @@ async function onSecondStep(){
       s.dataset.source = "button";
       mpButtonWrap.appendChild(s);
     }
-    // 2) Link directo + QR
     const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN";
     const payLink = d.payLink || FALLBACK_PAY_LINK;
 
@@ -447,8 +489,9 @@ async function onSecondStep(){
   }
 }
 
-// ===== Nice Select (Custom) - FIX =====
-// (Si ya no existe el select, esto se auto-desactiva)
+// ================================
+// Nice Select (si existe)
+// ================================
 (function initNiceSelect(){
   const wrap = document.querySelector('.nice-select-wrap');
   if(!wrap) return;
@@ -508,10 +551,9 @@ async function onSecondStep(){
   syncFromSelect();
 })();
 
-
-// ============================
+// ================================
 // PLANES / PRECIOS DINÁMICOS
-// ============================
+// ================================
 async function fetchPlans(){
   try{
     const r = await fetch('/api/plans');
@@ -531,11 +573,12 @@ function renderPricingCards(plans){
   }
   plans.forEach((p, idx) => {
     const art = document.createElement('article');
-    art.className = 'card' + (idx===0 ? ' card--featured':'');
+    art.className = 'card' + (idx===1 ? ' card--featured':'');
+
     art.innerHTML = `
       <header class="card__head">
         <h3>${escapeHtml(p.label)}</h3>
-        ${idx===0 ? '<span class="badge">Más pedido</span>':''}
+        ${idx===1 ? '<span class="badge">Más pedido</span>':''}
       </header>
       <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>USD</span></p>
       <ul class="card__list">
@@ -543,7 +586,7 @@ function renderPricingCards(plans){
         <li>Colchonetas y seguridad</li>
         <li>Traslado en AMBA*</li>
       </ul>
-      <a href="#calendario" class="btn btn--block ${idx===0?'btn--primary':''}">Reservar</a>
+      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}">Reservar</a>
     `;
     wrap.appendChild(art);
   });
@@ -557,7 +600,6 @@ function renderPlanRadios(plans){
     wrap.innerHTML = `<p class="hint">No hay planes activos.</p>`;
     return;
   }
-  // Si ya hay uno seleccionado, conservarlo si existe
   const current = (document.querySelector('input[name="plan"]:checked')||{}).value;
 
   plans.forEach((p, idx) => {
@@ -566,7 +608,7 @@ function renderPlanRadios(plans){
     div.className = 'plan__opt';
     div.innerHTML = `
       <input type="radio" name="plan" value="${escapeHtml(p.code)}" ${checked?'checked':''} />
-      <span class="plan__card ${idx===0?'plan__card--pop':''}">
+      <span class="plan__card ${idx===1?'plan__card--pop':''}">
         <strong>${escapeHtml(p.label)}</strong>
         <em>USD ${Number(p.price_usd).toFixed(0)}</em>
       </span>
@@ -575,13 +617,11 @@ function renderPlanRadios(plans){
   });
 }
 
-function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-
-/* ================================
-   ADMIN OVERLAY: lógica de login
-   ================================ */
-(function initAdminAuth(){
+// ================================
+// ADMIN OVERLAY: lógica de login
+// (Con session_id correcto)
+// ================================
+function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
   if (!overlay) return;
 
@@ -619,7 +659,7 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&am
 
   async function startEmail(){
     hint1.textContent = '';
-    const email = (emailInput.value || '').trim();
+    const email = (emailInput.value || '').trim().toLowerCase();
     if (!email){ hint1.textContent = 'Ingresá un email.'; return; }
 
     sendBtn.disabled = true;
@@ -631,6 +671,9 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&am
       const d = await r.json();
       if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
 
+      // Guardar session_id para los siguientes pasos
+      if (d.session_id) saveAdminSessionId(d.session_id);
+
       show(stepCodeEmail);
       codeEmailInput.focus();
     }catch(e){
@@ -641,75 +684,82 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&am
   }
 
   async function verifyEmail(){
-  hint2.textContent = '';
+    hint2.textContent = '';
 
-  // normalizamos email y limpiamos el código (solo dígitos)
-  const email = (emailInput.value || '').trim().toLowerCase();
-  const code  = ((codeEmailInput.value || '').replace(/\D/g, '')).slice(0, 6);
+    const session_id = getAdminSessionId();
+    const code  = ((codeEmailInput.value || '').replace(/\D/g, '')).slice(0, 6);
 
-  if (!email){ hint2.textContent = 'Ingresá tu email.'; return; }
-  if (code.length !== 6){ hint2.textContent = 'Código de 6 dígitos.'; return; }
+    if (!session_id){ hint2.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); return; }
+    if (code.length !== 6){ hint2.textContent = 'Código de 6 dígitos.'; return; }
 
-  verifyEmailBtn.disabled = true;
-  try{
-    const r = await fetch('/api/admin/verify-email', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, code })
-    });
-    const d = await r.json();
+    verifyEmailBtn.disabled = true;
+    try{
+      const r = await fetch('/api/admin/verify-email', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, code })
+      });
+      const d = await r.json();
 
-    if (!r.ok || !d.ok){
-      hint2.textContent = d.error || 'Código incorrecto o vencido.';
-      return;
+      if (!r.ok || !d.ok){
+        hint2.textContent = d.error || 'Código incorrecto o vencido.';
+        return;
+      }
+
+      // Si TOTP está deshabilitado, el server puede dejarte entrar directo
+      if (d.totpDisabled || d.done || d.session === 'ok'){
+        overlay.classList.add('hidden');
+        document.body.classList.remove('has-admin-overlay');
+        document.getElementById('adminBadge')?.classList.remove('hidden');
+        return;
+      }
+
+      // Mostrar QR para configurar TOTP si viene
+      const qrData = d.qrDataUrl || d.qr || d.qrData || d.qrDataURL || d.qrDataurl || d.qrDataUrl;
+      const otpauth = d.otpauth || d.provisioningUri;
+      if (totpQR){
+        if (qrData)        totpQR.src = qrData;
+        else if (otpauth)  totpQR.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(otpauth);
+      }
+
+      show(stepCodeTotp);
+      codeTotpInput.focus();
+
+    }catch(e){
+      hint2.textContent = 'Error de red.';
+    }finally{
+      verifyEmailBtn.disabled = false;
     }
-
-    // Si ya quedó logueado, cerramos overlay
-    if (d.session === 'ok' || d.done){
-      overlay.classList.add('hidden');
-      document.body.classList.remove('has-admin-overlay');
-      document.getElementById('adminBadge')?.classList.remove('hidden');
-      return;
-    }
-
-    // Si requiere TOTP, mostramos QR
-    const qr = d.totpQr || d.qr || d.totp_qr || d.provisioningUri;
-    if (qr){
-      totpQR.src = qr.startsWith('http')
-        ? qr
-        : 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qr);
-    }
-    show(stepCodeTotp);
-    codeTotpInput.focus();
-
-  }catch(e){
-    hint2.textContent = 'Error de red.';
-  }finally{
-    verifyEmailBtn.disabled = false;
   }
-}
-
 
   async function verifyTotp(){
     hint3.textContent = '';
-    const code = (codeTotpInput.value || '').trim();
-    if (code.length < 6){ hint3.textContent = 'Código de 6 dígitos.'; return; }
+
+    const session_id = getAdminSessionId();
+    const code  = ((codeTotpInput.value || '').replace(/\D/g, '')).slice(0, 6);
+
+    if (!session_id){ hint3.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); return; }
+    if (code.length !== 6){ hint3.textContent = 'Código de 6 dígitos.'; return; }
 
     verifyTotpBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/verify-totp', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ code })
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
-      if (!r.ok || !d.ok){ hint3.textContent = d.error || 'Código incorrecto.'; return; }
 
-      // OK: el backend ya setea la cookie de sesión
+      if (!r.ok || !d.ok){
+        hint3.textContent = d.error || 'Código inválido.';
+        return;
+      }
+
+      // Éxito: el server setea la cookie admin_session=ok
       overlay.classList.add('hidden');
       document.body.classList.remove('has-admin-overlay');
       document.getElementById('adminBadge')?.classList.remove('hidden');
-      // Si preferís recargar:
-      // location.replace('/');
+
     }catch(e){
       hint3.textContent = 'Error de red.';
     }finally{
@@ -717,15 +767,10 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&am
     }
   }
 
-  // Clicks
+  // Eventos
   sendBtn?.addEventListener('click', startEmail);
   verifyEmailBtn?.addEventListener('click', verifyEmail);
   verifyTotpBtn?.addEventListener('click', verifyTotp);
   back1?.addEventListener('click', () => show(stepEmail));
   back2?.addEventListener('click', () => show(stepCodeEmail));
-
-  // Enter en inputs
-  emailInput?.addEventListener('keydown',     e => { if (e.key==='Enter'){ e.preventDefault(); startEmail(); }});
-  codeEmailInput?.addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); verifyEmail(); }});
-  codeTotpInput?.addEventListener('keydown',  e => { if (e.key==='Enter'){ e.preventDefault(); verifyTotp(); }});
-})();
+}
