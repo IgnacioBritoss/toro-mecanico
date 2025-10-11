@@ -23,85 +23,26 @@ function getQS(name){ return new URLSearchParams(location.search).get(name); }
 // ================================
 // Admin session helpers
 // ================================
-function hasAdminSession(){ return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || ""); }
-function clearAdminSessionCookie(){ document.cookie = "admin_session=; Max-Age=0; path=/"; }
-function saveAdminSessionId(id){ try { localStorage.setItem("admin_session_id", id); } catch {} }
-function getAdminSessionId(){ try { return localStorage.getItem("admin_session_id") || ""; } catch { return ""; } }
-function clearAdminSessionId(){ try { localStorage.removeItem("admin_session_id"); } catch {} }
-
-// === ADMIN helpers (ping simple) ===
+function hasAdminSession(){
+  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
+}
+function clearAdminSessionCookie(){
+  document.cookie = "admin_session=; Max-Age=0; path=/";
+}
+function saveAdminSessionId(id){
+  try { localStorage.setItem("admin_session_id", id); } catch {}
+}
+function getAdminSessionId(){
+  try { return localStorage.getItem("admin_session_id") || ""; } catch { return ""; }
+}
+function clearAdminSessionId(){
+  try { localStorage.removeItem("admin_session_id"); } catch {}
+}
 async function isAdmin(){
   try{
     const r = await fetch('/api/admin/plans', { method:'GET' });
     return r.status !== 401;
   }catch{ return false; }
-}
-
-// === Popover admin por día ===
-let adminPop = null;
-function closeAdminPop(){ adminPop?.remove(); adminPop = null; }
-
-async function openAdminDayPopover(anchorEl, dateKey){
-  closeAdminPop();
-
-  adminPop = document.createElement('div');
-  adminPop.className = 'admin-pop';
-  adminPop.innerHTML = `
-    <div class="admin-pop__head">
-      <h4 class="admin-pop__title">Reservas • ${dateKey}</h4>
-      <button class="admin-pop__close" type="button">Cerrar</button>
-    </div>
-    <div class="admin-pop__list"><p class="hint">Cargando…</p></div>`;
-  document.body.appendChild(adminPop);
-  adminPop.querySelector('.admin-pop__close').onclick = closeAdminPop;
-  adminPop.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeAdminPop(); });
-
-  const r = anchorEl.getBoundingClientRect();
-  const top = r.top + window.scrollY + r.height + 8;
-  const left = Math.min(Math.max(12, r.left + window.scrollX - 120), window.scrollX + document.documentElement.clientWidth - 24 - 420);
-  adminPop.style.top = `${top}px`;
-  adminPop.style.left = `${left}px`;
-
-  try{
-    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`);
-    const data = await res.json();
-    const list = adminPop.querySelector('.admin-pop__list');
-
-    if (!res.ok || !data.ok){
-      list.innerHTML = `<p class="hint">No se pudo cargar (${data?.error || res.status}).</p>`;
-      return;
-    }
-    const items = data.reservations || [];
-    if (!items.length){
-      list.innerHTML = `<p class="hint">No hay reservas para este día.</p>`;
-      return;
-    }
-    list.innerHTML = '';
-    items.forEach((it, i) => {
-      const div = document.createElement('div');
-      div.className = 'admin-pop__item';
-      const maps = (it.location && Number.isFinite(it.location.lat) && Number.isFinite(it.location.lng))
-        ? `https://www.google.com/maps?q=${encodeURIComponent(it.location.lat)},${encodeURIComponent(it.location.lng)}`
-        : null;
-      div.innerHTML = `
-        <div class="admin-pop__name">${i===0 ? 'Cliente' : 'Cliente 2'}: ${escapeHtml(it.name || '')}</div>
-        <div class="admin-pop__meta">Hora: <strong>${escapeHtml(it.time || '')}</strong> · Plan: ${escapeHtml(it.plan || '')}</div>
-        <div class="admin-pop__meta">Tel: ${escapeHtml(it.phone || '-')} · Email: ${escapeHtml(it.email || '-')}</div>
-        <div class="admin-pop__meta">Ubicación: ${escapeHtml(it.location?.display_name || '-')}</div>
-        <div class="admin-pop__actions">
-          ${maps ? `<a class="admin-pop__btn admin-pop__btn--primary" href="${maps}" target="_blank" rel="noreferrer">Abrir en Google Maps</a>` : ''}
-        </div>`;
-      list.appendChild(div);
-    });
-  }catch{
-    const list = adminPop.querySelector('.admin-pop__list');
-    list.innerHTML = `<p class="hint">Error de red al cargar el día.</p>`;
-  }
-
-  setTimeout(() => {
-    const onDoc = (e) => { if (!adminPop.contains(e.target)) { document.removeEventListener('mousedown', onDoc, true); closeAdminPop(); } };
-    document.addEventListener('mousedown', onDoc, true);
-  }, 0);
 }
 
 // ================================
@@ -139,6 +80,15 @@ const payWarn = document.getElementById("payWarn");
 const adminBadge = document.getElementById("adminBadge");
 const adminOverlay = document.getElementById("adminOverlay");
 
+// Modal admin “día”
+const dayOverlay = document.getElementById('dayOverlay');
+const daySub     = document.getElementById('daySub');
+const dayList    = document.getElementById('dayList');
+document.getElementById('dayClose')?.addEventListener('click', () => {
+  dayOverlay?.classList.add('hidden');
+  document.body.classList.remove('has-admin-overlay');
+});
+
 // Footer year
 const yearEl = document.getElementById("year");
 
@@ -165,8 +115,10 @@ function setFormDateTimeFromSelection() {
 // Inicio
 // ================================
 document.addEventListener("DOMContentLoaded", async () => {
+  // año en footer
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
+  // Ajustar variable CSS del alto de la nav para centrar badge
   (function setNavHeightVar(){
     const el = document.querySelector('.nav__inner');
     const h = el ? el.getBoundingClientRect().height : 64;
@@ -179,7 +131,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   })();
 
-  // /admin overlay
+  // /admin: overlay login o redirección
   if (location.pathname.replace(/\/+$/,'') === "/admin") {
     if (hasAdminSession()) {
       window.location.replace("/?editprices=1#precios");
@@ -207,28 +159,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Overlay auth
+  // Hookear overlay (login admin)
   initAdminAuth();
 
   lockDateTimeFields();
 
-  // Planes
+  // Planes dinámicos
   const plans = await fetchPlans();
   renderPricingCards(plans);
   renderPlanRadios(plans);
 
   // Disponibilidad
   await fetchAvailabilityForMonth(activeMonth);
-  renderCalendar(); renderHours(); updateSummary();
+  renderCalendar();
+  renderHours();
+  updateSummary();
   setFormDateTimeFromSelection();
 
-  prevMonthBtn?.addEventListener("click", async () => {
+  prevMonthBtn?.addEventListener("click", async (e) => {
+    e.preventDefault();
     activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1);
-    await fetchAvailabilityForMonth(activeMonth); renderCalendar();
+    await fetchAvailabilityForMonth(activeMonth);
+    renderCalendar();
   });
-  nextMonthBtn?.addEventListener("click", async () => {
+  nextMonthBtn?.addEventListener("click", async (e) => {
+    e.preventDefault();
     activeMonth = new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1);
-    await fetchAvailabilityForMonth(activeMonth); renderCalendar();
+    await fetchAvailabilityForMonth(activeMonth);
+    renderCalendar();
   });
 
   goToFormBtn?.addEventListener("click", () => {
@@ -263,54 +221,77 @@ async function fetchAvailabilityForMonth(date){
   }catch{ availability = {}; }
 }
 
-async function renderCalendar(){
+// bloquear: pasado, hoy y próximos 3 días
+function isBlockedByLeadTime(dateObj){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 4); // hoy + 4 (bloquea 0,1,2,3; permite 4+)
+  const d = new Date(dateObj); d.setHours(0,0,0,0);
+  return d < cutoff;
+}
+
+function renderCalendar(){
   const grid = buildMonthGrid(activeMonth);
   if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
   calGrid.innerHTML = "";
 
-  const admin = await isAdmin();
-
-  const today = new Date(); today.setHours(0,0,0,0);
-  const minSel = new Date(today); minSel.setDate(minSel.getDate()+3);
-
   grid.forEach(d=>{
     const btn=document.createElement("button");
-    btn.type = "button"; // evita submits accidentales
+    btn.type = "button";
     btn.className="cal__day";
-
     if(!d){
-      btn.classList.add("cal__day--muted"); btn.disabled=true;
-    } else {
+      btn.classList.add("cal__day--muted");
+      btn.disabled=true;
+    }else{
       const key = toInputDate(d);
       const info = availability[key] || {count:0, hours:[]};
       const full = info.count >= MAX_PER_DAY;
-
-      const dd = new Date(d); dd.setHours(0,0,0,0);
-      const blocked = dd < minSel;
+      const blocked = isBlockedByLeadTime(d);
 
       btn.textContent = d.getDate();
 
-      if ((blocked || full) && !admin){
-        if (blocked) btn.classList.add("cal__day--blocked");
-        if (full)    btn.classList.add("cal__day--full");
+      if (blocked){
+        btn.classList.add("cal__day--full");
         btn.disabled = true;
-      } else {
-        if (blocked) btn.classList.add("cal__day--blocked");
-        if (full)    btn.classList.add("cal__day--full");
-        if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
-
-        btn.addEventListener("click", async (ev)=>{
-          ev.preventDefault();
-          selectedDate=d; formDate.value=toInputDate(d);
-          const taken=new Set((availability[key]?.hours)||[]);
-          if(taken.has(selectedHour)){
-            const free=HOURS.find(h=>!taken.has(h));
-            if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
+      } else if(full){
+        btn.classList.add("cal__day--full");
+        // admin puede abrir modal
+        isAdmin().then(adminOk=>{
+          if (adminOk){
+            btn.disabled = false;
+            btn.classList.remove("cal__day--full");
+            btn.classList.add("cal__day--selected"); // visualmente marcado como “especial”
           }
-          renderCalendar(); renderHours(); updateSummary();
-          if (admin) openAdminDayPopover(ev.currentTarget, key);
         });
+      } else {
+        if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
       }
+
+      btn.addEventListener("click", async (ev)=>{
+        ev.preventDefault();
+        const key2 = toInputDate(d);
+        const adminOk = await isAdmin();
+
+        // selección visual sin re-render
+        calGrid.querySelectorAll(".cal__day--selected").forEach(el => el.classList.remove("cal__day--selected"));
+        ev.currentTarget.classList.add("cal__day--selected");
+
+        selectedDate = d;
+        formDate.value = key2;
+
+        // si la hora actual está tomada => sugerir otra libre (sin re-render de calendario)
+        const taken=new Set((availability[key2]?.hours)||[]);
+        if(taken.has(selectedHour)){
+          const free=HOURS.find(h=>!taken.has(h));
+          if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
+        }
+        updateSummary();
+        renderHours(); // solo horas, es liviano
+
+        // si es admin: abrir modal con reservas del día
+        if (adminOk){
+          openAdminDayModal(key2);
+        }
+      });
     }
     calGrid.appendChild(btn);
   });
@@ -330,7 +311,14 @@ function renderHours(){
     if(disabled){ b.classList.add("slot__btn--disabled"); b.disabled=true; b.title=full?"Día completo":"Ocupado"; }
     else{
       if(h===selectedHour) b.classList.add("slot__btn--active");
-      b.addEventListener("click",()=>{ selectedHour=h; formTime.value=`${pad2(h)}:00`; renderHours(); updateSummary(); });
+      b.addEventListener("click",(e)=>{
+        e.preventDefault();
+        selectedHour=h; formTime.value=`${pad2(h)}:00`;
+        // actualizar estilos sin reconstruir todo
+        hourList.querySelectorAll(".slot__btn").forEach(el=>el.classList.remove("slot__btn--active"));
+        b.classList.add("slot__btn--active");
+        updateSummary();
+      });
     }
     hourList.appendChild(b);
   });
@@ -339,6 +327,52 @@ function renderHours(){
 function updateSummary(){
   const dateStr = selectedDate ? toLocaleDate(selectedDate) : "Elegí un día";
   summaryText && (summaryText.textContent = `${dateStr} • ${pad2(selectedHour)}:00 hs`);
+}
+
+// ================================
+// Modal admin: reservas del día
+// ================================
+function renderDayItems(items){
+  if (!items?.length){
+    dayList.innerHTML = `<p class="hint">No hay reservas para este día.</p>`;
+    return;
+  }
+  dayList.innerHTML = items.map((it, idx) => {
+    const maps = (it.location && Number.isFinite(it.location.lat) && Number.isFinite(it.location.lng))
+      ? `https://www.google.com/maps?q=${encodeURIComponent(it.location.lat)},${encodeURIComponent(it.location.lng)}`
+      : null;
+    return `
+      <div class="day-item">
+        <h4>${idx ? "Cliente 2" : "Cliente"}: ${escapeHtml(it.name || "")}</h4>
+        <div class="meta"><strong>Hora:</strong> ${escapeHtml(it.time || "")} &nbsp; · &nbsp; <strong>Plan:</strong> ${escapeHtml(it.plan || "")}</div>
+        <div class="meta"><strong>Tel:</strong> ${escapeHtml(it.phone || "-")} &nbsp; · &nbsp; <strong>Email:</strong> ${escapeHtml(it.email || "-")}</div>
+        <div class="meta"><strong>Ubicación:</strong> ${escapeHtml(it.location?.display_name || "-")}</div>
+        <div class="actions">
+          ${maps ? `<a class="btn-map" target="_blank" rel="noreferrer" href="${maps}">Abrir en Google Maps</a>` : ""}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function openAdminDayModal(dateKey){
+  if (!dayOverlay) return;
+  daySub.textContent = dateKey.replaceAll("-", "/");
+  dayList.innerHTML = `<p class="hint">Cargando…</p>`;
+
+  dayOverlay.classList.remove('hidden');
+  document.body.classList.add('has-admin-overlay');
+
+  try{
+    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`);
+    const data = await res.json();
+    if (!res.ok || !data.ok){
+      dayList.innerHTML = `<p class="hint">No se pudo cargar (${data?.error || res.status}).</p>`;
+      return;
+    }
+    renderDayItems(data.reservations || []);
+  }catch{
+    dayList.innerHTML = `<p class="hint">Error de red al cargar el día.</p>`;
+  }
 }
 
 // ================================
@@ -364,7 +398,10 @@ function ensureMapVisible(){
   if (addrMapEl.classList.contains("hidden")) addrMapEl.classList.remove("hidden");
   if (!addrMap && window.L){
     addrMap = L.map('addrMap').setView([START.lat, START.lng], START.zoom);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(addrMap);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(addrMap);
+
     addrMarker = L.marker([START.lat, START.lng], { draggable: true }).addTo(addrMap);
     addrMarker.on('dragend', () => {
       const { lat, lng } = addrMarker.getLatLng();
@@ -378,10 +415,16 @@ function ensureMapVisible(){
 
 function fetchSuggest(q){
   const base = 'https://nominatim.openstreetmap.org/search';
-  const params = new URLSearchParams({ q, format: 'jsonv2', addressdetails: '1', countrycodes: 'ar', limit: '6', 'accept-language': 'es' });
+  const params = new URLSearchParams({
+    q, format: 'jsonv2', addressdetails: '1',
+    countrycodes: 'ar', limit: '6', 'accept-language': 'es'
+  });
   if (USE_VIEWBOX){ params.append('viewbox', VIEWBOX); params.append('bounded','1'); }
+
   fetch(`${base}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
-    .then(r => r.json()).then(showSuggest).catch(() => hideSuggest());
+    .then(r => r.json())
+    .then(showSuggest)
+    .catch(() => hideSuggest());
 }
 
 function showSuggest(list){
@@ -389,14 +432,26 @@ function showSuggest(list){
   if (!addrSuggest) return;
   if (!currentData.length) { hideSuggest(); return; }
   addrSuggest.innerHTML = currentData.map((it, i) =>
-    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${escapeHtml(it.display_name||'')}</div>`).join('');
+    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${escapeHtml(it.display_name||'')}</div>`
+  ).join('');
   selectedIndex = 0;
   addrSuggest.classList.remove("hidden");
   [...addrSuggest.querySelectorAll('.s-item')].forEach(div => {
-    div.addEventListener('mousedown', () => { const i = Number(div.getAttribute('data-i')); choose(currentData[i]); });
+    div.addEventListener('mousedown', () => {
+      const i = Number(div.getAttribute('data-i'));
+      choose(currentData[i]);
+    });
   });
 }
-function hideSuggest(){ if (!addrSuggest) return; addrSuggest.classList.add("hidden"); addrSuggest.innerHTML = ''; currentData = []; selectedIndex = -1; }
+
+function hideSuggest(){
+  if (!addrSuggest) return;
+  addrSuggest.classList.add("hidden");
+  addrSuggest.innerHTML = '';
+  currentData = [];
+  selectedIndex = -1;
+}
+
 function moveActive(delta){
   const items = addrSuggest ? [...addrSuggest.querySelectorAll('.s-item')] : [];
   if (!items.length) return;
@@ -404,8 +459,10 @@ function moveActive(delta){
   items.forEach((el, idx) => el.classList.toggle('active', idx === selectedIndex));
   items[selectedIndex].scrollIntoView({ block: 'nearest' });
 }
+
 function choose(item){
-  hideSuggest(); ensureMapVisible();
+  hideSuggest();
+  ensureMapVisible();
   const nice = item.display_name || '';
   const lat = Number(item.lat), lng = Number(item.lon);
   if (fAddress) fAddress.value = nice;
@@ -413,12 +470,14 @@ function choose(item){
   if (addrMarker) addrMarker.setLatLng([lat, lng]);
   if (addrMap) addrMap.setView([lat, lng], 18);
 }
+
 function setHidden(lat, lng, displayName, osmId){
   if (addrLat) addrLat.value = lat ?? '';
   if (addrLng) addrLng.value = lng ?? '';
   if (addrDisplay) addrDisplay.value = displayName ?? '';
   if (addrOsmId) addrOsmId.value = osmId ?? '';
 }
+
 fAddress?.addEventListener('input', () => {
   const q = fAddress.value.trim();
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -603,7 +662,8 @@ async function onSecondStep(){
     wrap.classList.toggle('is-empty', !v);
     const items = list.querySelectorAll('li');
     items.forEach(li => {
-      li.toggleAttribute('aria-selected', li.dataset.value === v || li.textContent.trim() === v);
+      li.toggleAttribute('aria-selected', li.dataset.value === v ||
+        li.textContent.trim() === v);
     });
   }
   function open(){ btn.setAttribute('aria-expanded','true'); document.addEventListener('click', onDoc, { capture:true }); document.addEventListener('keydown', onKey); }
@@ -643,7 +703,6 @@ function renderPricingCards(plans){
     const art = document.createElement('article');
     art.className = 'card' + (idx===1 ? ' card--featured':'');
 
-    // registrar acción smooth scroll para “Reservar”
     art.innerHTML = `
       <header class="card__head">
         <h3>${escapeHtml(p.label)}</h3>
@@ -655,17 +714,9 @@ function renderPricingCards(plans){
         <li>Colchonetas y seguridad</li>
         <li>Traslado en AMBA*</li>
       </ul>
-      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}" data-scroll="1">Reservar</a>
+      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}">Reservar</a>
     `;
     wrap.appendChild(art);
-  });
-
-  // delegación para scroll suave
-  wrap.addEventListener('click', (e)=>{
-    const a = e.target.closest('a[data-scroll="1"]');
-    if (!a) return;
-    e.preventDefault();
-    document.querySelector('#calendario')?.scrollIntoView({behavior:'smooth'});
   });
 }
 
@@ -674,8 +725,7 @@ function renderPlanRadios(plans){
   if(!wrap) return;
   wrap.innerHTML = '';
   if(!plans.length){
-    wrap.innerHTML = `<p class="hint">No hay planes activos.</p>`;
-    return;
+    wrap.innerHTML = `<p class="hint">No hay planes activos.</p>`; return;
   }
   const current = (document.querySelector('input[name="plan"]:checked')||{}).value;
 
@@ -688,13 +738,14 @@ function renderPlanRadios(plans){
       <span class="plan__card ${idx===1?'plan__card--pop':''}">
         <strong>${escapeHtml(p.label)}</strong>
         <em>USD ${Number(p.price_usd).toFixed(0)}</em>
-      </span>`;
+      </span>
+    `;
     wrap.appendChild(div);
   });
 }
 
 // ================================
-// ADMIN OVERLAY: lógica de login (endpoint unificado)
+// ADMIN OVERLAY: lógica de login (unificada)
 // ================================
 function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
@@ -702,19 +753,23 @@ function initAdminAuth(){
 
   const el = (id) => document.getElementById(id);
 
+  // Pasos
   const stepEmail      = el('stepEmail');
   const stepCodeEmail  = el('stepCodeEmail');
   const stepCodeTotp   = el('stepCodeTotp');
 
+  // Paso 1 (email)
   const emailInput     = el('ovEmail');
   const sendBtn        = el('ovSendEmail');
   const hint1          = el('ovHint1');
 
+  // Paso 2 (código email)
   const codeEmailInput = el('ovCodeEmail');
   const verifyEmailBtn = el('ovVerifyEmail');
   const back1          = el('ovBack1');
   const hint2          = el('ovHint2');
 
+  // Paso 3 (TOTP)
   const totpQR         = el('ovTotpQR');
   const codeTotpInput  = el('ovCodeTotp');
   const verifyTotpBtn  = el('ovVerifyTotp');
@@ -725,6 +780,7 @@ function initAdminAuth(){
     [stepEmail, stepCodeEmail, stepCodeTotp].forEach(s => s?.classList.remove('active'));
     step?.classList.add('active');
   };
+
   show(stepEmail);
 
   async function startEmail(){
@@ -740,11 +796,16 @@ function initAdminAuth(){
       });
       const d = await r.json();
       if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
+
       if (d.session_id) saveAdminSessionId(d.session_id);
+
       show(stepCodeEmail);
       codeEmailInput.focus();
-    }catch{ hint1.textContent = 'Error de red.'; }
-    finally{ sendBtn.disabled = false; }
+    }catch(e){
+      hint1.textContent = 'Error de red.';
+    }finally{
+      sendBtn.disabled = false;
+    }
   }
 
   async function verifyEmail(){
@@ -763,15 +824,20 @@ function initAdminAuth(){
       });
       const d = await r.json();
 
-      if (!r.ok || !d.ok){ hint2.textContent = d.error || 'Código incorrecto o vencido.'; return; }
+      if (!r.ok || !d.ok){
+        hint2.textContent = d.error || 'Código incorrecto o vencido.';
+        return;
+      }
 
-      if (d.totpDisabled || d.done || d.session === 'ok'){
+      // si el server dice done => ya estás logueado
+      if (d.done || d.session === 'ok'){
         window.location.replace("/?editprices=1#precios");
         return;
       }
 
-      const qrData = d.qrDataUrl || d.qr || d.qrData || d.qrDataURL || d.qrDataurl;
-      const otpauth = d.otpauth;
+      // mostrar QR si viene otpauth
+      const qrData = d.qrDataUrl || d.qr || d.qrData;
+      const otpauth = d.otpauth || d.provisioningUri;
       if (totpQR){
         if (qrData)        totpQR.src = qrData;
         else if (otpauth)  totpQR.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(otpauth);
@@ -779,8 +845,12 @@ function initAdminAuth(){
 
       show(stepCodeTotp);
       codeTotpInput.focus();
-    }catch{ hint2.textContent = 'Error de red.'; }
-    finally{ verifyEmailBtn.disabled = false; }
+
+    }catch(e){
+      hint2.textContent = 'Error de red.';
+    }finally{
+      verifyEmailBtn.disabled = false;
+    }
   }
 
   async function verifyTotp(){
@@ -799,11 +869,18 @@ function initAdminAuth(){
       });
       const d = await r.json();
 
-      if (!r.ok || !d.ok){ hint3.textContent = d.error || 'Código inválido.'; return; }
+      if (!r.ok || !d.ok){
+        hint3.textContent = d.error || 'Código inválido.';
+        return;
+      }
 
       window.location.replace("/?editprices=1#precios");
-    }catch{ hint3.textContent = 'Error de red.'; }
-    finally{ verifyTotpBtn.disabled = false; }
+
+    }catch(e){
+      hint3.textContent = 'Error de red.';
+    }finally{
+      verifyTotpBtn.disabled = false;
+    }
   }
 
   el('ovSendEmail')?.addEventListener('click', startEmail);

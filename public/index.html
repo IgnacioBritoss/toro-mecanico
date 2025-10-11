@@ -278,6 +278,20 @@
     </div>
   </div>
 
+  <!-- ===== ADMIN: Modal de reservas por día ===== -->
+<div id="dayOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="dayTitle">
+  <div class="ov-card" style="max-width:680px">
+    <h3 id="dayTitle" class="ov-title">Reservas del día</h3>
+    <p id="daySub" class="ov-sub"></p>
+    <div id="dayList"></div>
+
+    <div class="ov-actions" style="margin-top:14px">
+      <button id="dayClose" class="ov-btn" type="button">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./main.js"></script>
