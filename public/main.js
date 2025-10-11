@@ -249,8 +249,10 @@ function renderCalendar(){
   const grid = buildMonthGrid(activeMonth);
   if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
   calGrid.innerHTML = "";
+
   grid.forEach(d=>{
     const btn=document.createElement("button");
+    btn.type = "button";
     btn.className="cal__day";
     if(!d){
       btn.classList.add("cal__day--muted");
@@ -259,45 +261,37 @@ function renderCalendar(){
       const key = toInputDate(d);
       const info = availability[key] || {count:0, hours:[]};
       const full = info.count >= MAX_PER_DAY;
+      const blocked = isBlockedByLeadTime(d);
 
       btn.textContent = d.getDate();
 
-      /* === NUEVO: poner cruces según cantidad de reservas (máx 2) === */
-      if (info.count > 0){
-        const xwrap = document.createElement('div');
-        xwrap.className = 'xwrap';
-        const n = Math.min(info.count, 2);
-        for (let i=0; i<n; i++){
-          const x = document.createElement('span');
-          x.className = 'xicon';
-          xwrap.appendChild(x);
-        }
-        btn.appendChild(xwrap);
-      }
-      /* === FIN NUEVO === */
-
-      if(full){
+      if (blocked){
         btn.classList.add("cal__day--full");
-        // Si querés que el admin pueda abrir el modal del día lleno:
-        // if (!window.__isAdmin) btn.disabled=true;
-        btn.disabled = true; // como lo tenías, si querés mantenerlo igual
-      }else{
-        if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
-        btn.addEventListener("click", ()=>{
-          selectedDate=d; formDate.value=toInputDate(d);
-          const taken=new Set((availability[key]?.hours)||[]);
-          if(taken.has(selectedHour)){
-            const free=HOURS.find(h=>!taken.has(h));
-            if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
+        btn.disabled = true;
+      } else if(full){
+        btn.classList.add("cal__day--full");
+        // admin puede abrir modal
+        isAdmin().then(adminOk=>{
+          if (adminOk){
+            btn.disabled = false;
+            btn.classList.remove("cal__day--full");
+            btn.classList.add("cal__day--selected"); // resaltado suave
           }
-          renderCalendar(); renderHours(); updateSummary();
         });
+      } else {
+        if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
       }
+
+      // --- FIX: capturamos el botón y delegamos ---
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const el = ev.currentTarget;
+        onDayClick(el, d);
+      });
     }
     calGrid.appendChild(btn);
   });
 }
-
 
 // Handler seguro (sin perder el target por awaits)
 async function onDayClick(el, d){
