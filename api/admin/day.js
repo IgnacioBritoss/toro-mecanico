@@ -1,59 +1,66 @@
 // api/admin/day.js
+import { pool } from "../../lib/db.js";
+
 export const config = { runtime: "nodejs" };
 
-/**
- * Devuelve las reservas de un día (máx 2), para admin.
- * GET /api/admin/day?date=YYYY-MM-DD
- * Respuesta: { reservations: [ { name,email,phone,time, location:{address,display_name,lat,lng}, ... }, ... ] }
- */
-
-function isAdmin(req){
-  // cookie seteada por /api/admin/auth
-  const cookie = req.headers.cookie || "";
-  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(cookie);
+function isAdminFromCookie(req){
+  const ck = String(req.headers.cookie || "");
+  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(ck);
 }
-
-// === ADAPTAR A TU DB REAL ========================================
-// Debés reemplazar esta función por tu lector real.
-// Debe devolver una lista de objetos con al menos:
-// { name, email, phone, date: 'YYYY-MM-DD', time: 'HH:MM', location: { display_name, address, lat, lng } }
-async function listReservationsByDate(dateYmd){
-  // EJEMPLO: si ya guardás en un archivo o DB, consultalo acá.
-  // A modo de demo devuelvo un array vacío:
-  return []; // <-- REEMPLAZÁ por tu consulta real
+function isoDay(s){
+  // yyyy-mm-dd simple
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s||"")) ? s : null;
 }
-// ================================================================
 
 export default async function handler(req, res){
-  if (req.method !== 'GET'){
-    return res.status(405).json({ ok:false, error:'Método no permitido' });
+  if (!isAdminFromCookie(req)) {
+    return res.status(401).json({ ok:false, error:"Unauthorized" });
   }
-  if (!isAdmin(req)){
-    return res.status(401).json({ ok:false, error:'No autorizado' });
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok:false, error:"Método no permitido" });
   }
 
-  const date = (req.query?.date || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)){
-    return res.status(400).json({ ok:false, error:'Parámetro date inválido' });
-  }
+  const day = isoDay(req.query.date);
+  if (!day) return res.status(400).json({ ok:false, error:"Fecha inválida" });
 
   try{
-    let list = await listReservationsByDate(date);
-    // seguridad: máximo 2 porque tu negocio lo limita
-    list = (Array.isArray(list) ? list : []).slice(0,2).map(x => ({
-      name: x.name || '',
-      email: x.email || '',
-      phone: x.phone || '',
-      time: x.time || '',
+    const q = await pool.query(
+      `SELECT r.id,
+              r.event_date::date AS event_date,
+              r.event_hour AS hour,
+              r.plan,
+              r.status,
+              u.name, u.email, u.phone,
+              r.location_display,
+              r.location_lat::float AS lat,
+              r.location_lng::float AS lng
+         FROM reservations r
+         JOIN users u ON u.id = r.user_id
+        WHERE r.event_date = $1
+          AND r.status <> 'rechazada'
+        ORDER BY r.event_hour ASC`,
+      [day]
+    );
+
+    const list = q.rows.map(row => ({
+      id: row.id,
+      date: row.event_date,
+      time: String(row.hour).padStart(2,"0") + ":00",
+      plan: row.plan,
+      status: row.status,
+      name: row.name,
+      email: row.email,
+      phone: row.phone || "-",
       location: {
-        display_name: x.location?.display_name || x.location?.address || '',
-        address: x.location?.address || '',
-        lat: typeof x.location?.lat === 'number' ? x.location?.lat : undefined,
-        lng: typeof x.location?.lng === 'number' ? x.location?.lng : undefined,
+        display_name: row.location_display || "",
+        lat: row.lat,
+        lng: row.lng
       }
     }));
+
     return res.status(200).json({ ok:true, reservations: list });
   }catch(e){
-    return res.status(500).json({ ok:false, error:'Error leyendo reservas' });
+    console.error("admin/day error:", e);
+    return res.status(500).json({ ok:false, error:"Error interno" });
   }
 }
