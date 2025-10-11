@@ -556,3 +556,37 @@ body.has-admin-overlay{ overflow:hidden; }
   padding:8px 12px; border-radius:10px; text-decoration:none;
   background:#0ea5e9; color:#fff;
 }
+
+/* ===== Actividad por semanas (ajustes de espaciado) ===== */
+.weeks-wrap{ 
+  display: grid; 
+  gap: 14px;                  /* espacio ENTRE tarjetas/ semanas */
+  margin-top: 10px;
+}
+
+.week-card{
+  padding: 14px 16px;         /* antes era más grande; ahora más compacto */
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 14px rgba(0,0,0,.06);
+}
+
+.week-card h4{
+  margin: 0 0 8px;            /* menos espacio debajo del título */
+  font-size: 18px;
+}
+
+.week-card ul{
+  margin: 6px 0 0 18px;       /* lista pegada al título, identación suave */
+}
+
+.week-card li{
+  margin: 4px 0;              /* menos espacio entre líneas */
+}
+
+/* En pantallas chicas, aún más compacto si querés */
+@media (max-width: 640px){
+  .week-card{ padding: 12px 14px; }
+  .weeks-wrap{ gap: 12px; }
+}
