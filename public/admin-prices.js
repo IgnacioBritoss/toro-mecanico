@@ -32,20 +32,18 @@
     if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar');
   }
 
-  // Editor fijo debajo del título "Precios"
+  // Editor FIJO (no sticky) debajo del título "Precios"
   function renderEditor(plans){
-    // Buscamos la sección y metemos el editor dentro del contenedor, después del h2
     const preciosSec = document.getElementById('precios');
     const container  = $('.container', preciosSec) || preciosSec;
     const titleH2    = $('.section__title', container);
 
-    // Holder
     const holder = document.createElement('aside');
     holder.id = 'tm-admin-editor';
     holder.setAttribute('aria-label','Editor de precios');
-    holder.style.position = 'sticky';
-    holder.style.top = 'calc(var(--nav-h, 64px) + 12px)'; // se pega debajo de la nav
-    holder.style.zIndex = '6';
+    // SIN sticky
+    holder.style.position = 'relative';
+    holder.style.zIndex = '1';
     holder.style.background = '#ffffff';
     holder.style.border = '1px solid #e5e7eb';
     holder.style.borderRadius = '16px';
@@ -53,7 +51,6 @@
     holder.style.margin = '12px 0 20px';
     holder.style.boxShadow = '0 8px 24px rgba(0,0,0,.06)';
 
-    // Grid de filas
     const rowsWrap = document.createElement('div');
     rowsWrap.style.display = 'grid';
     rowsWrap.style.gridTemplateColumns = '1fr auto';

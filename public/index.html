@@ -8,6 +8,34 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/favicon.ico" />
   <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas de seguridad y traslado en AMBA. Reservá fecha y horario para tu evento." />
+
+  <!-- ESTILOS mínimos para que la flecha se vea siempre -->
+  <style>
+    .admin-badge.hidden{ display:none !important; }
+    .admin-badge{
+      position: fixed;
+      left: 16px;
+      top: calc(var(--nav-h, 64px) + 16px);
+      width: 44px; height: 44px;
+      display: grid; place-items: center;
+      border-radius: 9999px;
+      background: #111827; /* gris muy oscuro */
+      box-shadow: 0 10px 24px rgba(0,0,0,.15);
+      z-index: 1000; /* por encima del editor y tarjetas */
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+      opacity: .95;
+    }
+    .admin-badge:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 14px 32px rgba(0,0,0,.18);
+      opacity: 1;
+    }
+    .admin-badge__icon{
+      width: 24px; height: 24px;
+      fill: #fff;
+    }
+  </style>
 </head>
 <body>
   <!-- Navbar -->
@@ -218,14 +246,14 @@
   </footer>
 
   <!-- ============== ADMIN UI ============== -->
-  <!-- Badge/insignia para salir del modo admin -->
+  <!-- Flecha para salir del modo admin -->
   <button id="adminBadge" class="admin-badge hidden" aria-label="Salir del modo admin" title="Salir del modo admin">
     <svg viewBox="0 0 24 24" aria-hidden="true" class="admin-badge__icon">
       <path d="M15.5 19a1 1 0 0 1-.7-.3l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 1 1 1.4 1.4L10.9 12l5.3 5.3A1 1 0 0 1 15.5 19z"/>
     </svg>
   </button>
 
-  <!-- Overlay de login admin -->
+  <!-- Overlay de login admin (tres pasos) -->
   <div id="adminOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
     <div class="ov-card">
       <h3 id="ovTitle" class="ov-title">Acceso administrador</h3>
