@@ -556,25 +556,3 @@ body.has-admin-overlay{ overflow:hidden; }
   padding:8px 12px; border-radius:10px; text-decoration:none;
   background:#0ea5e9; color:#fff;
 }
-
-/* Cruces rojas en las celdas del calendario */
-.cal__day{ position: relative; }              /* para poder posicionar las cruces */
-.cal__day .xwrap{
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 6px;
-  pointer-events: none;                       /* que no molesten el click */
-}
-.cal__day .xicon{
-  width: 16px; height: 16px;
-  background: url("/public/imgproyecto/red-cross-check-mark-on-transparent-background-free-png.webp") center/contain no-repeat;
-  /* si el archivo que subís tiene otro nombre, cambiá la ruta de arriba */
-}
-
-/* si preferís que se vean un poquito mejor sobre el día seleccionado oscuro */
-.cal__day--selected .xicon{
-  filter: drop-shadow(0 0 2px rgba(0,0,0,.5));
-}
