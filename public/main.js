@@ -145,19 +145,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Badge admin (logout)
-  if (adminBadge){
-    if (hasAdminSession()){ adminBadge.classList.remove("hidden"); }
-    else { adminBadge.classList.add("hidden"); }
-
-    adminBadge.addEventListener("click", async () => {
-      try { await fetch("/api/admin/auth?action=logout", { method:'POST' }); } catch {}
-      clearAdminSessionCookie();
-      clearAdminSessionId();
-      const url = new URL(location.href);
-      url.searchParams.delete('editprices');
-      window.location.replace(url.pathname + (url.search || '') + (url.hash || ''));
-    });
+  // Mostrar/ocultar badge admin (no podemos leer cookie HttpOnly → consultamos al server)
+async function refreshAdminBadge(){
+  if (!adminBadge) return;
+  try{
+    const r = await fetch("/api/admin/plans", { method:"GET" });
+    // si responde 200 (o 204) hay sesión admin; si 401 no
+    const isAdmin = r.status !== 401;
+    adminBadge.classList.toggle("hidden", !isAdmin);
+  }catch{
+    adminBadge.classList.add("hidden");
   }
+}
+
+if (adminBadge){
+  // botón para salir del modo admin (usa el nuevo endpoint unificado)
+  adminBadge.addEventListener("click", async () => {
+    try { await fetch("/api/admin/auth?action=logout", { method:"POST" }); } catch {}
+    // limpiamos rastros locales por las dudas
+    clearAdminSessionId();
+    // quitamos ?editprices si estuviera
+    const url = new URL(location.href);
+    url.searchParams.delete("editprices");
+    window.location.replace(url.pathname + (url.search || "") + (url.hash || ""));
+  });
+
+  // chequear al cargar
+  refreshAdminBadge();
+}
+
 
   // Hookear overlay (login admin)
   initAdminAuth();
