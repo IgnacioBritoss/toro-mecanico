@@ -149,13 +149,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     adminBadge.addEventListener("click", async () => {
-      try { await fetch("/api/admin/logout", { method:'POST' }); } catch {}
-      clearAdminSessionCookie();
-      clearAdminSessionId();
-      const url = new URL(location.href);
-      url.searchParams.delete('editprices');
-      window.location.replace(url.pathname + (url.search || '') + (url.hash || ''));
-    });
+  try { await fetch("/api/admin/auth?action=logout", { method: "POST" }); } catch {}
+  clearAdminSessionCookie();
+  clearAdminSessionId();
+  const url = new URL(location.href);
+  url.searchParams.delete("editprices");
+  window.location.replace(url.pathname + (url.search || "") + (url.hash || ""));
+});
+
   }
 
   // Hookear overlay (login admin)
@@ -703,10 +704,11 @@ function initAdminAuth(){
 
     sendBtn.disabled = true;
     try{
-      const r = await fetch('/api/admin/auth', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'start', email })
-      });
+      const r = await fetch('/api/admin/auth?action=start', {
+  method:'POST', headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({ email })
+});
+
       const d = await r.json();
       if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
 
@@ -732,11 +734,12 @@ function initAdminAuth(){
 
     verifyEmailBtn.disabled = true;
     try{
-      const r = await fetch('/api/admin/auth', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'verify-email', session_id, code })
-      });
+      const r = await fetch('/api/admin/auth?action=verify_email', {
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({ session_id, code })
+});
+
       const d = await r.json();
 
       if (!r.ok || !d.ok){
@@ -777,11 +780,12 @@ function initAdminAuth(){
 
     verifyTotpBtn.disabled = true;
     try{
-      const r = await fetch('/api/admin/auth', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'verify-totp', session_id, code })
-      });
+      const r = await fetch('/api/admin/auth?action=verify_totp', {
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({ session_id, code })
+});
+
       const d = await r.json();
 
       if (!r.ok || !d.ok){
