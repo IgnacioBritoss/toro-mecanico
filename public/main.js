@@ -259,42 +259,55 @@ function renderCalendar(){
           if (adminOk){
             btn.disabled = false;
             btn.classList.remove("cal__day--full");
-            btn.classList.add("cal__day--selected"); // visualmente marcado como “especial”
+            btn.classList.add("cal__day--selected"); // resaltado suave
           }
         });
       } else {
         if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
       }
 
-      btn.addEventListener("click", async (ev)=>{
+      // --- FIX: capturamos el botón y delegamos ---
+      btn.addEventListener("click", (ev) => {
         ev.preventDefault();
-        const key2 = toInputDate(d);
-        const adminOk = await isAdmin();
-
-        // selección visual sin re-render
-        calGrid.querySelectorAll(".cal__day--selected").forEach(el => el.classList.remove("cal__day--selected"));
-        ev.currentTarget.classList.add("cal__day--selected");
-
-        selectedDate = d;
-        formDate.value = key2;
-
-        // si la hora actual está tomada => sugerir otra libre (sin re-render de calendario)
-        const taken=new Set((availability[key2]?.hours)||[]);
-        if(taken.has(selectedHour)){
-          const free=HOURS.find(h=>!taken.has(h));
-          if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
-        }
-        updateSummary();
-        renderHours(); // solo horas, es liviano
-
-        // si es admin: abrir modal con reservas del día
-        if (adminOk){
-          openAdminDayModal(key2);
-        }
+        const el = ev.currentTarget;
+        onDayClick(el, d);
       });
     }
     calGrid.appendChild(btn);
   });
+}
+
+// Handler seguro (sin perder el target por awaits)
+async function onDayClick(el, d){
+  const key2 = toInputDate(d);
+  const adminOk = await isAdmin();
+
+  // Marcar selección sin re-render y con null-safety
+  if (calGrid) {
+    calGrid.querySelectorAll(".cal__day--selected")
+      .forEach(node => node && node.classList && node.classList.remove("cal__day--selected"));
+  }
+  if (el && el.classList) el.classList.add("cal__day--selected");
+
+  // Estado de la selección
+  selectedDate = d;
+  if (formDate) formDate.value = key2;
+
+  // Si la hora elegida está ocupada, sugerimos otra libre
+  const taken = new Set((availability[key2]?.hours) || []);
+  if (taken.has(selectedHour)) {
+    const free = HOURS.find(h => !taken.has(h));
+    if (Number.isFinite(free)) {
+      selectedHour = free;
+      if (formTime) formTime.value = `${pad2(free)}:00`;
+    }
+  }
+
+  updateSummary();
+  renderHours(); // liviano, sin parpadeos
+
+  // Si es admin, abrir modal con reservas del día
+  if (adminOk) openAdminDayModal(key2);
 }
 
 function renderHours(){
@@ -625,7 +638,7 @@ async function onSecondStep(){
   if(!wrap) return;
 
   const sel  = wrap.querySelector('select');
-  const btn  = wrap.querySelector('.nice-select-display');
+  const btn  = wrap.querySelector('nice-select-display') || wrap.querySelector('.nice-select-display');
   const list = wrap.querySelector('.nice-select-list');
   const text = wrap.querySelector('.nice-select-text');
 
@@ -745,7 +758,7 @@ function renderPlanRadios(plans){
 }
 
 // ================================
-// ADMIN OVERLAY: lógica de login (unificada)
+// ADMIN OVERLAY: lógica de login (unificada con TOTP)
 // ================================
 function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
@@ -829,13 +842,11 @@ function initAdminAuth(){
         return;
       }
 
-      // si el server dice done => ya estás logueado
       if (d.done || d.session === 'ok'){
         window.location.replace("/?editprices=1#precios");
         return;
       }
 
-      // mostrar QR si viene otpauth
       const qrData = d.qrDataUrl || d.qr || d.qrData;
       const otpauth = d.otpauth || d.provisioningUri;
       if (totpQR){
