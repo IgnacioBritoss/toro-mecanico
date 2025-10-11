@@ -12,10 +12,12 @@ function hmac(data, secret){
 }
 function json(res, code, body){ res.status(code).json(body); }
 
-/* ======= SESIÓN SIN ESTADO (session_id firmado) ======= */
-/** payload = { email, code, exp }  -> base64url + HMAC */
-function makeSession(email, code, ttlMs=10*60*1000){
-  const payload = { email, code, exp: Date.now()+ttlMs };
+/* ======= SESIÓN SIN ESTADO (session_id firmado) =======
+   payload se guarda en el token:
+   - durante "start": { email, code, exp, totp_secret? }
+   - tras verify_email (si hay TOTP): seguimos usando el MISMO session_id
+*/
+function makeSession(payload){
   const raw = JSON.stringify(payload);
   const body = b64url(raw);
   const secret = process.env.ADMIN_AUTH_SECRET || "dev-admin-secret";
@@ -38,7 +40,6 @@ function parseSession(session_id){
 async function sendEmailCode(to, code){
   const hasSMTP = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
   if (!hasSMTP){
-    // modo dev: log y devolvemos el code en la respuesta del start
     console.log("[ADMIN DEV] code for %s -> %s", to, code);
     return { sent:false, dev:true };
   }
@@ -62,13 +63,23 @@ async function sendEmailCode(to, code){
   return { sent:true, dev:false };
 }
 
-/* -------------------- TOTP opcional (sin dependencias) -------------------- */
-/* Si definís ADMIN_TOTP_BASE32 en .env, se exigirá TOTP después del email */
-const TOTP_SECRET_BASE32 = (process.env.ADMIN_TOTP_BASE32 || "").replace(/\s+/g, "");
+/* -------------------- TOTP (con fijo u on-the-fly) -------------------- */
+const FIXED_TOTP_BASE32 = (process.env.ADMIN_TOTP_BASE32 || "").replace(/\s+/g, "");
 const TOTP_ISSUER = encodeURIComponent(process.env.TOTP_ISSUER || "Toro Mecánico");
 const TOTP_LABEL_PREFIX = encodeURIComponent(process.env.TOTP_LABEL || "Admin");
-
 const BASE32_ALPH = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function base32Encode(buf){
+  let bits = "";
+  for (const b of buf){ bits += b.toString(2).padStart(8,"0"); }
+  let out = "";
+  for (let i=0; i<bits.length; i+=5){
+    const chunk = bits.slice(i, i+5);
+    if (chunk.length < 5) out += BASE32_ALPH[parseInt(chunk.padEnd(5, "0"), 2)];
+    else out += BASE32_ALPH[parseInt(chunk, 2)];
+  }
+  return out.replace(/=+$/,"");
+}
 function base32Decode(b32){
   let bits = "";
   for (const c of b32.toUpperCase()){
@@ -89,17 +100,14 @@ function hotp(keyBuf, counter, digits=6){
   const bin = ((h[off] & 0x7f)<<24) | ((h[off+1]&0xff)<<16) | ((h[off+2]&0xff)<<8) | (h[off+3]&0xff);
   return String(bin % (10**digits)).padStart(digits, "0");
 }
-function totpNow(base32Secret, step=30, digits=6){
+function totpNowFromBase32(base32Secret, step=30, digits=6){
   const key = base32Decode(base32Secret);
   const counter = Math.floor(Date.now()/1000/step);
-  // tolerancia ±1 step
-  const codes = new Set([hotp(key,counter-1,digits), hotp(key,counter,digits), hotp(key,counter+1,digits)]);
-  return codes;
+  return new Set([hotp(key,counter-1,digits), hotp(key,counter,digits), hotp(key,counter+1,digits)]);
 }
-function buildOtpauthUri(email){
-  if (!TOTP_SECRET_BASE32) return null;
+function buildOtpauthUri(email, base32Secret){
   const label = `${TOTP_LABEL_PREFIX}:${encodeURIComponent(email)}`;
-  return `otpauth://totp/${label}?secret=${TOTP_SECRET_BASE32}&issuer=${TOTP_ISSUER}&digits=6&period=30`;
+  return `otpauth://totp/${label}?secret=${base32Secret}&issuer=${TOTP_ISSUER}&digits=6&period=30`;
 }
 
 /* -------------------- cookie admin -------------------- */
@@ -107,7 +115,7 @@ function setAdminCookie(res){
   const parts = [
     "admin_session=ok",
     "Path=/",
-    "Max-Age=86400",          // 1 día
+    "Max-Age=86400",
     "HttpOnly",
     "SameSite=Lax",
     "Secure"
@@ -117,18 +125,14 @@ function setAdminCookie(res){
 function clearAdminCookie(res){
   res.setHeader("Set-Cookie", "admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure");
 }
-function hasAdminCookie(req){
-  const c = req.headers.cookie || "";
-  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(c);
-}
 
 /* ======================================================
    HANDLER UNIFICADO
    Acciones:
-   - POST ?action=start          -> envía código por email, responde session_id
-   - POST ?action=verify_email   -> valida código email; si no hay TOTP, loguea; si hay TOTP, pide TOTP
-   - POST ?action=verify_totp    -> valida TOTP y loguea (set cookie)
-   - POST/GET ?action=logout     -> borra cookie
+   - POST ?action=start
+   - POST ?action=verify_email
+   - POST ?action=verify_totp
+   - POST/GET ?action=logout
    ====================================================== */
 export default async function handler(req, res){
   const action = (req.query.action || "").toString();
@@ -140,7 +144,7 @@ export default async function handler(req, res){
       return json(res, 200, { ok:true });
     }
 
-    // -------- start (POST): envía código por email
+    // -------- start (POST): envía código, guarda totp_secret (si no hay fijo)
     if (action === "start" && req.method === "POST"){
       const { email } = req.body || {};
       if (!email || !isValidEmail(email)) return json(res, 400, { ok:false, error:"Email inválido" });
@@ -154,13 +158,32 @@ export default async function handler(req, res){
       }
 
       const code = String(Math.floor(100000 + Math.random()*900000)); // 6 dígitos
-      const session_id = makeSession(String(email).toLowerCase(), code);
+
+      // si NO hay un secreto TOTP fijo, generamos uno por sesión (para QR)
+      let perSessionTotpBase32 = "";
+      if (!FIXED_TOTP_BASE32){
+        const rand = crypto.randomBytes(20);
+        perSessionTotpBase32 = base32Encode(rand);
+      }
+
+      const payload = {
+        email: String(email).toLowerCase(),
+        code,
+        exp: Date.now() + 10*60*1000,
+        // guardamos el secreto por sesión sólo si no hay fijo
+        ...(perSessionTotpBase32 ? { totp_secret: perSessionTotpBase32 } : {})
+      };
+      const session_id = makeSession(payload);
 
       const result = await sendEmailCode(email, code);
-      return json(res, 200, { ok:true, session_id, ...(result.dev ? { dev_code: code } : {}) });
+      return json(res, 200, {
+        ok:true,
+        session_id,
+        ...(result.dev ? { dev_code: code } : {})
+      });
     }
 
-    // -------- verify_email (POST): valida código del email
+    // -------- verify_email (POST): valida código; si hay TOTP => devuelve otpauth + qr
     if (action === "verify_email" && req.method === "POST"){
       const { session_id, code } = req.body || {};
       if (!session_id || !code) return json(res, 400, { ok:false, error:"Faltan datos" });
@@ -172,31 +195,41 @@ export default async function handler(req, res){
       const ok = String(code).replace(/\D/g,"") === String(payload.code);
       if (!ok) return json(res, 400, { ok:false, error:"Código incorrecto" });
 
-      // Si no hay TOTP, logueamos acá mismo.
-      if (!TOTP_SECRET_BASE32){
+      // ¿TOTP activo?
+      const base32Secret = FIXED_TOTP_BASE32 || payload.totp_secret || "";
+      if (!base32Secret){
+        // Sin TOTP => logueo directo (como antes cuando no exigías 2FA)
         setAdminCookie(res);
         return json(res, 200, { ok:true, done:true, session:"ok", totpDisabled:true });
       }
 
-      // Si hay TOTP, devolvemos datos para mostrar QR y pedir el código de la app.
-      const otpauth = buildOtpauthUri(payload.email);
-      return json(res, 200, { ok:true, totpRequired:true, otpauth, qrDataUrl:null });
+      // Con TOTP => devolvemos otpauth y QR. Front ya sabe mostrarlo.
+      const otpauth = buildOtpauthUri(payload.email, base32Secret);
+      const qrDataUrl = otpauth
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpauth)}`
+        : null;
+
+      return json(res, 200, {
+        ok: true,
+        totpRequired: true,
+        otpauth,
+        qrDataUrl
+        // usamos el MISMO session_id: el front no tiene que cambiar nada
+      });
     }
 
-    // -------- verify_totp (POST): valida TOTP y loguea
+    // -------- verify_totp (POST): valida TOTP (fijo o por sesión) y loguea
     if (action === "verify_totp" && req.method === "POST"){
-      if (!TOTP_SECRET_BASE32){
-        // si no hay TOTP en server, lo tratamos como deshabilitado (éxito)
-        setAdminCookie(res);
-        return json(res, 200, { ok:true, done:true, session:"ok" });
-      }
       const { session_id, code } = req.body || {};
       if (!session_id || !code) return json(res, 400, { ok:false, error:"Faltan datos" });
 
       const payload = parseSession(session_id);
       if (!payload) return json(res, 400, { ok:false, error:"Sesión inválida" });
 
-      const validSet = totpNow(TOTP_SECRET_BASE32, 30, 6);
+      const base32Secret = FIXED_TOTP_BASE32 || payload.totp_secret || "";
+      if (!base32Secret) return json(res, 400, { ok:false, error:"TOTP no configurado" });
+
+      const validSet = totpNowFromBase32(base32Secret, 30, 6);
       if (!validSet.has(String(code).replace(/\D/g,""))){
         return json(res, 400, { ok:false, error:"Código inválido" });
       }
@@ -205,7 +238,6 @@ export default async function handler(req, res){
       return json(res, 200, { ok:true, done:true, session:"ok" });
     }
 
-    // Acción desconocida o método inválido
     return json(res, 405, { ok:false, error:"Acción o método no permitido" });
   }catch(e){
     console.error("ADMIN AUTH ERROR:", e);
