@@ -132,17 +132,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Mostrar/ocultar badge admin
-  if (adminBadge){
-    if (hasAdminSession()){ adminBadge.classList.remove("hidden"); }
-    else { adminBadge.classList.add("hidden"); }
-
-    adminBadge.addEventListener("click", async () => {
-      try { await fetch("/api/admin/logout"); } catch {}
-      clearAdminSessionCookie();
-      clearAdminSessionId();
-      window.location.href = "/";
-    });
+  // Mostrar/ocultar badge admin (sin leer cookie HttpOnly)
+if (adminBadge){
+  async function checkAdminAndToggle(){
+    try{
+      const r = await fetch('/api/admin/plans', { method:'GET' });
+      const isAdmin = r.status !== 401;
+      adminBadge.classList.toggle('hidden', !isAdmin);
+    }catch{
+      adminBadge.classList.add('hidden');
+    }
   }
+
+  // mostrar al cargar y también cuando vuelve el foco (por si se logueó en otra pestaña)
+  checkAdminAndToggle();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkAdminAndToggle();
+  });
+
+  // salir de admin
+  adminBadge.addEventListener("click", async () => {
+    try { await fetch("/api/admin/logout", { method:'POST' }); } catch {}
+    clearAdminSessionCookie();
+    clearAdminSessionId();
+
+    // limpiá el parámetro ?editprices si está presente
+    const url = new URL(location.href);
+    url.searchParams.delete('editprices');
+    window.location.replace(url.pathname + url.search + url.hash || '/');
+  });
+}
+
 
   // Hookear overlay (login admin)
   initAdminAuth();
