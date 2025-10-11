@@ -258,29 +258,39 @@ function renderCalendar(){
       btn.classList.add("cal__day--muted");
       btn.disabled=true;
     }else{
-      const key = toInputDate(d);
-      const info = availability[key] || {count:0, hours:[]};
-      const full = info.count >= MAX_PER_DAY;
-      const blocked = isBlockedByLeadTime(d);
-
       btn.textContent = d.getDate();
 
-      if (blocked){
-        btn.classList.add("cal__day--full");
-        btn.disabled = true;
-      } else if(full){
-        btn.classList.add("cal__day--full");
-        // admin puede abrir modal
-        isAdmin().then(adminOk=>{
-          if (adminOk){
-            btn.disabled = false;
-            btn.classList.remove("cal__day--full");
-            btn.classList.add("cal__day--selected"); // resaltado suave
-          }
-        });
-      } else {
-        if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
+const key  = toInputDate(d);
+const info = availability[key] || { count: 0, hours: [] };
+const full = info.count >= MAX_PER_DAY;
+const blocked = isBlockedByLeadTime(d);
+
+// helper: si sos admin, habilita el día (aunque esté bloqueado/completo)
+function adminOverride(){
+  isAdmin().then(adminOk => {
+    if (adminOk){
+      btn.disabled = false;
+      btn.classList.remove("cal__day--full");
+      if (selectedDate && sameDay(d, selectedDate)){
+        btn.classList.add("cal__day--selected");
       }
+    } else {
+      btn.disabled = true;
+      btn.classList.add("cal__day--full");
+    }
+  });
+}
+
+if (blocked || full){
+  btn.classList.add("cal__day--full");
+  btn.disabled = true;       // por defecto bloqueado…
+  adminOverride();           // …pero si es admin, lo habilitamos
+} else {
+  if (selectedDate && sameDay(d, selectedDate)){
+    btn.classList.add("cal__day--selected");
+  }
+}
+
 
       // --- FIX: capturamos el botón y delegamos ---
       btn.addEventListener("click", (ev) => {
