@@ -1,18 +1,14 @@
 // public/admin-prices.js
-
 (function(){
   const qs = new URLSearchParams(location.search);
   const wantsEdit = qs.get('editprices') === '1';
 
-  // nodo helper
   const $ = (sel, ctx=document) => ctx.querySelector(sel);
 
   async function ensureAdmin() {
     try {
-      // ping usando un endpoint protegido
       const r = await fetch('/api/admin/plans', { method: 'GET' });
       if (r.status === 401) return false;
-      // 200 => ok (o 204/empty)
       return true;
     } catch {
       return false;
@@ -36,41 +32,32 @@
     if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar');
   }
 
-  // Crea una barrita flotante simple arriba de la sección Precios
+  // Editor fijo debajo del título "Precios"
   function renderEditor(plans){
-    // contenedor
-    const holder = document.createElement('div');
+    // Buscamos la sección y metemos el editor dentro del contenedor, después del h2
+    const preciosSec = document.getElementById('precios');
+    const container  = $('.container', preciosSec) || preciosSec;
+    const titleH2    = $('.section__title', container);
+
+    // Holder
+    const holder = document.createElement('aside');
     holder.id = 'tm-admin-editor';
+    holder.setAttribute('aria-label','Editor de precios');
     holder.style.position = 'sticky';
-    holder.style.top = '8px';
-    holder.style.zIndex = '50';
-    holder.style.margin = '24px auto';
-    holder.style.maxWidth = '1100px';
-    holder.style.background = '#fff';
+    holder.style.top = 'calc(var(--nav-h, 64px) + 12px)'; // se pega debajo de la nav
+    holder.style.zIndex = '6';
+    holder.style.background = '#ffffff';
     holder.style.border = '1px solid #e5e7eb';
     holder.style.borderRadius = '16px';
     holder.style.padding = '16px';
+    holder.style.margin = '12px 0 20px';
     holder.style.boxShadow = '0 8px 24px rgba(0,0,0,.06)';
-    holder.style.display = 'flex';
-    holder.style.alignItems = 'center';
-    holder.style.gap = '12px';
 
-    // cerrar
-    const close = document.createElement('button');
-    close.textContent = '✕ Cerrar editor';
-    close.className = 'btn';
-    close.style.marginLeft = 'auto';
-    close.onclick = () => {
-      const url = new URL(location.href);
-      url.searchParams.delete('editprices');
-      location.href = url.toString();
-    };
-    // filas por plan
+    // Grid de filas
     const rowsWrap = document.createElement('div');
     rowsWrap.style.display = 'grid';
     rowsWrap.style.gridTemplateColumns = '1fr auto';
     rowsWrap.style.gap = '10px 12px';
-    rowsWrap.style.flex = '1';
 
     plans.forEach(p => {
       const label = document.createElement('div');
@@ -104,7 +91,6 @@
           await savePlanPrice(p.id, inp.value);
           save.textContent = 'Guardado ✓';
           setTimeout(() => (save.textContent = 'Guardar', save.disabled=false), 1200);
-          // refrescar cards mostradas al público
           try { window.__tm_refresh_plans__ && window.__tm_refresh_plans__(); } catch {}
         }catch(e){
           alert(e.message || 'Error al guardar');
@@ -120,21 +106,23 @@
     });
 
     holder.appendChild(rowsWrap);
-    holder.appendChild(close);
 
-    // insertar antes de la sección de precios (o al inicio)
-    const precios = document.getElementById('precios');
-    const parent = precios?.parentElement || document.querySelector('.container') || document.body;
-    parent.insertBefore(holder, precios || parent.firstChild);
+    // Insertar justo DESPUÉS del h2 de Precios
+    if (titleH2 && titleH2.parentNode){
+      titleH2.parentNode.insertBefore(holder, titleH2.nextSibling);
+    } else if (container){
+      container.insertBefore(holder, container.firstChild);
+    } else {
+      document.body.insertBefore(holder, document.body.firstChild);
+    }
   }
 
   async function boot(){
-    if (!wantsEdit) return; // sólo si ?editprices=1
+    if (!wantsEdit) return; // solo si ?editprices=1
 
     const ok = await ensureAdmin();
     if (!ok) {
-      // no logueado => manda a /admin para hacer el flujo (se reescribe a /?editprices=1)
-      location.href = '/admin';
+      location.href = '/admin'; // fuerza login si no hay sesión
       return;
     }
 
@@ -155,7 +143,6 @@
       const r = await fetch('/api/plans');
       const d = await r.json();
       if (Array.isArray(d.plans)) {
-        // si tu main.js tiene renderPricingCards/plans, reúsalo
         if (typeof renderPricingCards === 'function') renderPricingCards(d.plans);
         if (typeof renderPlanRadios === 'function')  renderPlanRadios(d.plans);
       }

@@ -54,16 +54,14 @@
   </section>
 
   <!-- Precios -->
-  <!-- Precios -->
-<section id="precios" class="section section--muted">
-  <div class="container">
-    <h2 class="section__title">Precios</h2>
-    <div id="pricingCards" class="cards cards--pricing">
-      <!-- JS rellenará las tarjetas -->
+  <section id="precios" class="section section--muted">
+    <div class="container">
+      <h2 class="section__title">Precios</h2>
+      <div id="pricingCards" class="cards cards--pricing">
+        <!-- JS rellenará las tarjetas -->
+      </div>
     </div>
-  </div>
-</section>
-
+  </section>
 
   <!-- Disponibilidad -->
   <section id="calendario" class="section">
@@ -160,14 +158,13 @@
           </label>
         </div>
 
-       <fieldset class="plan plan--pretty">
-  <legend>Elegí tu plan</legend>
-  <div id="planOptions">
-    <!-- Las opciones se cargan por JS desde /api/plans -->
-    <noscript>Activá JavaScript para ver los planes disponibles.</noscript>
-  </div>
-</fieldset>
-
+        <fieldset class="plan plan--pretty">
+          <legend>Elegí tu plan</legend>
+          <div id="planOptions">
+            <!-- Las opciones se cargan por JS desde /api/plans -->
+            <noscript>Activá JavaScript para ver los planes disponibles.</noscript>
+          </div>
+        </fieldset>
 
         <label>Mensaje
           <textarea id="fMsg" rows="3" placeholder="Contanos del evento"></textarea>
@@ -187,7 +184,6 @@
 
       <!-- Pago -->
       <section id="paymentBlockManual" class="flow-card hidden">
-        
         <section class="pay-split">
           <div class="pay-left">
             <h4>Opción 1</h4>
@@ -224,14 +220,12 @@
   <!-- ============== ADMIN UI ============== -->
   <!-- Badge/insignia para salir del modo admin -->
   <button id="adminBadge" class="admin-badge hidden" aria-label="Salir del modo admin" title="Salir del modo admin">
-  <!-- Flecha hacia la izquierda (SVG) -->
-  <svg viewBox="0 0 24 24" aria-hidden="true" class="admin-badge__icon">
-    <path d="M15.5 19a1 1 0 0 1-.7-.3l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 1 1 1.4 1.4L10.9 12l5.3 5.3A1 1 0 0 1 15.5 19z"/>
-  </svg>
-</button>
+    <svg viewBox="0 0 24 24" aria-hidden="true" class="admin-badge__icon">
+      <path d="M15.5 19a1 1 0 0 1-.7-.3l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 1 1 1.4 1.4L10.9 12l5.3 5.3A1 1 0 0 1 15.5 19z"/>
+    </svg>
+  </button>
 
-
-  <!-- Overlay de login admin (tres pasos) -->
+  <!-- Overlay de login admin -->
   <div id="adminOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
     <div class="ov-card">
       <h3 id="ovTitle" class="ov-title">Acceso administrador</h3>
@@ -261,26 +255,25 @@
         <div id="ovHint2" class="ov-hint"></div>
       </div>
 
-      <!-- Paso 3: Código SMS -->
       <!-- Paso 3: Código TOTP -->
-<div id="stepCodeTotp" class="ov-step" data-step="codeTotp">
-  <p class="ov-sub">
-    Escaneá el QR con Google Authenticator / Authy.<br/>
-    Luego ingresá el código de 6 dígitos que te da la app.
-  </p>
-  <div class="ov-row" style="align-items:center">
-    <img id="ovTotpQR" alt="QR para configurar Authenticator" style="max-width:220px;border:1px solid #e5e7eb;border-radius:12px;padding:8px;background:#fff"/>
-  </div>
-  <div class="ov-row">
-    <label>Código de la app</label>
-    <input id="ovCodeTotp" inputmode="numeric" maxlength="6" class="ov-input ov-code" placeholder="______" />
-  </div>
-  <div class="ov-actions">
-    <button id="ovBack2" class="ov-btn ov-ghost" type="button">Volver</button>
-    <button id="ovVerifyTotp" class="ov-btn" type="button">Ingresar al modo admin</button>
-  </div>
-  <div id="ovHint3" class="ov-hint"></div>
-</div>
+      <div id="stepCodeTotp" class="ov-step" data-step="codeTotp">
+        <p class="ov-sub">
+          Escaneá el QR con Google Authenticator / Authy.<br/>
+          Luego ingresá el código de 6 dígitos que te da la app.
+        </p>
+        <div class="ov-row" style="align-items:center">
+          <img id="ovTotpQR" alt="QR para configurar Authenticator" style="max-width:220px;border:1px solid #e5e7eb;border-radius:12px;padding:8px;background:#fff"/>
+        </div>
+        <div class="ov-row">
+          <label>Código de la app</label>
+          <input id="ovCodeTotp" inputmode="numeric" maxlength="6" class="ov-input ov-code" placeholder="______" />
+        </div>
+        <div class="ov-actions">
+          <button id="ovBack2" class="ov-btn ov-ghost" type="button">Volver</button>
+          <button id="ovVerifyTotp" class="ov-btn" type="button">Ingresar al modo admin</button>
+        </div>
+        <div id="ovHint3" class="ov-hint"></div>
+      </div>
 
     </div>
   </div>
