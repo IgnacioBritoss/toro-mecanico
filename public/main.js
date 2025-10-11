@@ -14,6 +14,93 @@ let lastReservation = null; // { id, token }
 // ================================
 // Utilidades
 // ================================
+
+// === ADMIN helpers (ping simple) ===
+async function isAdmin(){
+  try{
+    const r = await fetch('/api/admin/plans', { method:'GET' });
+    return r.status !== 401;
+  }catch{ return false; }
+}
+
+// === Popover admin por día ===
+let adminPop = null;
+function closeAdminPop(){ adminPop?.remove(); adminPop = null; }
+
+async function openAdminDayPopover(anchorEl, dateKey){
+  closeAdminPop();
+
+  // Contenedor
+  adminPop = document.createElement('div');
+  adminPop.className = 'admin-pop';
+  adminPop.innerHTML = `
+    <div class="admin-pop__head">
+      <h4 class="admin-pop__title">Reservas • ${dateKey}</h4>
+      <button class="admin-pop__close" type="button">Cerrar</button>
+    </div>
+    <div class="admin-pop__list">
+      <p class="hint">Cargando…</p>
+    </div>
+  `;
+  document.body.appendChild(adminPop);
+  adminPop.querySelector('.admin-pop__close').onclick = closeAdminPop;
+  adminPop.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeAdminPop(); });
+
+  // Posicionar cerca del día
+  const r = anchorEl.getBoundingClientRect();
+  const top = r.top + window.scrollY + r.height + 8;
+  const left = Math.min(Math.max(12, r.left + window.scrollX - 120), window.scrollX + document.documentElement.clientWidth - 24 - 420);
+  adminPop.style.top = `${top}px`;
+  adminPop.style.left = `${left}px`;
+
+  // Traer reservas del día
+  try{
+    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`);
+    const data = await res.json();
+    const list = adminPop.querySelector('.admin-pop__list');
+
+    if (!res.ok || !data.ok){
+      list.innerHTML = `<p class="hint">No se pudo cargar (${data?.error || res.status}).</p>`;
+      return;
+    }
+    const items = data.reservations || [];
+
+    if (!items.length){
+      list.innerHTML = `<p class="hint">No hay reservas para este día.</p>`;
+      return;
+    }
+    list.innerHTML = '';
+    items.forEach((it, i) => {
+      const div = document.createElement('div');
+      div.className = 'admin-pop__item';
+      const maps = (it.location && (Number.isFinite(it.location.lat) && Number.isFinite(it.location.lng)))
+        ? `https://www.google.com/maps?q=${encodeURIComponent(it.location.lat)},${encodeURIComponent(it.location.lng)}`
+        : null;
+      div.innerHTML = `
+        <div class="admin-pop__name">${i===0 ? 'Cliente' : 'Cliente 2'}: ${escapeHtml(it.name || '')}</div>
+        <div class="admin-pop__meta">
+          Hora: <strong>${escapeHtml(it.time || '')}</strong> · Plan: ${escapeHtml(it.plan || '')}
+        </div>
+        <div class="admin-pop__meta">Tel: ${escapeHtml(it.phone || '-')} · Email: ${escapeHtml(it.email || '-')}</div>
+        <div class="admin-pop__meta">Ubicación: ${escapeHtml(it.location?.display_name || '-')}</div>
+        <div class="admin-pop__actions">
+          ${maps ? `<a class="admin-pop__btn admin-pop__btn--primary" href="${maps}" target="_blank" rel="noreferrer">Abrir en Google Maps</a>` : ''}
+        </div>
+      `;
+      list.appendChild(div);
+    });
+  }catch{
+    const list = adminPop.querySelector('.admin-pop__list');
+    list.innerHTML = `<p class="hint">Error de red al cargar el día.</p>`;
+  }
+
+  // Cerrar al clickear fuera
+  setTimeout(() => {
+    const onDoc = (e) => { if (!adminPop.contains(e.target)) { document.removeEventListener('mousedown', onDoc, true); closeAdminPop(); } };
+    document.addEventListener('mousedown', onDoc, true);
+  }, 0);
+}
+
 function pad2(n){ return String(n).padStart(2,"0"); }
 function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
 function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
@@ -215,14 +302,16 @@ async function fetchAvailabilityForMonth(date){
   }catch{ availability = {}; }
 }
 
-function renderCalendar(){
+async function renderCalendar(){
   const grid = buildMonthGrid(activeMonth);
   if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
   calGrid.innerHTML = "";
 
-  // fecha mínima seleccionable = hoy + 3 días (a 00:00)
-  const now = new Date();
-  const minSel = new Date(now.getFullYear(), now.getMonth(), now.getDate() + MIN_DATE_OFFSET_DAYS);
+  const admin = await isAdmin();   // <<< clave
+
+  // mínimo día seleccionable: hoy + 3 días
+  const today = new Date(); today.setHours(0,0,0,0);
+  const minSel = new Date(today); minSel.setDate(minSel.getDate()+3);
 
   grid.forEach(d=>{
     const btn=document.createElement("button");
@@ -230,20 +319,30 @@ function renderCalendar(){
 
     if(!d){
       btn.classList.add("cal__day--muted"); btn.disabled=true;
-    }else{
+    } else {
       const key = toInputDate(d);
       const info = availability[key] || {count:0, hours:[]};
       const full = info.count >= MAX_PER_DAY;
+
+      // bloqueado si antes de minSel
+      const dd = new Date(d); dd.setHours(0,0,0,0);
+      const blocked = dd < minSel;
+
       btn.textContent = d.getDate();
 
-      const isBeforeMin = d < minSel; // bloqueado por política
-      if (isBeforeMin){
-        btn.classList.add("cal__day--blocked"); btn.disabled = true;
-      } else if(full){
-        btn.classList.add("cal__day--full"); btn.disabled=true;
+      if ((blocked || full) && !admin){
+        // usuario normal: queda deshabilitado
+        if (blocked) btn.classList.add("cal__day--blocked");
+        if (full)    btn.classList.add("cal__day--full");
+        btn.disabled = true;
       } else {
+        // admin o día libre: clickable
+        if (blocked) btn.classList.add("cal__day--blocked");
+        if (full)    btn.classList.add("cal__day--full");
         if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
+
         btn.addEventListener("click", async (ev)=>{
+          // comportamiento normal de selección (para cualquiera)
           selectedDate=d; formDate.value=toInputDate(d);
           const taken=new Set((availability[key]?.hours)||[]);
           if(taken.has(selectedHour)){
@@ -252,16 +351,15 @@ function renderCalendar(){
           }
           renderCalendar(); renderHours(); updateSummary();
 
-          // si es admin, abrir popover con reservas del día
-          if (await isAdmin()){
-            openAdminDayPopover(ev.currentTarget, key);
-          }
+          // si es admin, abrimos el popover
+          if (admin) openAdminDayPopover(ev.currentTarget, key);
         });
       }
     }
     calGrid.appendChild(btn);
   });
 }
+
 
 function renderHours(){
   hourList.innerHTML = "";
