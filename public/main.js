@@ -3,7 +3,6 @@
 // ================================
 const MAX_PER_DAY = 2;
 const HOURS = [12, 14, 16, 18, 20, 22];
-const MIN_DATE_OFFSET_DAYS = 3; // no permitir hoy ni próximos 3 días
 
 let activeMonth = (() => { const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
 let selectedDate = null;
@@ -14,6 +13,21 @@ let lastReservation = null; // { id, token }
 // ================================
 // Utilidades
 // ================================
+function pad2(n){ return String(n).padStart(2,"0"); }
+function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
+function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function getQS(name){ return new URLSearchParams(location.search).get(name); }
+
+// ================================
+// Admin session helpers
+// ================================
+function hasAdminSession(){ return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || ""); }
+function clearAdminSessionCookie(){ document.cookie = "admin_session=; Max-Age=0; path=/"; }
+function saveAdminSessionId(id){ try { localStorage.setItem("admin_session_id", id); } catch {} }
+function getAdminSessionId(){ try { return localStorage.getItem("admin_session_id") || ""; } catch { return ""; } }
+function clearAdminSessionId(){ try { localStorage.removeItem("admin_session_id"); } catch {} }
 
 // === ADMIN helpers (ping simple) ===
 async function isAdmin(){
@@ -30,7 +44,6 @@ function closeAdminPop(){ adminPop?.remove(); adminPop = null; }
 async function openAdminDayPopover(anchorEl, dateKey){
   closeAdminPop();
 
-  // Contenedor
   adminPop = document.createElement('div');
   adminPop.className = 'admin-pop';
   adminPop.innerHTML = `
@@ -38,22 +51,17 @@ async function openAdminDayPopover(anchorEl, dateKey){
       <h4 class="admin-pop__title">Reservas • ${dateKey}</h4>
       <button class="admin-pop__close" type="button">Cerrar</button>
     </div>
-    <div class="admin-pop__list">
-      <p class="hint">Cargando…</p>
-    </div>
-  `;
+    <div class="admin-pop__list"><p class="hint">Cargando…</p></div>`;
   document.body.appendChild(adminPop);
   adminPop.querySelector('.admin-pop__close').onclick = closeAdminPop;
   adminPop.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeAdminPop(); });
 
-  // Posicionar cerca del día
   const r = anchorEl.getBoundingClientRect();
   const top = r.top + window.scrollY + r.height + 8;
   const left = Math.min(Math.max(12, r.left + window.scrollX - 120), window.scrollX + document.documentElement.clientWidth - 24 - 420);
   adminPop.style.top = `${top}px`;
   adminPop.style.left = `${left}px`;
 
-  // Traer reservas del día
   try{
     const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`);
     const data = await res.json();
@@ -64,7 +72,6 @@ async function openAdminDayPopover(anchorEl, dateKey){
       return;
     }
     const items = data.reservations || [];
-
     if (!items.length){
       list.innerHTML = `<p class="hint">No hay reservas para este día.</p>`;
       return;
@@ -73,20 +80,17 @@ async function openAdminDayPopover(anchorEl, dateKey){
     items.forEach((it, i) => {
       const div = document.createElement('div');
       div.className = 'admin-pop__item';
-      const maps = (it.location && (Number.isFinite(it.location.lat) && Number.isFinite(it.location.lng)))
+      const maps = (it.location && Number.isFinite(it.location.lat) && Number.isFinite(it.location.lng))
         ? `https://www.google.com/maps?q=${encodeURIComponent(it.location.lat)},${encodeURIComponent(it.location.lng)}`
         : null;
       div.innerHTML = `
         <div class="admin-pop__name">${i===0 ? 'Cliente' : 'Cliente 2'}: ${escapeHtml(it.name || '')}</div>
-        <div class="admin-pop__meta">
-          Hora: <strong>${escapeHtml(it.time || '')}</strong> · Plan: ${escapeHtml(it.plan || '')}
-        </div>
+        <div class="admin-pop__meta">Hora: <strong>${escapeHtml(it.time || '')}</strong> · Plan: ${escapeHtml(it.plan || '')}</div>
         <div class="admin-pop__meta">Tel: ${escapeHtml(it.phone || '-')} · Email: ${escapeHtml(it.email || '-')}</div>
         <div class="admin-pop__meta">Ubicación: ${escapeHtml(it.location?.display_name || '-')}</div>
         <div class="admin-pop__actions">
           ${maps ? `<a class="admin-pop__btn admin-pop__btn--primary" href="${maps}" target="_blank" rel="noreferrer">Abrir en Google Maps</a>` : ''}
-        </div>
-      `;
+        </div>`;
       list.appendChild(div);
     });
   }catch{
@@ -94,39 +98,10 @@ async function openAdminDayPopover(anchorEl, dateKey){
     list.innerHTML = `<p class="hint">Error de red al cargar el día.</p>`;
   }
 
-  // Cerrar al clickear fuera
   setTimeout(() => {
     const onDoc = (e) => { if (!adminPop.contains(e.target)) { document.removeEventListener('mousedown', onDoc, true); closeAdminPop(); } };
     document.addEventListener('mousedown', onDoc, true);
   }, 0);
-}
-
-function pad2(n){ return String(n).padStart(2,"0"); }
-function toInputDate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
-function toLocaleDate(d){ try{ return d.toLocaleDateString("es-AR"); }catch{ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; } }
-function sameDay(a,b){ return a?.getFullYear()===b?.getFullYear() && a?.getMonth()===b?.getMonth() && a?.getDate()===b?.getDate(); }
-function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function getQS(name){ return new URLSearchParams(location.search).get(name); }
-
-// ================================
-/* Admin session helpers (local only, NO HttpOnly cookie read) */
-// ================================
-function hasAdminSession(){
-  // Mantengo por compatibilidad, pero ya NO confiamos en leer cookie HttpOnly.
-  return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
-}
-function clearAdminSessionCookie(){
-  // limpia por si existía no-HttpOnly
-  document.cookie = "admin_session=; Max-Age=0; path=/";
-}
-function saveAdminSessionId(id){
-  try { localStorage.setItem("admin_session_id", id); } catch {}
-}
-function getAdminSessionId(){
-  try { return localStorage.getItem("admin_session_id") || ""; } catch { return ""; }
-}
-function clearAdminSessionId(){
-  try { localStorage.removeItem("admin_session_id"); } catch {}
 }
 
 // ================================
@@ -190,10 +165,8 @@ function setFormDateTimeFromSelection() {
 // Inicio
 // ================================
 document.addEventListener("DOMContentLoaded", async () => {
-  // año en footer
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // Ajustar variable CSS del alto de la nav para centrar badge (tu CSS usa --nav-h y --badge)
   (function setNavHeightVar(){
     const el = document.querySelector('.nav__inner');
     const h = el ? el.getBoundingClientRect().height : 64;
@@ -206,7 +179,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   })();
 
-  // ===== FIX ANTI-BUCLE /admin =====
+  // /admin overlay
   if (location.pathname.replace(/\/+$/,'') === "/admin") {
     if (hasAdminSession()) {
       window.location.replace("/?editprices=1#precios");
@@ -219,39 +192,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Mostrar/ocultar badge admin (sin leer cookie HttpOnly)
+  // Badge admin (logout)
   if (adminBadge){
-    async function checkAdminAndToggle(){
-      try{
-        const r = await fetch('/api/admin/plans', { method:'GET' });
-        const isAdmin = r.status !== 401;
-        adminBadge.classList.toggle('hidden', !isAdmin);
-      }catch{
-        adminBadge.classList.add('hidden');
-      }
-    }
-    checkAdminAndToggle();
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) checkAdminAndToggle();
-    });
+    if (hasAdminSession()){ adminBadge.classList.remove("hidden"); }
+    else { adminBadge.classList.add("hidden"); }
 
     adminBadge.addEventListener("click", async () => {
-  try { await fetch("/api/admin/auth?action=logout", { method: "POST" }); } catch {}
-  clearAdminSessionCookie();
-  clearAdminSessionId();
-  const url = new URL(location.href);
-  url.searchParams.delete("editprices");
-  window.location.replace(url.pathname + (url.search || "") + (url.hash || ""));
-});
-
+      try { await fetch("/api/admin/auth?action=logout", { method:'POST' }); } catch {}
+      clearAdminSessionCookie();
+      clearAdminSessionId();
+      const url = new URL(location.href);
+      url.searchParams.delete('editprices');
+      window.location.replace(url.pathname + (url.search || '') + (url.hash || ''));
+    });
   }
 
-  // Hookear overlay (login admin)
+  // Overlay auth
   initAdminAuth();
 
   lockDateTimeFields();
 
-  // ===== Planes dinámicos =====
+  // Planes
   const plans = await fetchPlans();
   renderPricingCards(plans);
   renderPlanRadios(plans);
@@ -307,14 +268,14 @@ async function renderCalendar(){
   if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
   calGrid.innerHTML = "";
 
-  const admin = await isAdmin();   // <<< clave
+  const admin = await isAdmin();
 
-  // mínimo día seleccionable: hoy + 3 días
   const today = new Date(); today.setHours(0,0,0,0);
   const minSel = new Date(today); minSel.setDate(minSel.getDate()+3);
 
   grid.forEach(d=>{
     const btn=document.createElement("button");
+    btn.type = "button"; // evita submits accidentales
     btn.className="cal__day";
 
     if(!d){
@@ -324,25 +285,22 @@ async function renderCalendar(){
       const info = availability[key] || {count:0, hours:[]};
       const full = info.count >= MAX_PER_DAY;
 
-      // bloqueado si antes de minSel
       const dd = new Date(d); dd.setHours(0,0,0,0);
       const blocked = dd < minSel;
 
       btn.textContent = d.getDate();
 
       if ((blocked || full) && !admin){
-        // usuario normal: queda deshabilitado
         if (blocked) btn.classList.add("cal__day--blocked");
         if (full)    btn.classList.add("cal__day--full");
         btn.disabled = true;
       } else {
-        // admin o día libre: clickable
         if (blocked) btn.classList.add("cal__day--blocked");
         if (full)    btn.classList.add("cal__day--full");
         if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
 
         btn.addEventListener("click", async (ev)=>{
-          // comportamiento normal de selección (para cualquiera)
+          ev.preventDefault();
           selectedDate=d; formDate.value=toInputDate(d);
           const taken=new Set((availability[key]?.hours)||[]);
           if(taken.has(selectedHour)){
@@ -350,8 +308,6 @@ async function renderCalendar(){
             if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
           }
           renderCalendar(); renderHours(); updateSummary();
-
-          // si es admin, abrimos el popover
           if (admin) openAdminDayPopover(ev.currentTarget, key);
         });
       }
@@ -359,7 +315,6 @@ async function renderCalendar(){
     calGrid.appendChild(btn);
   });
 }
-
 
 function renderHours(){
   hourList.innerHTML = "";
@@ -369,6 +324,7 @@ function renderHours(){
   const full = info.count >= MAX_PER_DAY;
   HOURS.forEach(h=>{
     const b=document.createElement("button");
+    b.type = "button";
     b.textContent=`${h}:00`; b.className="slot__btn";
     const disabled = full || taken.has(h);
     if(disabled){ b.classList.add("slot__btn--disabled"); b.disabled=true; b.title=full?"Día completo":"Ocupado"; }
@@ -408,10 +364,7 @@ function ensureMapVisible(){
   if (addrMapEl.classList.contains("hidden")) addrMapEl.classList.remove("hidden");
   if (!addrMap && window.L){
     addrMap = L.map('addrMap').setView([START.lat, START.lng], START.zoom);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap'
-    }).addTo(addrMap);
-
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(addrMap);
     addrMarker = L.marker([START.lat, START.lng], { draggable: true }).addTo(addrMap);
     addrMarker.on('dragend', () => {
       const { lat, lng } = addrMarker.getLatLng();
@@ -425,16 +378,10 @@ function ensureMapVisible(){
 
 function fetchSuggest(q){
   const base = 'https://nominatim.openstreetmap.org/search';
-  const params = new URLSearchParams({
-    q, format: 'jsonv2', addressdetails: '1',
-    countrycodes: 'ar', limit: '6', 'accept-language': 'es'
-  });
+  const params = new URLSearchParams({ q, format: 'jsonv2', addressdetails: '1', countrycodes: 'ar', limit: '6', 'accept-language': 'es' });
   if (USE_VIEWBOX){ params.append('viewbox', VIEWBOX); params.append('bounded','1'); }
-
   fetch(`${base}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
-    .then(r => r.json())
-    .then(showSuggest)
-    .catch(() => hideSuggest());
+    .then(r => r.json()).then(showSuggest).catch(() => hideSuggest());
 }
 
 function showSuggest(list){
@@ -442,26 +389,14 @@ function showSuggest(list){
   if (!addrSuggest) return;
   if (!currentData.length) { hideSuggest(); return; }
   addrSuggest.innerHTML = currentData.map((it, i) =>
-    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${escapeHtml(it.display_name||'')}</div>`
-  ).join('');
+    `<div class="s-item${i===0?' active':''}" data-i="${i}" role="option">${escapeHtml(it.display_name||'')}</div>`).join('');
   selectedIndex = 0;
   addrSuggest.classList.remove("hidden");
   [...addrSuggest.querySelectorAll('.s-item')].forEach(div => {
-    div.addEventListener('mousedown', () => {
-      const i = Number(div.getAttribute('data-i'));
-      choose(currentData[i]);
-    });
+    div.addEventListener('mousedown', () => { const i = Number(div.getAttribute('data-i')); choose(currentData[i]); });
   });
 }
-
-function hideSuggest(){
-  if (!addrSuggest) return;
-  addrSuggest.classList.add("hidden");
-  addrSuggest.innerHTML = '';
-  currentData = [];
-  selectedIndex = -1;
-}
-
+function hideSuggest(){ if (!addrSuggest) return; addrSuggest.classList.add("hidden"); addrSuggest.innerHTML = ''; currentData = []; selectedIndex = -1; }
 function moveActive(delta){
   const items = addrSuggest ? [...addrSuggest.querySelectorAll('.s-item')] : [];
   if (!items.length) return;
@@ -469,10 +404,8 @@ function moveActive(delta){
   items.forEach((el, idx) => el.classList.toggle('active', idx === selectedIndex));
   items[selectedIndex].scrollIntoView({ block: 'nearest' });
 }
-
 function choose(item){
-  hideSuggest();
-  ensureMapVisible();
+  hideSuggest(); ensureMapVisible();
   const nice = item.display_name || '';
   const lat = Number(item.lat), lng = Number(item.lon);
   if (fAddress) fAddress.value = nice;
@@ -480,14 +413,12 @@ function choose(item){
   if (addrMarker) addrMarker.setLatLng([lat, lng]);
   if (addrMap) addrMap.setView([lat, lng], 18);
 }
-
 function setHidden(lat, lng, displayName, osmId){
   if (addrLat) addrLat.value = lat ?? '';
   if (addrLng) addrLng.value = lng ?? '';
   if (addrDisplay) addrDisplay.value = displayName ?? '';
   if (addrOsmId) addrOsmId.value = osmId ?? '';
 }
-
 fAddress?.addEventListener('input', () => {
   const q = fAddress.value.trim();
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -517,7 +448,6 @@ async function onSubmitReservation(e){
     date: formDate.value,
     time: formTime.value,
     plan: (document.querySelector('input[name="plan"]:checked')||{}).value || "1h",
-
     location: {
       address: (document.getElementById('fAddress')?.value || '').trim(),
       lat: Number(addrLat?.value || 0),
@@ -673,8 +603,7 @@ async function onSecondStep(){
     wrap.classList.toggle('is-empty', !v);
     const items = list.querySelectorAll('li');
     items.forEach(li => {
-      li.toggleAttribute('aria-selected', li.dataset.value === v ||
-        li.textContent.trim() === v);
+      li.toggleAttribute('aria-selected', li.dataset.value === v || li.textContent.trim() === v);
     });
   }
   function open(){ btn.setAttribute('aria-expanded','true'); document.addEventListener('click', onDoc, { capture:true }); document.addEventListener('keydown', onKey); }
@@ -713,6 +642,8 @@ function renderPricingCards(plans){
   plans.forEach((p, idx) => {
     const art = document.createElement('article');
     art.className = 'card' + (idx===1 ? ' card--featured':'');
+
+    // registrar acción smooth scroll para “Reservar”
     art.innerHTML = `
       <header class="card__head">
         <h3>${escapeHtml(p.label)}</h3>
@@ -724,9 +655,17 @@ function renderPricingCards(plans){
         <li>Colchonetas y seguridad</li>
         <li>Traslado en AMBA*</li>
       </ul>
-      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}">Reservar</a>
+      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}" data-scroll="1">Reservar</a>
     `;
     wrap.appendChild(art);
+  });
+
+  // delegación para scroll suave
+  wrap.addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-scroll="1"]');
+    if (!a) return;
+    e.preventDefault();
+    document.querySelector('#calendario')?.scrollIntoView({behavior:'smooth'});
   });
 }
 
@@ -749,15 +688,13 @@ function renderPlanRadios(plans){
       <span class="plan__card ${idx===1?'plan__card--pop':''}">
         <strong>${escapeHtml(p.label)}</strong>
         <em>USD ${Number(p.price_usd).toFixed(0)}</em>
-      </span>
-    `;
+      </span>`;
     wrap.appendChild(div);
   });
 }
 
 // ================================
-// ADMIN OVERLAY: lógica de login
-// (Con session_id correcto) + REDIRECT POST-LOGIN (endpoint unificado)
+// ADMIN OVERLAY: lógica de login (endpoint unificado)
 // ================================
 function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
@@ -765,23 +702,19 @@ function initAdminAuth(){
 
   const el = (id) => document.getElementById(id);
 
-  // Pasos
   const stepEmail      = el('stepEmail');
   const stepCodeEmail  = el('stepCodeEmail');
   const stepCodeTotp   = el('stepCodeTotp');
 
-  // Paso 1 (email)
   const emailInput     = el('ovEmail');
   const sendBtn        = el('ovSendEmail');
   const hint1          = el('ovHint1');
 
-  // Paso 2 (código email)
   const codeEmailInput = el('ovCodeEmail');
   const verifyEmailBtn = el('ovVerifyEmail');
   const back1          = el('ovBack1');
   const hint2          = el('ovHint2');
 
-  // Paso 3 (TOTP)
   const totpQR         = el('ovTotpQR');
   const codeTotpInput  = el('ovCodeTotp');
   const verifyTotpBtn  = el('ovVerifyTotp');
@@ -792,8 +725,7 @@ function initAdminAuth(){
     [stepEmail, stepCodeEmail, stepCodeTotp].forEach(s => s?.classList.remove('active'));
     step?.classList.add('active');
   };
-
-  show(stepEmail); // arranca en paso email
+  show(stepEmail);
 
   async function startEmail(){
     hint1.textContent = '';
@@ -803,27 +735,20 @@ function initAdminAuth(){
     sendBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=start', {
-  method:'POST', headers:{'Content-Type':'application/json'},
-  body: JSON.stringify({ email })
-});
-
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
       const d = await r.json();
       if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
-
       if (d.session_id) saveAdminSessionId(d.session_id);
-
       show(stepCodeEmail);
       codeEmailInput.focus();
-    }catch(e){
-      hint1.textContent = 'Error de red.';
-    }finally{
-      sendBtn.disabled = false;
-    }
+    }catch{ hint1.textContent = 'Error de red.'; }
+    finally{ sendBtn.disabled = false; }
   }
 
   async function verifyEmail(){
     hint2.textContent = '';
-
     const session_id = getAdminSessionId();
     const code  = ((codeEmailInput.value || '').replace(/\D/g, '')).slice(0, 6);
 
@@ -833,25 +758,20 @@ function initAdminAuth(){
     verifyEmailBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=verify_email', {
-  method:'POST',
-  headers:{'Content-Type':'application/json'},
-  body: JSON.stringify({ session_id, code })
-});
-
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, code })
+      });
       const d = await r.json();
 
-      if (!r.ok || !d.ok){
-        hint2.textContent = d.error || 'Código incorrecto o vencido.';
-        return;
-      }
+      if (!r.ok || !d.ok){ hint2.textContent = d.error || 'Código incorrecto o vencido.'; return; }
 
       if (d.totpDisabled || d.done || d.session === 'ok'){
         window.location.replace("/?editprices=1#precios");
         return;
       }
 
-      const qrData = d.qrDataUrl || d.qr || d.qrData || d.qrDataURL || d.qrDataurl || d.qrDataUrl;
-      const otpauth = d.otpauth || d.provisioningUri;
+      const qrData = d.qrDataUrl || d.qr || d.qrData || d.qrDataURL || d.qrDataurl;
+      const otpauth = d.otpauth;
       if (totpQR){
         if (qrData)        totpQR.src = qrData;
         else if (otpauth)  totpQR.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(otpauth);
@@ -859,17 +779,12 @@ function initAdminAuth(){
 
       show(stepCodeTotp);
       codeTotpInput.focus();
-
-    }catch(e){
-      hint2.textContent = 'Error de red.';
-    }finally{
-      verifyEmailBtn.disabled = false;
-    }
+    }catch{ hint2.textContent = 'Error de red.'; }
+    finally{ verifyEmailBtn.disabled = false; }
   }
 
   async function verifyTotp(){
     hint3.textContent = '';
-
     const session_id = getAdminSessionId();
     const code  = ((codeTotpInput.value || '').replace(/\D/g, '')).slice(0, 6);
 
@@ -879,156 +794,21 @@ function initAdminAuth(){
     verifyTotpBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=verify_totp', {
-  method:'POST',
-  headers:{'Content-Type':'application/json'},
-  body: JSON.stringify({ session_id, code })
-});
-
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, code })
+      });
       const d = await r.json();
 
-      if (!r.ok || !d.ok){
-        hint3.textContent = d.error || 'Código inválido.';
-        return;
-      }
+      if (!r.ok || !d.ok){ hint3.textContent = d.error || 'Código inválido.'; return; }
 
       window.location.replace("/?editprices=1#precios");
-
-    }catch(e){
-      hint3.textContent = 'Error de red.';
-    }finally{
-      verifyTotpBtn.disabled = false;
-    }
+    }catch{ hint3.textContent = 'Error de red.'; }
+    finally{ verifyTotpBtn.disabled = false; }
   }
 
-  // Eventos
   el('ovSendEmail')?.addEventListener('click', startEmail);
   el('ovVerifyEmail')?.addEventListener('click', verifyEmail);
   el('ovVerifyTotp')?.addEventListener('click', verifyTotp);
   el('ovBack1')?.addEventListener('click', () => show(stepEmail));
   el('ovBack2')?.addEventListener('click', () => show(stepCodeEmail));
-}
-
-// ================================
-// ADMIN: helpers popover calendario
-// ================================
-async function isAdmin(){
-  try{
-    const r = await fetch('/api/admin/plans', { method:'GET' });
-    return r.status !== 401;
-  }catch{ return false; }
-}
-
-// crea un popover con las reservas del día para admin
-async function openAdminDayPopover(anchorBtn, ymd){
-  let data = { reservations: [] };
-  try{
-    const r = await fetch(`/api/admin/day?date=${encodeURIComponent(ymd)}`);
-    if (r.ok) data = await r.json();
-  }catch{}
-
-  closeAdminDayPopover(); // por si hay uno abierto
-  const pop = document.createElement('div');
-  pop.className = 'admin-pop';
-  pop.id = 'admin-pop';
-
-  const title = document.createElement('h4');
-  title.className = 'admin-pop__title';
-  title.textContent = `Reservas del ${toLocaleDate(new Date(ymd))}`;
-
-  const head = document.createElement('div');
-  head.className = 'admin-pop__head';
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'admin-pop__close';
-  closeBtn.textContent = 'Cerrar';
-  closeBtn.onclick = closeAdminDayPopover;
-
-  head.appendChild(title);
-  head.appendChild(closeBtn);
-  pop.appendChild(head);
-
-  const list = document.createElement('div');
-  list.className = 'admin-pop__list';
-
-  if (!data.reservations || !data.reservations.length){
-    const empty = document.createElement('div');
-    empty.className = 'admin-pop__item';
-    empty.textContent = 'No hay reservas en este día.';
-    list.appendChild(empty);
-  } else {
-    data.reservations.slice(0,2).forEach(rsv => {
-      const item = document.createElement('div');
-      item.className = 'admin-pop__item';
-
-      const name = document.createElement('div');
-      name.className = 'admin-pop__name';
-      name.textContent = rsv.name || '(sin nombre)';
-
-      const meta1 = document.createElement('div');
-      meta1.className = 'admin-pop__meta';
-      meta1.textContent = `Hora: ${rsv.time || '--:--'}`;
-
-      const meta2 = document.createElement('div');
-      meta2.className = 'admin-pop__meta';
-      meta2.textContent = `Dirección: ${rsv.location?.display_name || rsv.location?.address || '—'}`;
-
-      const actions = document.createElement('div');
-      actions.className = 'admin-pop__actions';
-
-      if (rsv.phone){
-        const tel = document.createElement('a');
-        tel.href = `tel:${rsv.phone}`;
-        tel.className = 'admin-pop__btn';
-        tel.textContent = 'Llamar';
-        actions.appendChild(tel);
-      }
-
-      const maps = document.createElement('a');
-      const lat = rsv.location?.lat, lng = rsv.location?.lng;
-      const hasLL = typeof lat === 'number' && typeof lng === 'number' && isFinite(lat) && isFinite(lng);
-      const q = hasLL ? `${lat},${lng}` : encodeURIComponent(rsv.location?.display_name || rsv.location?.address || '');
-      maps.href = `https://www.google.com/maps/search/?api=1&query=${q}`;
-      maps.target = '_blank'; maps.rel = 'noreferrer';
-      maps.className = 'admin-pop__btn admin-pop__btn--primary';
-      maps.textContent = 'Abrir en Maps';
-      actions.appendChild(maps);
-
-      if (rsv.phone){
-        const metaTel = document.createElement('div');
-        metaTel.className = 'admin-pop__meta';
-        metaTel.textContent = `Tel: ${rsv.phone}`;
-        item.appendChild(metaTel);
-      }
-
-      item.appendChild(name);
-      item.appendChild(meta1);
-      item.appendChild(meta2);
-      item.appendChild(actions);
-      list.appendChild(item);
-    });
-  }
-
-  pop.appendChild(list);
-  document.body.appendChild(pop);
-
-  // posicionar cerca del botón clickeado
-  const rect = anchorBtn.getBoundingClientRect();
-  const top = rect.top + window.scrollY + rect.height + 8;
-  let left = rect.left + window.scrollX;
-  const maxLeft = window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 12;
-  left = Math.min(left, maxLeft);
-  pop.style.top = `${top}px`;
-  pop.style.left = `${left}px`;
-
-  // cerrar con escape / click fuera
-  setTimeout(() => {
-    const onDoc = (e)=>{ if (!pop.contains(e.target)) closeAdminDayPopover(); };
-    document.addEventListener('click', onDoc, { capture:true, once:true });
-    document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeAdminDayPopover(); }, { once:true });
-  }, 0);
-}
-
-function closeAdminDayPopover(){
-  const ex = document.getElementById('admin-pop');
-  if (ex) ex.remove();
 }
