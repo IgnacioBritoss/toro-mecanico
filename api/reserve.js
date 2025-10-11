@@ -44,6 +44,25 @@ export default async function handler(req, res){
       return res.status(400).json({ error: "Falta ubicación exacta del evento." });
     }
 
+    // ===== NUEVO: bloqueo de fechas (pasado, hoy y próximos 3 días)
+    function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)){
+      return res.status(400).json({ error: "Fecha u hora inválidas" });
+    }
+
+    const now = new Date();
+    const minSel = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3); // hoy + 3 días 00:00
+
+    // Interpretación local del server; si querés UTC: new Date(`${date}T${time}:00Z`)
+    const reqDateTime = new Date(`${date}T${time}:00`);
+    const reqDay = startOfDay(reqDateTime);
+
+    if (reqDay < minSel){
+      return res.status(400).json({ error: "Solo se aceptan reservas a partir de dentro de 3 días." });
+    }
+    // ===== FIN BLOQUE NUEVO =====
+
     const planKey = (plan || "1h").toLowerCase();
 
     // === NUEVO: buscar plan y precio en DB

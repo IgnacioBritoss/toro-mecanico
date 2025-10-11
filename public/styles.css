@@ -536,3 +536,32 @@ body.has-admin-overlay{ overflow:hidden; }
   border-radius:12px; background:#fff; font-size:16px;
 }
 .plan-edit__actions{ display:flex; gap:10px; margin-top:12px }
+
+/* === ADMIN: popover de reservas del día ======================= */
+.admin-pop {
+  position: fixed;
+  z-index: 1200;
+  inset: auto auto auto auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(2,6,23,.22);
+  width: min(420px, calc(100vw - 28px));
+  padding: 14px;
+}
+.admin-pop__head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.admin-pop__title { font-weight:800; margin:0; font-size:16px; }
+.admin-pop__close { background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px 10px; cursor:pointer; }
+.admin-pop__list { display:grid; gap:10px; }
+.admin-pop__item { border:1px solid var(--border); border-radius:12px; padding:10px; }
+.admin-pop__row { display:flex; justify-content:space-between; gap:10px; }
+.admin-pop__name { font-weight:800; margin:0 0 6px; }
+.admin-pop__meta { color:#475569; font-size:14px; margin:2px 0; }
+.admin-pop__actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+.admin-pop__btn { padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer; text-decoration:none; }
+.admin-pop__btn--primary { background:#0f172a; color:#fff; border-color:#0f172a; }
+
+/* día bloqueado por política (hoy y próximos 3, o pasado) */
+.cal__day--blocked{
+  background:#f3f4f6; color:#9ca3af; border-style:dashed; cursor:not-allowed !important;
+}

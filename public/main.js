@@ -3,6 +3,7 @@
 // ================================
 const MAX_PER_DAY = 2;
 const HOURS = [12, 14, 16, 18, 20, 22];
+const MIN_DATE_OFFSET_DAYS = 3; // no permitir hoy ni próximos 3 días
 
 let activeMonth = (() => { const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
 let selectedDate = null;
@@ -21,12 +22,14 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&am
 function getQS(name){ return new URLSearchParams(location.search).get(name); }
 
 // ================================
-// Admin session helpers
+/* Admin session helpers (local only, NO HttpOnly cookie read) */
 // ================================
 function hasAdminSession(){
+  // Mantengo por compatibilidad, pero ya NO confiamos en leer cookie HttpOnly.
   return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(document.cookie || "");
 }
 function clearAdminSessionCookie(){
+  // limpia por si existía no-HttpOnly
   document.cookie = "admin_session=; Max-Age=0; path=/";
 }
 function saveAdminSessionId(id){
@@ -117,13 +120,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   })();
 
   // ===== FIX ANTI-BUCLE /admin =====
-  // Si estoy en /admin y ya tengo sesión admin => redirijo directo a editar precios
   if (location.pathname.replace(/\/+$/,'') === "/admin") {
     if (hasAdminSession()) {
       window.location.replace("/?editprices=1#precios");
-      return; // detenemos el resto para evitar overlay
+      return;
     } else {
-      // no logueado: mostrar overlay de login
       if (adminOverlay){
         adminOverlay.classList.remove("hidden");
         document.body.classList.add("has-admin-overlay");
@@ -131,38 +132,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // Mostrar/ocultar badge admin
   // Mostrar/ocultar badge admin (sin leer cookie HttpOnly)
-if (adminBadge){
-  async function checkAdminAndToggle(){
-    try{
-      const r = await fetch('/api/admin/plans', { method:'GET' });
-      const isAdmin = r.status !== 401;
-      adminBadge.classList.toggle('hidden', !isAdmin);
-    }catch{
-      adminBadge.classList.add('hidden');
+  if (adminBadge){
+    async function checkAdminAndToggle(){
+      try{
+        const r = await fetch('/api/admin/plans', { method:'GET' });
+        const isAdmin = r.status !== 401;
+        adminBadge.classList.toggle('hidden', !isAdmin);
+      }catch{
+        adminBadge.classList.add('hidden');
+      }
     }
+    checkAdminAndToggle();
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) checkAdminAndToggle();
+    });
+
+    adminBadge.addEventListener("click", async () => {
+      try { await fetch("/api/admin/logout", { method:'POST' }); } catch {}
+      clearAdminSessionCookie();
+      clearAdminSessionId();
+      const url = new URL(location.href);
+      url.searchParams.delete('editprices');
+      window.location.replace(url.pathname + (url.search || '') + (url.hash || ''));
+    });
   }
-
-  // mostrar al cargar y también cuando vuelve el foco (por si se logueó en otra pestaña)
-  checkAdminAndToggle();
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) checkAdminAndToggle();
-  });
-
-  // salir de admin
-  adminBadge.addEventListener("click", async () => {
-    try { await fetch("/api/admin/logout", { method:'POST' }); } catch {}
-    clearAdminSessionCookie();
-    clearAdminSessionId();
-
-    // limpiá el parámetro ?editprices si está presente
-    const url = new URL(location.href);
-    url.searchParams.delete('editprices');
-    window.location.replace(url.pathname + url.search + url.hash || '/');
-  });
-}
-
 
   // Hookear overlay (login admin)
   initAdminAuth();
@@ -224,19 +218,31 @@ function renderCalendar(){
   const grid = buildMonthGrid(activeMonth);
   if (calTitle) calTitle.textContent = `${activeMonth.toLocaleString("es-AR",{month:"long"})} ${activeMonth.getFullYear()}`;
   calGrid.innerHTML = "";
+
+  // fecha mínima seleccionable = hoy + 3 días (a 00:00)
+  const now = new Date();
+  const minSel = new Date(now.getFullYear(), now.getMonth(), now.getDate() + MIN_DATE_OFFSET_DAYS);
+
   grid.forEach(d=>{
     const btn=document.createElement("button");
     btn.className="cal__day";
-    if(!d){ btn.classList.add("cal__day--muted"); btn.disabled=true; }
-    else{
+
+    if(!d){
+      btn.classList.add("cal__day--muted"); btn.disabled=true;
+    }else{
       const key = toInputDate(d);
       const info = availability[key] || {count:0, hours:[]};
       const full = info.count >= MAX_PER_DAY;
       btn.textContent = d.getDate();
-      if(full){ btn.classList.add("cal__day--full"); btn.disabled=true; }
-      else{
+
+      const isBeforeMin = d < minSel; // bloqueado por política
+      if (isBeforeMin){
+        btn.classList.add("cal__day--blocked"); btn.disabled = true;
+      } else if(full){
+        btn.classList.add("cal__day--full"); btn.disabled=true;
+      } else {
         if(selectedDate && sameDay(d,selectedDate)) btn.classList.add("cal__day--selected");
-        btn.addEventListener("click", ()=>{
+        btn.addEventListener("click", async (ev)=>{
           selectedDate=d; formDate.value=toInputDate(d);
           const taken=new Set((availability[key]?.hours)||[]);
           if(taken.has(selectedHour)){
@@ -244,6 +250,11 @@ function renderCalendar(){
             if(free){ selectedHour=free; formTime.value=`${pad2(free)}:00`; }
           }
           renderCalendar(); renderHours(); updateSummary();
+
+          // si es admin, abrir popover con reservas del día
+          if (await isAdmin()){
+            openAdminDayPopover(ev.currentTarget, key);
+          }
         });
       }
     }
@@ -647,7 +658,7 @@ function renderPlanRadios(plans){
 
 // ================================
 // ADMIN OVERLAY: lógica de login
-// (Con session_id correcto) + REDIRECT POST-LOGIN
+// (Con session_id correcto) + REDIRECT POST-LOGIN (endpoint unificado)
 // ================================
 function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
@@ -692,14 +703,13 @@ function initAdminAuth(){
 
     sendBtn.disabled = true;
     try{
-      const r = await fetch('/api/admin/start', {
+      const r = await fetch('/api/admin/auth', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ action:'start', email })
       });
       const d = await r.json();
       if (!r.ok || !d.ok){ hint1.textContent = d.error || 'No se pudo enviar el código.'; return; }
 
-      // Guardar session_id para los siguientes pasos
       if (d.session_id) saveAdminSessionId(d.session_id);
 
       show(stepCodeEmail);
@@ -722,10 +732,10 @@ function initAdminAuth(){
 
     verifyEmailBtn.disabled = true;
     try{
-      const r = await fetch('/api/admin/verify-email', {
+      const r = await fetch('/api/admin/auth', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ session_id, code })
+        body: JSON.stringify({ action:'verify-email', session_id, code })
       });
       const d = await r.json();
 
@@ -734,14 +744,11 @@ function initAdminAuth(){
         return;
       }
 
-      // Si TOTP está deshabilitado, o el server decide que ya estás logueado, redirigí
       if (d.totpDisabled || d.done || d.session === 'ok'){
-        // redirección directa post-login
         window.location.replace("/?editprices=1#precios");
         return;
       }
 
-      // Mostrar QR para configurar TOTP si viene
       const qrData = d.qrDataUrl || d.qr || d.qrData || d.qrDataURL || d.qrDataurl || d.qrDataUrl;
       const otpauth = d.otpauth || d.provisioningUri;
       if (totpQR){
@@ -770,10 +777,10 @@ function initAdminAuth(){
 
     verifyTotpBtn.disabled = true;
     try{
-      const r = await fetch('/api/admin/verify-totp', {
+      const r = await fetch('/api/admin/auth', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ session_id, code })
+        body: JSON.stringify({ action:'verify-totp', session_id, code })
       });
       const d = await r.json();
 
@@ -782,8 +789,6 @@ function initAdminAuth(){
         return;
       }
 
-      // Éxito: el server setea la cookie admin_session=ok
-      // Redirigimos DIRECTO a la edición de precios
       window.location.replace("/?editprices=1#precios");
 
     }catch(e){
@@ -799,4 +804,129 @@ function initAdminAuth(){
   el('ovVerifyTotp')?.addEventListener('click', verifyTotp);
   el('ovBack1')?.addEventListener('click', () => show(stepEmail));
   el('ovBack2')?.addEventListener('click', () => show(stepCodeEmail));
+}
+
+// ================================
+// ADMIN: helpers popover calendario
+// ================================
+async function isAdmin(){
+  try{
+    const r = await fetch('/api/admin/plans', { method:'GET' });
+    return r.status !== 401;
+  }catch{ return false; }
+}
+
+// crea un popover con las reservas del día para admin
+async function openAdminDayPopover(anchorBtn, ymd){
+  let data = { reservations: [] };
+  try{
+    const r = await fetch(`/api/admin/day?date=${encodeURIComponent(ymd)}`);
+    if (r.ok) data = await r.json();
+  }catch{}
+
+  closeAdminDayPopover(); // por si hay uno abierto
+  const pop = document.createElement('div');
+  pop.className = 'admin-pop';
+  pop.id = 'admin-pop';
+
+  const title = document.createElement('h4');
+  title.className = 'admin-pop__title';
+  title.textContent = `Reservas del ${toLocaleDate(new Date(ymd))}`;
+
+  const head = document.createElement('div');
+  head.className = 'admin-pop__head';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'admin-pop__close';
+  closeBtn.textContent = 'Cerrar';
+  closeBtn.onclick = closeAdminDayPopover;
+
+  head.appendChild(title);
+  head.appendChild(closeBtn);
+  pop.appendChild(head);
+
+  const list = document.createElement('div');
+  list.className = 'admin-pop__list';
+
+  if (!data.reservations || !data.reservations.length){
+    const empty = document.createElement('div');
+    empty.className = 'admin-pop__item';
+    empty.textContent = 'No hay reservas en este día.';
+    list.appendChild(empty);
+  } else {
+    data.reservations.slice(0,2).forEach(rsv => {
+      const item = document.createElement('div');
+      item.className = 'admin-pop__item';
+
+      const name = document.createElement('div');
+      name.className = 'admin-pop__name';
+      name.textContent = rsv.name || '(sin nombre)';
+
+      const meta1 = document.createElement('div');
+      meta1.className = 'admin-pop__meta';
+      meta1.textContent = `Hora: ${rsv.time || '--:--'}`;
+
+      const meta2 = document.createElement('div');
+      meta2.className = 'admin-pop__meta';
+      meta2.textContent = `Dirección: ${rsv.location?.display_name || rsv.location?.address || '—'}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-pop__actions';
+
+      if (rsv.phone){
+        const tel = document.createElement('a');
+        tel.href = `tel:${rsv.phone}`;
+        tel.className = 'admin-pop__btn';
+        tel.textContent = 'Llamar';
+        actions.appendChild(tel);
+      }
+
+      const maps = document.createElement('a');
+      const lat = rsv.location?.lat, lng = rsv.location?.lng;
+      const hasLL = typeof lat === 'number' && typeof lng === 'number' && isFinite(lat) && isFinite(lng);
+      const q = hasLL ? `${lat},${lng}` : encodeURIComponent(rsv.location?.display_name || rsv.location?.address || '');
+      maps.href = `https://www.google.com/maps/search/?api=1&query=${q}`;
+      maps.target = '_blank'; maps.rel = 'noreferrer';
+      maps.className = 'admin-pop__btn admin-pop__btn--primary';
+      maps.textContent = 'Abrir en Maps';
+      actions.appendChild(maps);
+
+      if (rsv.phone){
+        const metaTel = document.createElement('div');
+        metaTel.className = 'admin-pop__meta';
+        metaTel.textContent = `Tel: ${rsv.phone}`;
+        item.appendChild(metaTel);
+      }
+
+      item.appendChild(name);
+      item.appendChild(meta1);
+      item.appendChild(meta2);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+  }
+
+  pop.appendChild(list);
+  document.body.appendChild(pop);
+
+  // posicionar cerca del botón clickeado
+  const rect = anchorBtn.getBoundingClientRect();
+  const top = rect.top + window.scrollY + rect.height + 8;
+  let left = rect.left + window.scrollX;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 12;
+  left = Math.min(left, maxLeft);
+  pop.style.top = `${top}px`;
+  pop.style.left = `${left}px`;
+
+  // cerrar con escape / click fuera
+  setTimeout(() => {
+    const onDoc = (e)=>{ if (!pop.contains(e.target)) closeAdminDayPopover(); };
+    document.addEventListener('click', onDoc, { capture:true, once:true });
+    document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeAdminDayPopover(); }, { once:true });
+  }, 0);
+}
+
+function closeAdminDayPopover(){
+  const ex = document.getElementById('admin-pop');
+  if (ex) ex.remove();
 }
