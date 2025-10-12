@@ -31,7 +31,9 @@ export default async function handler(req, res){
   try{
     const {
       name, email, phone, postal_code, age, zone, message, date, time, plan,
-      location
+      location,
+      // === NUEVO: referido
+      referred_email
     } = req.body || {};
 
     // ⚠️ zone YA NO ES REQUERIDO
@@ -43,6 +45,18 @@ export default async function handler(req, res){
     if (!location || !location.display_name || !isValidLatLng(location.lat, location.lng)){
       return res.status(400).json({ error: "Falta ubicación exacta del evento." });
     }
+
+    // ===== NUEVO: validaciones de referido (opcionales pero firmes)
+    const referred = (referred_email || "").trim();
+    if (referred) {
+      if (!isValidEmail(referred)) {
+        return res.status(400).json({ error: "Email de referido inválido" });
+      }
+      if (referred.toLowerCase() === (email||"").toLowerCase()) {
+        return res.status(400).json({ error: "No podés referirte a vos mismo" });
+      }
+    }
+    // ===== FIN validaciones referido
 
     // ===== NUEVO: bloqueo de fechas (pasado, hoy y próximos 3 días)
     function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
@@ -107,26 +121,40 @@ export default async function handler(req, res){
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // Insert con ubicación
+      // Insert con ubicación + === NUEVO: referred_email
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
-            location_display, location_address, location_lat, location_lng, location_osm_id)
+            location_display, location_address, location_lat, location_lng, location_osm_id,
+            referred_email)
          VALUES
            ($1,$2,$3,$4,$5,$6,'pendiente',
-            $7,$8,$9,$10,$11)
+            $7,$8,$9,$10,$11,
+            $12)
          RETURNING id, event_date, event_hour, plan, zone, message, created_at,
-                   location_display, location_address, location_lat, location_lng, location_osm_id`,
+                   location_display, location_address, location_lat, location_lng, location_osm_id,
+                   referred_email`,
         [
           user.id, date, hourInt, planRow.code, zone || null, message || null,
           location.display_name || null,
           (location.address || location.display_name || null),
           Number(location.lat),
           Number(location.lng),
-          location.osm_id ? Number(location.osm_id) : null
+          location.osm_id ? Number(location.osm_id) : null,
+          referred ? referred.toLowerCase() : null
         ]
       );
       reservation = r.rows[0];
+
+      // === NUEVO: arista en referral_edges si vino por referido (A -> B)
+      if (referred) {
+        await client.query(
+          `INSERT INTO referral_edges (referrer_email, referee_email, reservation_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT ON CONSTRAINT uniq_edge_once DO NOTHING`,
+          [referred.toLowerCase(), email.toLowerCase(), reservation.id]
+        );
+      }
 
       await client.query("COMMIT");
     }catch(e){
@@ -192,6 +220,7 @@ export default async function handler(req, res){
             <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
             <p><strong>${fechaCorta}</strong> — la hora del evento: ${horaStr}</p>
             <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
+            ${reservation.referred_email ? `<p><strong>Referido por:</strong> ${reservation.referred_email}</p>` : ""}
             ${message ? `<p style="white-space:pre-wrap"> el mensaje del usuario sobre el evento es ${message}</p>` : ""}
             ${locHtml}
             <p style="margin-top:16px">

@@ -67,6 +67,9 @@ const formDate = document.getElementById("formDate");
 const formTime = document.getElementById("formTime");
 const formHint = document.getElementById("formHint");
 
+// === NUEVO: input de referido (email opcional)
+const fReferred = document.getElementById("fReferred");
+
 // Paso 2 + Pago
 const secondStepBlock = document.getElementById("secondStepBlock");
 const secondStepBtn = document.getElementById("secondStepBtn");
@@ -552,7 +555,9 @@ async function onSubmitReservation(e){
       lng: Number(addrLng?.value || 0),
       display_name: addrDisplay?.value || '',
       osm_id: addrOsmId?.value || ''
-    }
+    },
+    // === NUEVO: incluir referido si lo hay
+    referred_email: (fReferred?.value || "").trim()
   };
 
   if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.phone||!payload.postal_code){
@@ -575,7 +580,9 @@ async function onSubmitReservation(e){
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
 
+    // limpiar mapa/hidden y referido
     setHidden('', '', '', '');
+    if (fReferred) fReferred.value = "";
     addrMapEl?.classList.add('hidden');
 
     secondStepBlock.classList.remove("hidden");
@@ -676,7 +683,6 @@ async function onSecondStep(){
       li.dataset.value = v;
       li.textContent = opt.textContent;
       li.setAttribute('role','option');
-      if (opt.selected) li.setAttribute('aria-selected','true');
       li.addEventListener('click', () => { setSelectValue(v); close(); btn.focus(); });
       list.appendChild(li);
     });

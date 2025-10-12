@@ -64,8 +64,8 @@ export default async function handler(req, res){
           html: `
             <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
               <h2>Tu reserva fue aceptada  te recordamos:</h2>
-              <p><strong>Fecha:</strong> ${fechaCorta} — ${horaStr}</p>
-              <p><strong>Plan:</strong> ${r.plan}</p>
+              <p><strong>Fecha:</strong> ${fechaCorta} — a las ${horaStr}</p>
+              <p><strong>con el plan de </strong> ${r.plan}</p>
               <p> Nos pondremos en contacto para coordinar detalles. Saludos y gracias por confiar en nosotros.</p>
             </div>`
         });
