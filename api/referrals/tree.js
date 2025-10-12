@@ -1,5 +1,5 @@
 // /api/referrals/tree.js
-import { pool } from "../lib/db.js";
+import { pool } from "../../lib/db.js";
 export const config = { runtime: "nodejs" };
 
 function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }

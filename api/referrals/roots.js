@@ -1,5 +1,5 @@
 // /api/referrals/roots.js
-import { pool } from "../lib/db.js";
+import { pool } from "../../lib/db.js";
 export const config = { runtime: "nodejs" };
 
 /*
