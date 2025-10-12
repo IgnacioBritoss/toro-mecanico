@@ -572,3 +572,35 @@ body.has-admin-overlay{ overflow:hidden; }
   min-height: 120px; padding: 12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff;
   overflow:auto; max-height: 360px;
 }
+
+/* === Overrides / mejoras para Árbol de Referidos === */
+
+/* aire lateral de 20px dentro de la sección */
+#forestSection .container { padding-left: 20px; padding-right: 20px; }
+
+/* controles: flechas solo-ícono, centrado del root y espacios */
+#forestSection .forest__controls{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin:12px 0 16px;
+}
+
+/* botón “sólo flecha” (reemplaza al ghost visualmente, podés dejar ambas clases) */
+#forestSection .btn--icon{
+  min-width:40px; height:36px; padding:0 6px;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:transparent; border:1px solid #e5e7eb; border-radius:10px; cursor:pointer;
+}
+
+/* título centrado (nombre <email>) */
+#forestSection .forest__root{ text-align:center; font-weight:600; opacity:.95; }
+
+/* tarjeta del árbol: un poco más de padding y aire */
+#forestSection .forest__tree{
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+  padding:16px 20px; min-height:120px; max-height:360px; overflow:auto;
+}
+
+/* viñetas anidadas prolijas */
+#forestSection .forest__tree ul{ margin:6px 0; padding-left:1.25rem; list-style:disc; }
+#forestSection .forest__tree li{ margin:6px 0; line-height:1.6; }
+#forestSection .forest__tree li > strong{ font-weight:600; }

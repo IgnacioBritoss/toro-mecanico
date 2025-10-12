@@ -82,6 +82,7 @@ const mpButtonWrap = document.getElementById("mp-button-wrap");
 const mpLink1ars = document.getElementById("mp-link-1ars");
 const payWarn = document.getElementById("payWarn");
 
+
 // Admin UI
 const adminBadge = document.getElementById("adminBadge");
 const adminOverlay = document.getElementById("adminOverlay");
@@ -923,6 +924,7 @@ function initAdminAuth(){
 // Bosque de referidos (solo admin)
 // ================================
 function renderRefNode(node){
+  // <li>Nombre/Email</li> + hijos (si tiene)
   const li = document.createElement('li');
   li.textContent = node.name || node.email;
   if (node.children && node.children.length){
@@ -965,20 +967,36 @@ async function initReferralForest(){
   }
 
   let idx = 0;
-  async function show(i){
-    idx = (i + roots.length) % roots.length;
-    const root = roots[idx];
-    label.textContent = `${root.name || root.email} <${root.email}>`;
-    hint.textContent = `(${idx+1}/${roots.length})`;
 
+  async function show(i){
+    // índice circular
+    idx = (i + roots.length) % roots.length;
+
+    const root = roots[idx];
+    // Cabecera
+    label.textContent = `${root.name || root.email} <${root.email}>`;
+    hint.textContent  = `(${idx+1}/${roots.length})`;
+
+    // Cargar árbol del root
     wrap.textContent = 'Cargando árbol…';
     try{
       const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(root.email)}`);
       if (!r.ok) { wrap.textContent = `Error (${r.status}) al cargar árbol.`; return; }
       const d = await r.json();
-      if (!d?.tree){ wrap.textContent = '— sin ramas —'; return; }
+
+      // Construcción del UL con ROOT como primer bullet
       const ul = document.createElement('ul');
-      ul.appendChild(renderRefNode(d.tree));
+      const rootLi = document.createElement('li');
+      rootLi.textContent = d?.tree?.name || root.name || root.email;
+
+      if (d?.tree?.children?.length){
+        const childrenUl = document.createElement('ul');
+        d.tree.children.forEach(ch => childrenUl.appendChild(renderRefNode(ch)));
+        rootLi.appendChild(childrenUl);
+      }
+
+      ul.appendChild(rootLi);
+
       wrap.innerHTML = '';
       wrap.appendChild(ul);
     }catch{
