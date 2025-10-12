@@ -9,7 +9,11 @@ let selectedDate = null;
 let selectedHour = 18;
 let availability = {};
 let lastReservation = null; // { id, token }
-let IS_ADMIN = false; // cache: evita pedir /api/admin/plans por cada celda
+let IS_ADMIN = false;
+const ON_ADMIN = location.pathname.replace(/\/+$/,'') === "/admin" ||
+                 new URLSearchParams(location.search).has("editprices");
+
+
 
 // ================================
 // Utilidades
@@ -181,7 +185,14 @@ if (adminBadge){
 
   // Hookear overlay (login admin)
   initAdminAuth();
-try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
+
+// Solo si estoy en /admin intento comprobar sesión admin una única vez.
+// Esto evita llamar /api/admin/plans en la home de usuarios comunes.
+if (ON_ADMIN) {
+  try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
+} else {
+  IS_ADMIN = false;
+}
 
   lockDateTimeFields();
 
@@ -272,12 +283,13 @@ const blocked = isBlockedByLeadTime(d);
 
 if (blocked || full){
   btn.classList.add("cal__day--full");
-  btn.disabled = !IS_ADMIN;  // admin puede, público no
+  btn.disabled = !IS_ADMIN;   // el admin puede forzar, usuario común no
 } else {
   if (selectedDate && sameDay(d, selectedDate)){
     btn.classList.add("cal__day--selected");
   }
 }
+
 
 
       // --- FIX: capturamos el botón y delegamos ---
@@ -383,7 +395,7 @@ function renderDayItems(items){
 
 function renderRefNode(node){
   const li = document.createElement('li');
-  li.textContent = node.email;
+  li.textContent = node.name || node.email;
   if (node.children && node.children.length){
     const ul = document.createElement('ul');
     node.children.forEach(ch => ul.appendChild(renderRefNode(ch)));
@@ -418,7 +430,7 @@ async function initReferralForest(){
   try{
     const r = await fetch('/api/referrals/roots');
     const d = await r.json();
-    if (r.ok && d && Array.isArray(d.roots)) roots = d.roots;
+    if (r.ok && d && Array.isArray(d.roots)) roots = d.roots; // [{email,name}]
   }catch{}
   if (!roots.length){
     wrap.textContent = 'No hay referidos aún.';
@@ -430,12 +442,12 @@ async function initReferralForest(){
 
   async function show(i){
     idx = (i + roots.length) % roots.length;
-    const email = roots[idx];
-    label.textContent = email;
+    const root = roots[idx];
+    label.textContent = `${root.name} <${root.email}>`;
     hint.textContent = `(${idx+1}/${roots.length})`;
 
     wrap.textContent = 'Cargando árbol…';
-    const treeEl = await fetchReferralTree(email);
+    const treeEl = await fetchReferralTree(root.email);
     if (treeEl){
       wrap.innerHTML = '';
       wrap.appendChild(treeEl);
@@ -646,7 +658,8 @@ async function onSubmitReservation(e){
     paymentBlockManual.classList.add("hidden");
 
     await fetchAvailabilityForMonth(activeMonth);
-    renderCalendar(); renderHours(); updateSummary(); initReferralForest();
+    renderCalendar(); renderHours(); updateSummary(); if (IS_ADMIN) initReferralForest();
+;
 
   }catch{
     formHint.textContent="Error de red. Intentá nuevamente.";
