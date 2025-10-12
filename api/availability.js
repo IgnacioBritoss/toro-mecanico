@@ -12,7 +12,7 @@ export default async function handler(req, res){
   try{
     const q = await pool.query(`
       SELECT
-        event_date::date AS d,
+        TO_CHAR(event_date::date, 'YYYY-MM-DD') AS dkey,
         COUNT(*) FILTER (WHERE status IN ('pendiente','confirmada')) AS c,
         COALESCE(
           ARRAY_AGG(DISTINCT event_hour)
@@ -27,7 +27,7 @@ export default async function handler(req, res){
 
     const days = {};
     for (const row of q.rows){
-      const key = (row.d instanceof Date) ? row.d.toISOString().slice(0,10) : String(row.d);
+      const key = row.dkey; // ← clave textual estable "YYYY-MM-DD" (sin toISOString)
       days[key] = {
         count: Number(row.c) || 0,
         hours: (row.hrs || []).map(n => Number(n))

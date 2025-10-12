@@ -9,6 +9,7 @@ let selectedDate = null;
 let selectedHour = 18;
 let availability = {};
 let lastReservation = null; // { id, token }
+let IS_ADMIN = false; // cache: evita pedir /api/admin/plans por cada celda
 
 // ================================
 // Utilidades
@@ -180,6 +181,7 @@ if (adminBadge){
 
   // Hookear overlay (login admin)
   initAdminAuth();
+try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
 
   lockDateTimeFields();
 
@@ -268,26 +270,9 @@ const info = availability[key] || { count: 0, hours: [] };
 const full = info.count >= MAX_PER_DAY;
 const blocked = isBlockedByLeadTime(d);
 
-// helper: si sos admin, habilita el día (aunque esté bloqueado/completo)
-function adminOverride(){
-  isAdmin().then(adminOk => {
-    if (adminOk){
-      btn.disabled = false;
-      btn.classList.remove("cal__day--full");
-      if (selectedDate && sameDay(d, selectedDate)){
-        btn.classList.add("cal__day--selected");
-      }
-    } else {
-      btn.disabled = true;
-      btn.classList.add("cal__day--full");
-    }
-  });
-}
-
 if (blocked || full){
   btn.classList.add("cal__day--full");
-  btn.disabled = true;       // por defecto bloqueado…
-  adminOverride();           // …pero si es admin, lo habilitamos
+  btn.disabled = !IS_ADMIN;  // admin puede, público no
 } else {
   if (selectedDate && sameDay(d, selectedDate)){
     btn.classList.add("cal__day--selected");
@@ -395,6 +380,77 @@ function renderDayItems(items){
       </div>`;
   }).join('');
 }
+
+function renderRefNode(node){
+  const li = document.createElement('li');
+  li.textContent = node.email;
+  if (node.children && node.children.length){
+    const ul = document.createElement('ul');
+    node.children.forEach(ch => ul.appendChild(renderRefNode(ch)));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
+async function fetchReferralTree(email){
+  try{
+    const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(email)}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!d || !d.tree) return null;
+    const ul = document.createElement('ul');
+    ul.appendChild(renderRefNode(d.tree));
+    return ul;
+  }catch{ return null; }
+}
+
+async function initReferralForest(){
+  const wrap  = document.getElementById('forestTreeWrap');
+  const prev  = document.getElementById('forestPrev');
+  const next  = document.getElementById('forestNext');
+  const label = document.getElementById('forestRootEmail');
+  const hint  = document.getElementById('forestIndexHint');
+  if (!wrap || !prev || !next || !label || !hint) return;
+
+  wrap.textContent = 'Cargando raíces…';
+
+  let roots = [];
+  try{
+    const r = await fetch('/api/referrals/roots');
+    const d = await r.json();
+    if (r.ok && d && Array.isArray(d.roots)) roots = d.roots;
+  }catch{}
+  if (!roots.length){
+    wrap.textContent = 'No hay referidos aún.';
+    label.textContent = '—';
+    return;
+  }
+
+  let idx = 0;
+
+  async function show(i){
+    idx = (i + roots.length) % roots.length;
+    const email = roots[idx];
+    label.textContent = email;
+    hint.textContent = `(${idx+1}/${roots.length})`;
+
+    wrap.textContent = 'Cargando árbol…';
+    const treeEl = await fetchReferralTree(email);
+    if (treeEl){
+      wrap.innerHTML = '';
+      wrap.appendChild(treeEl);
+    } else {
+      wrap.textContent = '— sin ramas —';
+    }
+  }
+
+  prev.addEventListener('click', () => show(idx - 1));
+  next.addEventListener('click', () => show(idx + 1));
+
+  show(0);
+}
+
+
 
 async function openAdminDayModal(dateKey){
   if (!dayOverlay) return;
@@ -590,7 +646,8 @@ async function onSubmitReservation(e){
     paymentBlockManual.classList.add("hidden");
 
     await fetchAvailabilityForMonth(activeMonth);
-    renderCalendar(); renderHours(); updateSummary();
+    renderCalendar(); renderHours(); updateSummary(); initReferralForest();
+
   }catch{
     formHint.textContent="Error de red. Intentá nuevamente.";
   }

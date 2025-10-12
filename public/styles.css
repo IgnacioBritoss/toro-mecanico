@@ -557,3 +557,18 @@ body.has-admin-overlay{ overflow:hidden; }
   background:#0ea5e9; color:#fff;
 }
 
+#forestSection .forest__controls{
+  display:flex; align-items:center; gap:.75rem; margin: .5rem 0 1rem;
+}
+#forestSection .btn--ghost{
+  background:transparent; border:1px solid #e5e7eb; padding:.5rem .75rem; border-radius:10px; cursor:pointer;
+}
+#forestSection .forest__root{
+  flex:1; text-align:center; font-weight:600;
+}
+#forestSection .forest__tree ul{ margin-left:1rem; }
+#forestSection .forest__tree li{ line-height:1.6; }
+#forestSection .forest__tree{
+  min-height: 120px; padding: 12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff;
+  overflow:auto; max-height: 360px;
+}
