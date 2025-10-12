@@ -27,7 +27,7 @@ export default async function handler(req, res){
 
     const days = {};
     for (const row of q.rows){
-      const key = row.dkey; // ← clave textual estable "YYYY-MM-DD" (sin toISOString)
+      const key = row.dkey; // clave textual estable (sin UTC shift)
       days[key] = {
         count: Number(row.c) || 0,
         hours: (row.hrs || []).map(n => Number(n))

@@ -12,7 +12,6 @@ export default async function handler(req, res){
     const root = (url.searchParams.get("root") || "").trim().toLowerCase();
     if (!isValidEmail(root)) return res.status(400).json({ error: "root inválido" });
 
-    // Traemos el subárbol (emails en minúscula)
     const { rows } = await pool.query(`
       WITH RECURSIVE tree AS (
         SELECT LOWER(referrer_email) AS referrer_email,
@@ -27,11 +26,9 @@ export default async function handler(req, res){
       SELECT referrer_email, referee_email FROM tree
     `, [root]);
 
-    // construimos sets de nodos
     const emailsSet = new Set([root]);
-    const children = new Map(); // email -> Set<hijos>
+    const children = new Map();
     const ensure = (k)=>{ if(!children.has(k)) children.set(k, new Set()); return children.get(k); };
-
     for(const r of rows){
       emailsSet.add(r.referrer_email);
       emailsSet.add(r.referee_email);
@@ -39,7 +36,7 @@ export default async function handler(req, res){
       ensure(r.referee_email);
     }
 
-    // Traemos nombres desde users para todos los emails involucrados
+    // nombres desde users
     const emailsArr = Array.from(emailsSet);
     let nameMap = new Map();
     if (emailsArr.length){
@@ -53,20 +50,10 @@ export default async function handler(req, res){
 
     function build(email){
       const kids = Array.from(children.get(email) || []);
-      return {
-        email,
-        name: nameMap.get(email) || email,
-        children: kids.map(build)
-      };
+      return { email, name: nameMap.get(email) || email, children: kids.map(build) };
     }
 
-    return res.status(200).json({
-      ok: true,
-      root,
-      tree: build(root),
-      count_nodes: emailsArr.length
-    });
-
+    return res.status(200).json({ ok: true, root, tree: build(root) });
   }catch(err){
     console.error("TREE ERROR:", err);
     return res.status(500).json({ error: "Error interno" });

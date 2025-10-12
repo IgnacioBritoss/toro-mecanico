@@ -9,11 +9,11 @@ let selectedDate = null;
 let selectedHour = 18;
 let availability = {};
 let lastReservation = null; // { id, token }
+
+// --- NUEVO: cache admin y flag de ruta admin
 let IS_ADMIN = false;
 const ON_ADMIN = location.pathname.replace(/\/+$/,'') === "/admin" ||
                  new URLSearchParams(location.search).has("editprices");
-
-
 
 // ================================
 // Utilidades
@@ -68,12 +68,10 @@ const fPhone = document.getElementById("fPhone");
 const fPostal = document.getElementById("fPostal");
 const fAge = document.getElementById("fAge");
 const fMsg = document.getElementById("fMsg");
+const fReferred = document.getElementById("fReferred"); // NUEVO
 const formDate = document.getElementById("formDate");
 const formTime = document.getElementById("formTime");
 const formHint = document.getElementById("formHint");
-
-// === NUEVO: input de referido (email opcional)
-const fReferred = document.getElementById("fReferred");
 
 // Paso 2 + Pago
 const secondStepBlock = document.getElementById("secondStepBlock");
@@ -84,7 +82,7 @@ const mpButtonWrap = document.getElementById("mp-button-wrap");
 const mpLink1ars = document.getElementById("mp-link-1ars");
 const payWarn = document.getElementById("payWarn");
 
-// Admin UI mínimos (badge y overlay si existen en el DOM)
+// Admin UI
 const adminBadge = document.getElementById("adminBadge");
 const adminOverlay = document.getElementById("adminOverlay");
 
@@ -126,7 +124,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // año en footer
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // Ajustar variable CSS del alto de la nav para centrar badge
+  // Ajustar variable CSS del alto de la nav
   (function setNavHeightVar(){
     const el = document.querySelector('.nav__inner');
     const h = el ? el.getBoundingClientRect().height : 64;
@@ -153,46 +151,42 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Badge admin (logout)
-  // Mostrar/ocultar badge admin (no podemos leer cookie HttpOnly → consultamos al server)
-async function refreshAdminBadge(){
-  if (!adminBadge) return;
-  try{
-    const r = await fetch("/api/admin/plans", { method:"GET" });
-    // si responde 200 (o 204) hay sesión admin; si 401 no
-    const isAdmin = r.status !== 401;
-    adminBadge.classList.toggle("hidden", !isAdmin);
-  }catch{
-    adminBadge.classList.add("hidden");
+  async function refreshAdminBadge(){
+    if (!adminBadge) return;
+    // Solo chequeamos admin en /admin o con ?editprices,
+    // así no generamos 401 en la home.
+    if (!ON_ADMIN) { adminBadge.classList.add("hidden"); return; }
+    try{
+      const r = await fetch("/api/admin/plans", { method:"GET" });
+      const isA = r.status !== 401;
+      adminBadge.classList.toggle("hidden", !isA);
+    }catch{
+      adminBadge.classList.add("hidden");
+    }
   }
-}
 
-if (adminBadge){
-  // botón para salir del modo admin (usa el nuevo endpoint unificado)
-  adminBadge.addEventListener("click", async () => {
-    try { await fetch("/api/admin/auth?action=logout", { method:"POST" }); } catch {}
-    // limpiamos rastros locales por las dudas
-    clearAdminSessionId();
-    // quitamos ?editprices si estuviera
-    const url = new URL(location.href);
-    url.searchParams.delete("editprices");
-    window.location.replace(url.pathname + (url.search || "") + (url.hash || ""));
-  });
-
-  // chequear al cargar
-  refreshAdminBadge();
-}
-
+  if (adminBadge){
+    adminBadge.addEventListener("click", async () => {
+      try { await fetch("/api/admin/auth?action=logout", { method:"POST" }); } catch {}
+      clearAdminSessionId();
+      const url = new URL(location.href);
+      url.searchParams.delete("editprices");
+      window.location.replace(url.pathname + (url.search || "") + (url.hash || ""));
+    });
+    refreshAdminBadge();
+  }
 
   // Hookear overlay (login admin)
   initAdminAuth();
 
-// Solo si estoy en /admin intento comprobar sesión admin una única vez.
-// Esto evita llamar /api/admin/plans en la home de usuarios comunes.
-if (ON_ADMIN) {
-  try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
-} else {
-  IS_ADMIN = false;
-}
+  // NUEVO: cache isAdmin SOLO si estamos en admin
+  if (ON_ADMIN) {
+    try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
+  } else {
+    IS_ADMIN = false;
+    // si no es admin, ni siquiera mostramos la sección bosque
+    document.getElementById('forestSection')?.remove();
+  }
 
   lockDateTimeFields();
 
@@ -228,6 +222,9 @@ if (ON_ADMIN) {
 
   reserveForm?.addEventListener("submit", onSubmitReservation);
   secondStepBtn?.addEventListener("click", onSecondStep);
+
+  // Bosque de referidos SOLO si sos admin
+  if (IS_ADMIN) initReferralForest();
 });
 
 // ================================
@@ -276,23 +273,20 @@ function renderCalendar(){
     }else{
       btn.textContent = d.getDate();
 
-const key  = toInputDate(d);
-const info = availability[key] || { count: 0, hours: [] };
-const full = info.count >= MAX_PER_DAY;
-const blocked = isBlockedByLeadTime(d);
+      const key  = toInputDate(d);
+      const info = availability[key] || { count: 0, hours: [] };
+      const full = info.count >= MAX_PER_DAY;
+      const blocked = isBlockedByLeadTime(d);
 
-if (blocked || full){
-  btn.classList.add("cal__day--full");
-  btn.disabled = !IS_ADMIN;   // el admin puede forzar, usuario común no
-} else {
-  if (selectedDate && sameDay(d, selectedDate)){
-    btn.classList.add("cal__day--selected");
-  }
-}
+      if (blocked || full){
+        btn.classList.add("cal__day--full");
+        btn.disabled = !IS_ADMIN; // admin puede forzar
+      } else {
+        if (selectedDate && sameDay(d, selectedDate)){
+          btn.classList.add("cal__day--selected");
+        }
+      }
 
-
-
-      // --- FIX: capturamos el botón y delegamos ---
       btn.addEventListener("click", (ev) => {
         ev.preventDefault();
         const el = ev.currentTarget;
@@ -303,23 +297,20 @@ if (blocked || full){
   });
 }
 
-// Handler seguro (sin perder el target por awaits)
+// Handler seguro
 async function onDayClick(el, d){
   const key2 = toInputDate(d);
-  const adminOk = await isAdmin();
+  const adminOk = IS_ADMIN;
 
-  // Marcar selección sin re-render y con null-safety
   if (calGrid) {
     calGrid.querySelectorAll(".cal__day--selected")
       .forEach(node => node && node.classList && node.classList.remove("cal__day--selected"));
   }
   if (el && el.classList) el.classList.add("cal__day--selected");
 
-  // Estado de la selección
   selectedDate = d;
   if (formDate) formDate.value = key2;
 
-  // Si la hora elegida está ocupada, sugerimos otra libre
   const taken = new Set((availability[key2]?.hours) || []);
   if (taken.has(selectedHour)) {
     const free = HOURS.find(h => !taken.has(h));
@@ -330,9 +321,8 @@ async function onDayClick(el, d){
   }
 
   updateSummary();
-  renderHours(); // liviano, sin parpadeos
+  renderHours();
 
-  // Si es admin, abrir modal con reservas del día
   if (adminOk) openAdminDayModal(key2);
 }
 
@@ -353,7 +343,6 @@ function renderHours(){
       b.addEventListener("click",(e)=>{
         e.preventDefault();
         selectedHour=h; formTime.value=`${pad2(h)}:00`;
-        // actualizar estilos sin reconstruir todo
         hourList.querySelectorAll(".slot__btn").forEach(el=>el.classList.remove("slot__btn--active"));
         b.classList.add("slot__btn--active");
         updateSummary();
@@ -392,77 +381,6 @@ function renderDayItems(items){
       </div>`;
   }).join('');
 }
-
-function renderRefNode(node){
-  const li = document.createElement('li');
-  li.textContent = node.name || node.email;
-  if (node.children && node.children.length){
-    const ul = document.createElement('ul');
-    node.children.forEach(ch => ul.appendChild(renderRefNode(ch)));
-    li.appendChild(ul);
-  }
-  return li;
-}
-
-async function fetchReferralTree(email){
-  try{
-    const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(email)}`);
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (!d || !d.tree) return null;
-    const ul = document.createElement('ul');
-    ul.appendChild(renderRefNode(d.tree));
-    return ul;
-  }catch{ return null; }
-}
-
-async function initReferralForest(){
-  const wrap  = document.getElementById('forestTreeWrap');
-  const prev  = document.getElementById('forestPrev');
-  const next  = document.getElementById('forestNext');
-  const label = document.getElementById('forestRootEmail');
-  const hint  = document.getElementById('forestIndexHint');
-  if (!wrap || !prev || !next || !label || !hint) return;
-
-  wrap.textContent = 'Cargando raíces…';
-
-  let roots = [];
-  try{
-    const r = await fetch('/api/referrals/roots');
-    const d = await r.json();
-    if (r.ok && d && Array.isArray(d.roots)) roots = d.roots; // [{email,name}]
-  }catch{}
-  if (!roots.length){
-    wrap.textContent = 'No hay referidos aún.';
-    label.textContent = '—';
-    return;
-  }
-
-  let idx = 0;
-
-  async function show(i){
-    idx = (i + roots.length) % roots.length;
-    const root = roots[idx];
-    label.textContent = `${root.name} <${root.email}>`;
-    hint.textContent = `(${idx+1}/${roots.length})`;
-
-    wrap.textContent = 'Cargando árbol…';
-    const treeEl = await fetchReferralTree(root.email);
-    if (treeEl){
-      wrap.innerHTML = '';
-      wrap.appendChild(treeEl);
-    } else {
-      wrap.textContent = '— sin ramas —';
-    }
-  }
-
-  prev.addEventListener('click', () => show(idx - 1));
-  next.addEventListener('click', () => show(idx + 1));
-
-  show(0);
-}
-
-
 
 async function openAdminDayModal(dateKey){
   if (!dayOverlay) return;
@@ -624,8 +542,8 @@ async function onSubmitReservation(e){
       display_name: addrDisplay?.value || '',
       osm_id: addrOsmId?.value || ''
     },
-    // === NUEVO: incluir referido si lo hay
-    referred_email: (fReferred?.value || "").trim()
+    // NUEVO: referido
+    referred_email: (fReferred?.value || '').trim()
   };
 
   if(!payload.name||!payload.email||!payload.age||!payload.date||!payload.time||!payload.phone||!payload.postal_code){
@@ -648,19 +566,16 @@ async function onSubmitReservation(e){
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
 
-    // limpiar mapa/hidden y referido
     setHidden('', '', '', '');
-    if (fReferred) fReferred.value = "";
     addrMapEl?.classList.add('hidden');
 
     secondStepBlock.classList.remove("hidden");
     secondStepHint.textContent="";
     paymentBlockManual.classList.add("hidden");
 
+    // IMPORTANTE: refresco disponibilidad para que persista visualmente
     await fetchAvailabilityForMonth(activeMonth);
-    renderCalendar(); renderHours(); updateSummary(); if (IS_ADMIN) initReferralForest();
-;
-
+    renderCalendar(); renderHours(); updateSummary();
   }catch{
     formHint.textContent="Error de red. Intentá nuevamente.";
   }
@@ -753,6 +668,7 @@ async function onSecondStep(){
       li.dataset.value = v;
       li.textContent = opt.textContent;
       li.setAttribute('role','option');
+      if (opt.selected) li.setAttribute('aria-selected','true');
       li.addEventListener('click', () => { setSelectValue(v); close(); btn.focus(); });
       list.appendChild(li);
     });
@@ -996,9 +912,81 @@ function initAdminAuth(){
     }
   }
 
-  el('ovSendEmail')?.addEventListener('click', startEmail);
-  el('ovVerifyEmail')?.addEventListener('click', verifyEmail);
-  el('ovVerifyTotp')?.addEventListener('click', verifyTotp);
-  el('ovBack1')?.addEventListener('click', () => show(stepEmail));
-  el('ovBack2')?.addEventListener('click', () => show(stepCodeEmail));
+  document.getElementById('ovSendEmail')?.addEventListener('click', startEmail);
+  document.getElementById('ovVerifyEmail')?.addEventListener('click', verifyEmail);
+  document.getElementById('ovVerifyTotp')?.addEventListener('click', verifyTotp);
+  document.getElementById('ovBack1')?.addEventListener('click', () => show(stepEmail));
+  document.getElementById('ovBack2')?.addEventListener('click', () => show(stepCodeEmail));
+}
+
+// ================================
+// Bosque de referidos (solo admin)
+// ================================
+function renderRefNode(node){
+  const li = document.createElement('li');
+  li.textContent = node.name || node.email;
+  if (node.children && node.children.length){
+    const ul = document.createElement('ul');
+    node.children.forEach(ch => ul.appendChild(renderRefNode(ch)));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
+async function initReferralForest(){
+  const wrap  = document.getElementById('forestTreeWrap');
+  const prev  = document.getElementById('forestPrev');
+  const next  = document.getElementById('forestNext');
+  const label = document.getElementById('forestRootEmail');
+  const hint  = document.getElementById('forestIndexHint');
+  if (!wrap || !prev || !next || !label || !hint) return;
+
+  wrap.textContent = 'Cargando raíces…';
+
+  let roots = [];
+  try{
+    const r = await fetch('/api/referrals/roots');
+    if (!r.ok) {
+      wrap.textContent = `Error (${r.status}) al cargar raíces.`;
+      return;
+    }
+    const d = await r.json();
+    roots = Array.isArray(d?.roots) ? d.roots : [];
+  }catch{
+    wrap.textContent = 'Error de red al cargar raíces.';
+    return;
+  }
+
+  if (!roots.length){
+    wrap.textContent = 'No hay referidos aún.';
+    label.textContent = '—';
+    hint.textContent = '';
+    return;
+  }
+
+  let idx = 0;
+  async function show(i){
+    idx = (i + roots.length) % roots.length;
+    const root = roots[idx];
+    label.textContent = `${root.name || root.email} <${root.email}>`;
+    hint.textContent = `(${idx+1}/${roots.length})`;
+
+    wrap.textContent = 'Cargando árbol…';
+    try{
+      const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(root.email)}`);
+      if (!r.ok) { wrap.textContent = `Error (${r.status}) al cargar árbol.`; return; }
+      const d = await r.json();
+      if (!d?.tree){ wrap.textContent = '— sin ramas —'; return; }
+      const ul = document.createElement('ul');
+      ul.appendChild(renderRefNode(d.tree));
+      wrap.innerHTML = '';
+      wrap.appendChild(ul);
+    }catch{
+      wrap.textContent = 'Error de red al cargar árbol.';
+    }
+  }
+
+  prev.addEventListener('click', () => show(idx - 1));
+  next.addEventListener('click', () => show(idx + 1));
+  show(0);
 }

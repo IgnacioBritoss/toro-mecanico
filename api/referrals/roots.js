@@ -19,7 +19,7 @@ export default async function handler(req, res){
           SELECT 1 FROM referral_edges x WHERE LOWER(x.referee_email) = e.email
         )
       )
-      SELECT r.email, COALESCE(u.name, r.email) AS name
+      SELECT r.email, COALESCE(NULLIF(TRIM(u.name),''), r.email) AS name
       FROM roots r
       LEFT JOIN users u ON LOWER(u.email) = r.email
       WHERE r.email IS NOT NULL AND r.email <> ''
