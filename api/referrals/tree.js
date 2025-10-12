@@ -8,6 +8,12 @@ export default async function handler(req, res){
   if (req.method !== "GET") return res.status(405).json({ error: "Método no permitido" });
 
   try{
+    // validar tabla también aquí por si no existe
+    const chk = await pool.query(`SELECT to_regclass('public.referral_edges') AS t`);
+    if (!chk.rows?.[0]?.t) {
+      return res.status(200).json({ ok:true, root:null, tree:null });
+    }
+
     const url = new URL(req.url, `http://${req.headers.host}`);
     const root = (url.searchParams.get("root") || "").trim().toLowerCase();
     if (!isValidEmail(root)) return res.status(400).json({ error: "root inválido" });
@@ -36,7 +42,6 @@ export default async function handler(req, res){
       ensure(r.referee_email);
     }
 
-    // nombres desde users
     const emailsArr = Array.from(emailsSet);
     let nameMap = new Map();
     if (emailsArr.length){

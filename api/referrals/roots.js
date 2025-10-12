@@ -2,10 +2,21 @@
 import { pool } from "../lib/db.js";
 export const config = { runtime: "nodejs" };
 
+/*
+  Manejo defensivo:
+  - Si la tabla referral_edges NO existe en el deploy, devolvemos roots: []
+    en vez de 500, así la UI no queda en "Error (500)".
+*/
 export default async function handler(req, res){
   if (req.method !== "GET") return res.status(405).json({ error: "Método no permitido" });
 
   try{
+    // ¿existe la tabla?
+    const chk = await pool.query(`SELECT to_regclass('public.referral_edges') AS t`);
+    if (!chk.rows?.[0]?.t) {
+      return res.status(200).json({ ok:true, roots: [] });
+    }
+
     const { rows } = await pool.query(`
       WITH emails AS (
         SELECT LOWER(email) AS email FROM users
