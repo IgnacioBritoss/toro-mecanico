@@ -21,6 +21,17 @@ function formatFechaCortaUTC(dateLike){
 }
 
 export default async function handler(req, res){
+  
+  if (req.method === "OPTIONS") {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  return res.status(200).end();
+}
+if (req.method === "HEAD") {
+  return res.status(200).end();
+}
+
   if (req.method === "GET") {
     const { id, token } = req.query || {};
     if(!id || !token) return res.status(400).send("Link inválido");
