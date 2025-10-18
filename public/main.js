@@ -808,12 +808,68 @@ function initAdminAuth(){
   const back2          = el('ovBack2');
   const hint3          = el('ovHint3');
 
+  // === BLOQUEO 30 MIN POR FALLA (por paso) ===
+  const LOCK_MS = 30 * 60 * 1000; // 30 minutos
+  const LOCK_KEYS = {
+    email: 'admin_lock_email',
+    totp:  'admin_lock_totp'
+  };
+
+  function _now(){ return Date.now(); }
+  function _getLock(key){
+    try{
+      const raw = localStorage.getItem(key);
+      const t = raw ? Number(raw) : 0;
+      return Number.isFinite(t) ? t : 0;
+    }catch{ return 0; }
+  }
+  function _setLock(key, ms=LOCK_MS){
+    try{ localStorage.setItem(key, String(_now()+ms)); }catch{}
+  }
+  function _clearLock(key){
+    try{ localStorage.removeItem(key); }catch{}
+  }
+  function _remaining(key){
+    const exp = _getLock(key);
+    const rem = exp - _now();
+    return rem > 0 ? rem : 0;
+  }
+  function _fmtRemaining(ms){
+    const totalSec = Math.ceil(ms/1000);
+    const mm = Math.floor(totalSec/60);
+    const ss = totalSec % 60;
+    return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  }
+
+  function applyLocksUI(){
+    // Email
+    const remEmail = _remaining(LOCK_KEYS.email);
+    const emailLocked = remEmail > 0;
+    verifyEmailBtn.disabled = emailLocked;
+    if (emailLocked){
+      hint2.textContent = `Bloqueado por intentos fallidos. Esperá ${_fmtRemaining(remEmail)} para reintentar.`;
+    }else if (hint2.textContent.startsWith('Bloqueado')){
+      hint2.textContent = '';
+    }
+
+    // TOTP
+    const remTotp = _remaining(LOCK_KEYS.totp);
+    const totpLocked = remTotp > 0;
+    verifyTotpBtn.disabled = totpLocked;
+    if (totpLocked){
+      hint3.textContent = `Bloqueado por intentos fallidos. Esperá ${_fmtRemaining(remTotp)} para reintentar.`;
+    }else if (hint3.textContent.startsWith('Bloqueado')){
+      hint3.textContent = '';
+    }
+  }
+
   const show = (step) => {
     [stepEmail, stepCodeEmail, stepCodeTotp].forEach(s => s?.classList.remove('active'));
     step?.classList.add('active');
   };
 
   show(stepEmail);
+  applyLocksUI();
 
   async function startEmail(){
     hint1.textContent = '';
@@ -833,6 +889,7 @@ function initAdminAuth(){
 
       show(stepCodeEmail);
       codeEmailInput.focus();
+      applyLocksUI();
     }catch(e){
       hint1.textContent = 'Error de red.';
     }finally{
@@ -840,12 +897,22 @@ function initAdminAuth(){
     }
   }
 
+  // === REEMPLAZO: verifyEmail con 1 intento + bloqueo 30' ===
   async function verifyEmail(){
     hint2.textContent = '';
+
+    // 1) Chequear bloqueo
+    const rem = _remaining(LOCK_KEYS.email);
+    if (rem > 0){
+      hint2.textContent = `Bloqueado por intentos fallidos. Esperá ${_fmtRemaining(rem)} para reintentar.`;
+      applyLocksUI();
+      return;
+    }
+
     const session_id = getAdminSessionId();
     const code  = ((codeEmailInput.value || '').replace(/\D/g, '')).slice(0, 6);
 
-    if (!session_id){ hint2.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); return; }
+    if (!session_id){ hint2.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); applyLocksUI(); return; }
     if (code.length !== 6){ hint2.textContent = 'Código de 6 dígitos.'; return; }
 
     verifyEmailBtn.disabled = true;
@@ -857,9 +924,15 @@ function initAdminAuth(){
       const d = await r.json();
 
       if (!r.ok || !d.ok){
-        hint2.textContent = d.error || 'Código incorrecto o vencido.';
+        // => ÚNICO intento: bloquear 30'
+        _setLock(LOCK_KEYS.email);
+        hint2.textContent = 'Código incorrecto o vencido. Se bloqueó 30 minutos.';
+        applyLocksUI();
         return;
       }
+
+      // éxito => limpiar lock de email
+      _clearLock(LOCK_KEYS.email);
 
       if (d.done || d.session === 'ok'){
         window.location.replace("/?editprices=1#precios");
@@ -875,20 +948,33 @@ function initAdminAuth(){
 
       show(stepCodeTotp);
       codeTotpInput.focus();
+      applyLocksUI();
 
     }catch(e){
+      // Error de red NO bloquea
       hint2.textContent = 'Error de red.';
     }finally{
       verifyEmailBtn.disabled = false;
+      applyLocksUI();
     }
   }
 
+  // === REEMPLAZO: verifyTotp con 1 intento + bloqueo 30' ===
   async function verifyTotp(){
     hint3.textContent = '';
+
+    // 1) Chequear bloqueo
+    const rem = _remaining(LOCK_KEYS.totp);
+    if (rem > 0){
+      hint3.textContent = `Bloqueado por intentos fallidos. Esperá ${_fmtRemaining(rem)} para reintentar.`;
+      applyLocksUI();
+      return;
+    }
+
     const session_id = getAdminSessionId();
     const code  = ((codeTotpInput.value || '').replace(/\D/g, '')).slice(0, 6);
 
-    if (!session_id){ hint3.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); return; }
+    if (!session_id){ hint3.textContent = 'Reiniciá el proceso (falta sesión).'; show(stepEmail); applyLocksUI(); return; }
     if (code.length !== 6){ hint3.textContent = 'Código de 6 dígitos.'; return; }
 
     verifyTotpBtn.disabled = true;
@@ -900,24 +986,32 @@ function initAdminAuth(){
       const d = await r.json();
 
       if (!r.ok || !d.ok){
-        hint3.textContent = d.error || 'Código inválido.';
+        // => ÚNICO intento: bloquear 30'
+        _setLock(LOCK_KEYS.totp);
+        hint3.textContent = 'Código inválido. Se bloqueó 30 minutos.';
+        applyLocksUI();
         return;
       }
+
+      // éxito => limpiar lock de TOTP
+      _clearLock(LOCK_KEYS.totp);
 
       window.location.replace("/?editprices=1#precios");
 
     }catch(e){
+      // Error de red NO bloquea
       hint3.textContent = 'Error de red.';
     }finally{
       verifyTotpBtn.disabled = false;
+      applyLocksUI();
     }
   }
 
   document.getElementById('ovSendEmail')?.addEventListener('click', startEmail);
   document.getElementById('ovVerifyEmail')?.addEventListener('click', verifyEmail);
   document.getElementById('ovVerifyTotp')?.addEventListener('click', verifyTotp);
-  document.getElementById('ovBack1')?.addEventListener('click', () => show(stepEmail));
-  document.getElementById('ovBack2')?.addEventListener('click', () => show(stepCodeEmail));
+  document.getElementById('ovBack1')?.addEventListener('click', () => { show(stepEmail); applyLocksUI(); });
+  document.getElementById('ovBack2')?.addEventListener('click', () => { show(stepCodeEmail); applyLocksUI(); });
 }
 
 // ================================
