@@ -1,9 +1,10 @@
 // Editor de precios para admin (inline)
-// Requiere ?editprices=1 y sesión admin válida.
+// Activo con ?editprices=1 y sesión admin válida.
 
 (function(){
   const wrapId = "pricingCards";
 
+  // ==== Helpers de admin/CSRF ====
   function getCsrfToken(){
     const m = (document.cookie || "").match(/(?:^|;\s*)adm_csrf=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : "";
@@ -20,13 +21,18 @@
     if (!wantsEdit) return;
     if (!(await isAdmin())) return;
 
-    // Inserta controles de edición en cada tarjeta de plan
     try{
+      // 1) Cargar planes admin (con id/price)
       const plans = await fetchPlansAdmin();
+
+      // 2) Esperar a que main.js pinte las tarjetas
+      await waitForCards();
+
+      // 3) Inyectar editores
       enhanceCards(plans);
       injectNotice();
     }catch(e){
-      console.error("admin-prices enhance error:", e);
+      console.error("admin-prices init error:", e);
     }
   });
 
@@ -37,18 +43,34 @@
     return Array.isArray(d.plans) ? d.plans : [];
   }
 
+  // Espera a que existan .card dentro de #pricingCards (máx 6s)
+  function waitForCards(){
+    const host = document.getElementById(wrapId);
+    if (!host) return Promise.reject(new Error("#pricingCards no existe"));
+
+    return new Promise((resolve, reject) => {
+      const ready = () => host.querySelectorAll('.card').length > 0;
+      if (ready()) return resolve();
+
+      const obs = new MutationObserver(() => { if (ready()) { obs.disconnect(); resolve(); } });
+      obs.observe(host, { childList: true, subtree: true });
+
+      setTimeout(() => { obs.disconnect(); ready() ? resolve() : reject(new Error("Timeout esperando tarjetas")); }, 6000);
+    });
+  }
+
   function enhanceCards(plans){
     const host = document.getElementById(wrapId);
-    if (!host) return;
-    const cards = [...host.querySelectorAll('.card')];
+    const cards = host ? [...host.querySelectorAll('.card')] : [];
     if (!cards.length) return;
 
-    // Mapear por label aproximado (simple) o por índice
+    // Asumimos el mismo orden DB → UI (como hace main.js). Si no, se podría
+    // mapear por label aproximado.
     plans.forEach((p, idx) => {
       const card = cards[idx];
       if (!card) return;
 
-      // Bloque editor
+      // Editor UI
       const editor = document.createElement('div');
       editor.className = "admin-editor";
       editor.style.marginTop = "10px";
@@ -56,7 +78,8 @@
         <div class="admin-editor__row">
           <label style="display:flex;align-items:center;gap:.5rem">
             <span>USD</span>
-            <input type="number" min="0" step="1" value="${Number(p.price_usd).toFixed(0)}" class="admin-editor__input" style="width:120px" />
+            <input type="number" min="0" step="1" value="${Number(p.price_usd).toFixed(0)}"
+                   class="admin-editor__input" style="width:120px" />
           </label>
           <button class="admin-editor__save btn btn--primary" type="button">Guardar</button>
           <small class="admin-editor__hint hint" style="margin-left:.5rem"></small>
@@ -102,10 +125,8 @@
         }
       });
 
-      // Mostrar el editor
+      // Marcar tarjeta y pegar editor
       card.appendChild(editor);
-
-      // Marcar visualmente la tarjeta editable
       card.style.boxShadow = "0 0 0 2px rgba(59,130,246,.25)";
       card.style.position = "relative";
       const tag = document.createElement('span');
@@ -119,7 +140,6 @@
   }
 
   function injectNotice(){
-    // Cartelito arriba del bloque precios
     const title = document.querySelector('#precios .section__title');
     if (!title) return;
     const note = document.createElement('p');

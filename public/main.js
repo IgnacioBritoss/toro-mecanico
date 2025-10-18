@@ -793,6 +793,25 @@ function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
   if (!overlay) return;
 
+    // Chequear si el acceso está bloqueado (status 429 previamente)
+(async () => {
+  try{
+    const r = await fetch('/api/admin/auth?action=status', { method:'GET' });
+    const d = await r.json();
+    if (d.locked) {
+      overlay?.classList.remove('hidden');
+      document.body.classList.add('has-admin-overlay');
+      // Deshabilitar UI para que no siga intentando
+      overlay.querySelectorAll('input,button').forEach(el => el.disabled = true);
+      const h = document.getElementById('ovHint1') || document.getElementById('ovHint2') || document.getElementById('ovHint3');
+      if (h) h.textContent = "Demasiados intentos. Acceso bloqueado por 1 hora.";
+      return; // no continuar con el init de pasos
+    }
+  }catch{}
+})();
+
+
+
   const el = (id) => document.getElementById(id);
 
   // Pasos
@@ -866,6 +885,14 @@ function initAdminAuth(){
       });
       const d = await r.json();
 
+          if (d.session_id) saveAdminSessionId(d.session_id);
+    if (r.status === 429 || d.locked) {
+      hint2.textContent = d.error || "Acceso bloqueado por 1 hora.";
+      overlay.querySelectorAll('input,button').forEach(el => el.disabled = true);
+      return;
+    }
+
+
       if (!r.ok || !d.ok){
         hint2.textContent = d.error || 'Código incorrecto o vencido.';
         return;
@@ -908,6 +935,14 @@ function initAdminAuth(){
         body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
+
+          if (d.session_id) saveAdminSessionId(d.session_id);
+    if (r.status === 429 || d.locked) {
+      hint3.textContent = d.error || "Acceso bloqueado por 1 hora.";
+      overlay.querySelectorAll('input,button').forEach(el => el.disabled = true);
+      return;
+    }
+
 
       if (!r.ok || !d.ok){
         hint3.textContent = d.error || 'Código inválido.';

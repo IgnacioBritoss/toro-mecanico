@@ -14,21 +14,22 @@ function json(res, code, body){ res.status(code).json(body); }
 
 /* ======= SESIÓN SIN ESTADO (session_id firmado) =======
    payload se guarda en el token:
-   - durante "start": { email, code, exp, totp_secret? }
+   - durante "start": { email, code, exp, totp_secret?, tries_email, tries_totp }
    - tras verify_email (si hay TOTP): seguimos usando el MISMO session_id
+   - si hay intento fallido, devolvemos un NUEVO session_id con tries_*+1
 */
+const ADMIN_AUTH_SECRET = process.env.ADMIN_AUTH_SECRET || "dev-admin-secret";
+
 function makeSession(payload){
   const raw = JSON.stringify(payload);
   const body = b64url(raw);
-  const secret = process.env.ADMIN_AUTH_SECRET || "dev-admin-secret";
-  const sig = hmac(body, secret);
+  const sig  = hmac(body, ADMIN_AUTH_SECRET);
   return `${body}.${sig}`;
 }
 function parseSession(session_id){
-  const secret = process.env.ADMIN_AUTH_SECRET || "dev-admin-secret";
   if (typeof session_id !== "string" || !session_id.includes(".")) return null;
   const [body, sig] = session_id.split(".");
-  const expect = hmac(body, secret);
+  const expect = hmac(body, ADMIN_AUTH_SECRET);
   if (sig !== expect) return null;
   try{
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
@@ -111,7 +112,6 @@ function buildOtpauthUri(email, base32Secret){
 }
 
 /* -------------------- cookie admin -------------------- */
-// NUEVO: también seteo una cookie de CSRF (no HttpOnly) y devuelvo el token
 function setAdminCookie(res){
   const parts = [
     "admin_session=ok",
@@ -121,43 +121,55 @@ function setAdminCookie(res){
     "SameSite=Lax",
     "Secure"
   ];
-  // CSRF token aleatorio para el cliente (lo mandará en x-csrf-token)
-  const csrfToken = crypto.randomBytes(16).toString("base64url");
-  const csrfCookie = [
-    `adm_csrf=${csrfToken}`,
-    "Path=/",
-    "Max-Age=86400",
-    "SameSite=Lax",
-    "Secure"
-  ];
-  res.setHeader("Set-Cookie", [parts.join("; "), csrfCookie.join("; ")]);
-  return csrfToken;
+  res.setHeader("Set-Cookie", parts.join("; "));
 }
 function clearAdminCookie(res){
-  res.setHeader("Set-Cookie", [
-    "admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure",
-    "adm_csrf=; Path=/; Max-Age=0; SameSite=Lax; Secure"
-  ]);
+  res.setHeader("Set-Cookie", "admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure");
 }
 
-/* -------------------- NUEVO: rate limit simple por IP -------------------- */
-const RL = new Map(); // key: ip:window -> count
-function rateLimit(req, res, { windowMs=60_000, max=20 } = {}){
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+/* ===================== NUEVO: BLOQUEO 1h ===================== */
+const LOCK_COOKIE = "admin_lock";
+// Valor: "<expMs>.<sig>". Firmamos exp para evitar manipulación.
+function makeLockValue(expMs){
+  const body = String(expMs);
+  const sig = hmac(body, ADMIN_AUTH_SECRET);
+  return `${body}.${sig}`;
+}
+function parseLockValue(v){
+  if (!v || typeof v!=="string" || !v.includes(".")) return null;
+  const [body, sig] = v.split(".");
+  if (sig !== hmac(body, ADMIN_AUTH_SECRET)) return null;
+  const exp = Number(body);
+  if (!Number.isFinite(exp)) return null;
+  return exp;
+}
+function readCookie(req, name){
+  const ck = req.headers.cookie || "";
+  const m = ck.match(new RegExp("(?:^|;\\s*)"+name+"=([^;]+)"));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+function isLocked(req){
+  const v = readCookie(req, LOCK_COOKIE);
+  const exp = parseLockValue(v);
+  if (!exp) return { locked:false };
   const now = Date.now();
-  const bucket = `${ip}:${Math.floor(now / windowMs)}`;
-  const n = (RL.get(bucket) || 0) + 1;
-  RL.set(bucket, n);
-  if (n > max){
-    json(res, 429, { ok:false, error:"Too many requests" });
-    return false;
-  }
-  return true;
+  if (now < exp) return { locked:true, until: exp };
+  return { locked:false };
+}
+function setLock(res, minutes=60){
+  const exp = Date.now() + minutes*60*1000;
+  res.setHeader("Set-Cookie",
+    `${LOCK_COOKIE}=${makeLockValue(exp)}; Path=/; Max-Age=${minutes*60}; HttpOnly; SameSite=Lax; Secure`);
+  return exp;
+}
+function clearLock(res){
+  res.setHeader("Set-Cookie", `${LOCK_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure`);
 }
 
 /* ======================================================
    HANDLER UNIFICADO
    Acciones:
+   - GET/POST ?action=status           (NUEVO: chequea bloqueo)
    - POST ?action=start
    - POST ?action=verify_email
    - POST ?action=verify_totp
@@ -167,8 +179,20 @@ export default async function handler(req, res){
   const action = (req.query.action || "").toString();
 
   try{
-    // Rate limit básico por seguridad (cada llamada)
-    if (!rateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
+    // -------- status (GET/POST) NUEVO
+    if (action === "status"){
+      const lock = isLocked(req);
+      return json(res, 200, { ok:true, ...lock });
+    }
+
+    // Antes de cualquier acción sensible, ¿está bloqueado?
+    if (["start","verify_email","verify_totp"].includes(action)){
+      const lock = isLocked(req);
+      if (lock.locked){
+        res.setHeader("Retry-After", "3600");
+        return json(res, 429, { ok:false, locked:true, until: lock.until, error:"Demasiados intentos. Bloqueado 1h." });
+      }
+    }
 
     // -------- logout (GET o POST)
     if (action === "logout"){
@@ -202,7 +226,8 @@ export default async function handler(req, res){
         email: String(email).toLowerCase(),
         code,
         exp: Date.now() + 10*60*1000,
-        // guardamos el secreto por sesión sólo si no hay fijo
+        tries_email: 0,  // NUEVO
+        tries_totp: 0,   // NUEVO
         ...(perSessionTotpBase32 ? { totp_secret: perSessionTotpBase32 } : {})
       };
       const session_id = makeSession(payload);
@@ -222,31 +247,52 @@ export default async function handler(req, res){
 
       const payload = parseSession(session_id);
       if (!payload) return json(res, 400, { ok:false, error:"Sesión inválida" });
+
+      // ¿vencido?
       if (Date.now() > Number(payload.exp || 0)) return json(res, 400, { ok:false, error:"El código expiró" });
 
       const ok = String(code).replace(/\D/g,"") === String(payload.code);
-      if (!ok) return json(res, 400, { ok:false, error:"Código incorrecto" });
+
+      if (!ok){
+        // incrementar intentos de email
+        const tries = Number(payload.tries_email || 0) + 1;
+        const newPayload = { ...payload, tries_email: tries };
+        const newSession = makeSession(newPayload);
+
+        // ¿superó 3 intentos?
+        if (tries >= 3){
+          const until = setLock(res, 60); // 1h
+          res.setHeader("Retry-After", "3600");
+          return json(res, 429, { ok:false, locked:true, until, session_id:newSession, error:"Demasiados intentos. Bloqueado 1h." });
+        }
+        return json(res, 400, { ok:false, session_id:newSession, error:"Código incorrecto" });
+      }
+
+      // Reset tries_email en éxito
+      payload.tries_email = 0;
 
       // ¿TOTP activo?
       const base32Secret = FIXED_TOTP_BASE32 || payload.totp_secret || "";
       if (!base32Secret){
-        // Sin TOTP => logueo directo (como antes cuando no exigías 2FA)
-        const csrfToken = setAdminCookie(res);
-        return json(res, 200, { ok:true, done:true, session:"ok", totpDisabled:true, csrfToken });
+        setAdminCookie(res);
+        clearLock(res); // por las dudas
+        const finalSession = makeSession(payload);
+        return json(res, 200, { ok:true, done:true, session:"ok", totpDisabled:true, session_id: finalSession });
       }
 
-      // Con TOTP => devolvemos otpauth y QR. Front ya sabe mostrarlo.
       const otpauth = buildOtpauthUri(payload.email, base32Secret);
       const qrDataUrl = otpauth
         ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpauth)}`
         : null;
 
+      const nextSession = makeSession(payload);
+
       return json(res, 200, {
         ok: true,
         totpRequired: true,
         otpauth,
-        qrDataUrl
-        // usamos el MISMO session_id: el front no tiene que cambiar nada
+        qrDataUrl,
+        session_id: nextSession
       });
     }
 
@@ -262,12 +308,26 @@ export default async function handler(req, res){
       if (!base32Secret) return json(res, 400, { ok:false, error:"TOTP no configurado" });
 
       const validSet = totpNowFromBase32(base32Secret, 30, 6);
-      if (!validSet.has(String(code).replace(/\D/g,""))){
-        return json(res, 400, { ok:false, error:"Código inválido" });
+      const ok = validSet.has(String(code).replace(/\D/g,""));
+
+      if (!ok){
+        // Un solo intento de TOTP
+        const tries = Number(payload.tries_totp || 0) + 1;
+        const newPayload = { ...payload, tries_totp: tries };
+        const newSession = makeSession(newPayload);
+
+        // a la primera mala: bloqueo 1h
+        const until = setLock(res, 60);
+        res.setHeader("Retry-After", "3600");
+        return json(res, 429, { ok:false, locked:true, until, session_id:newSession, error:"Código inválido. Bloqueado 1h." });
       }
 
-      const csrfToken = setAdminCookie(res);
-      return json(res, 200, { ok:true, done:true, session:"ok", csrfToken });
+      // éxito: limpiar lock si lo hubiera
+      setAdminCookie(res);
+      clearLock(res);
+      payload.tries_totp = 0;
+      const finalSession = makeSession(payload);
+      return json(res, 200, { ok:true, done:true, session:"ok", session_id: finalSession });
     }
 
     return json(res, 405, { ok:false, error:"Acción o método no permitido" });
