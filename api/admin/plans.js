@@ -1,7 +1,5 @@
 // api/admin/plans.js
 import { pool } from "../../lib/db.js";
-// === NUEVO: wrapper con sesión + CSRF (sin romper tu chequeo actual) ===
-import { withAdmin } from "./_auth.js";
 
 export const config = { runtime: "nodejs" };
 
@@ -11,28 +9,11 @@ function isAdminFromCookie(req){
   return /(?:^|;\s*)admin_session=ok(?:;|$)/.test(ck);
 }
 
-// === NUEVO: rate limit simple por IP ===
-const RL = new Map(); // key: ip:window -> count
-function rateLimit(req, res, { windowMs=60_000, max=120 } = {}){
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
-  const now = Date.now();
-  const bucket = `${ip}:${Math.floor(now / windowMs)}`;
-  const n = (RL.get(bucket) || 0) + 1;
-  RL.set(bucket, n);
-  if (n > max){
-    return res.status(429).json({ ok:false, error:"Too many requests" });
-  }
-  return true;
-}
-
-export default withAdmin(async function handler(req, res){
-  // PROTECCIÓN (mantengo tu verificación previa por compatibilidad)
+export default async function handler(req, res){
+  // PROTECCIÓN
   if (!isAdminFromCookie(req)) {
     return res.status(401).json({ ok:false, error: "Unauthorized" });
   }
-
-  // NUEVO: rate limit
-  if (!rateLimit(req, res)) return;
 
   try {
     if (req.method === "GET") {
@@ -66,4 +47,4 @@ export default withAdmin(async function handler(req, res){
     console.error("admin/plans error:", e);
     return res.status(500).json({ ok:false, error:"Error interno" });
   }
-});
+}

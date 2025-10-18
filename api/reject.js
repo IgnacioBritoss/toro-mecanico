@@ -10,15 +10,6 @@ function signToken(id, email){
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-// === NUEVO: safe compare de token
-function safeEq(a, b){
-  try{
-    const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
-    if (ba.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ba, bb);
-  }catch{ return false; }
-}
-
 // === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
 function formatFechaCortaUTC(dateLike){
   const d = new Date(dateLike);
@@ -27,21 +18,6 @@ function formatFechaCortaUTC(dateLike){
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
   const yy = String(d.getUTCFullYear()).slice(-2);
   return `${weekday} ${dd}/${mm}/${yy}`;
-}
-
-// === NUEVO: rate limit
-const RL = new Map();
-function rateLimit(req, res, { windowMs=60_000, max=40 } = {}){
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
-  const now = Date.now();
-  const k = `${ip}:${Math.floor(now/windowMs)}`;
-  const n = (RL.get(k) || 0) + 1;
-  RL.set(k, n);
-  if (n > max){
-    if (req.method === "GET") return res.status(429).send("Too many requests");
-    return res.status(429).json({ error: "Too many requests" });
-  }
-  return true;
 }
 
 export default async function handler(req, res){
@@ -55,9 +31,6 @@ export default async function handler(req, res){
 if (req.method === "HEAD") {
   return res.status(200).end();
 }
-
-  // NUEVO: RL para GET/POST
-  if (!rateLimit(req, res)) return;
 
   if (req.method === "GET") {
     const { id, token } = req.query || {};
@@ -101,7 +74,7 @@ if (req.method === "HEAD") {
       const r = rows[0];
 
       const expected = signToken(r.id, r.email);
-      if (!safeEq(expected, token)) return res.status(403).send("Token inválido");
+      if (expected !== token) return res.status(403).send("Token inválido");
 
       await pool.query(`UPDATE reservations SET status='rechazada', reject_reason=$2 WHERE id=$1`, [r.id, reason]);
 

@@ -45,14 +45,9 @@ function clearAdminSessionId(){
 }
 async function isAdmin(){
   try{
-    const r = await fetch('/api/admin/plans', { method:'GET', headers: { "x-csrf-token": getCsrfToken() } });
+    const r = await fetch('/api/admin/plans', { method:'GET' });
     return r.status !== 401;
   }catch{ return false; }
-}
-// === NUEVO: CSRF token (cookie no HttpOnly seteada en login admin)
-function getCsrfToken(){
-  const m = (document.cookie || "").match(/(?:^|;\s*)adm_csrf=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : "";
 }
 
 // ================================
@@ -86,6 +81,7 @@ const paymentBlockManual = document.getElementById("paymentBlockManual");
 const mpButtonWrap = document.getElementById("mp-button-wrap");
 const mpLink1ars = document.getElementById("mp-link-1ars");
 const payWarn = document.getElementById("payWarn");
+
 
 // Admin UI
 const adminBadge = document.getElementById("adminBadge");
@@ -162,7 +158,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // así no generamos 401 en la home.
     if (!ON_ADMIN) { adminBadge.classList.add("hidden"); return; }
     try{
-      const r = await fetch("/api/admin/plans", { method:"GET", headers: { "x-csrf-token": getCsrfToken() } });
+      const r = await fetch("/api/admin/plans", { method:"GET" });
       const isA = r.status !== 401;
       adminBadge.classList.toggle("hidden", !isA);
     }catch{
@@ -172,7 +168,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (adminBadge){
     adminBadge.addEventListener("click", async () => {
-      try { await fetch("/api/admin/auth?action=logout", { method:"POST", headers: { "x-csrf-token": getCsrfToken() } }); } catch {}
+      try { await fetch("/api/admin/auth?action=logout", { method:"POST" }); } catch {}
       clearAdminSessionId();
       const url = new URL(location.href);
       url.searchParams.delete("editprices");
@@ -396,9 +392,7 @@ async function openAdminDayModal(dateKey){
   document.body.classList.add('has-admin-overlay');
 
   try{
-    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`, {
-      headers: { "x-csrf-token": getCsrfToken() }
-    });
+    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`);
     const data = await res.json();
     if (!res.ok || !data.ok){
       dayList.innerHTML = `<p class="hint">No se pudo cargar (${data?.error || res.status}).</p>`;
@@ -456,12 +450,7 @@ function fetchSuggest(q){
   });
   if (USE_VIEWBOX){ params.append('viewbox', VIEWBOX); params.append('bounded','1'); }
 
-  fetch(`${base}?${params.toString()}`, {
-    headers: { 'Accept': 'application/json' },
-    credentials: 'omit',
-    mode: 'cors',
-    cache: 'no-store'
-  })
+  fetch(`${base}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
     .then(r => r.json())
     .then(showSuggest)
     .catch(() => hideSuggest());
@@ -680,6 +669,7 @@ async function onSecondStep(){
       li.dataset.value = v;
       li.textContent = opt.textContent;
       li.setAttribute('role','option');
+      if (opt.selected) li.setAttribute('aria-selected','true');
       li.addEventListener('click', () => { setSelectValue(v); close(); btn.focus(); });
       list.appendChild(li);
     });
@@ -793,25 +783,6 @@ function initAdminAuth(){
   const overlay = document.getElementById('adminOverlay');
   if (!overlay) return;
 
-    // Chequear si el acceso está bloqueado (status 429 previamente)
-(async () => {
-  try{
-    const r = await fetch('/api/admin/auth?action=status', { method:'GET' });
-    const d = await r.json();
-    if (d.locked) {
-      overlay?.classList.remove('hidden');
-      document.body.classList.add('has-admin-overlay');
-      // Deshabilitar UI para que no siga intentando
-      overlay.querySelectorAll('input,button').forEach(el => el.disabled = true);
-      const h = document.getElementById('ovHint1') || document.getElementById('ovHint2') || document.getElementById('ovHint3');
-      if (h) h.textContent = "Demasiados intentos. Acceso bloqueado por 1 hora.";
-      return; // no continuar con el init de pasos
-    }
-  }catch{}
-})();
-
-
-
   const el = (id) => document.getElementById(id);
 
   // Pasos
@@ -852,7 +823,7 @@ function initAdminAuth(){
     sendBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=start', {
-        method:'POST', headers:{'Content-Type':'application/json', 'x-csrf-token': getCsrfToken() },
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email })
       });
       const d = await r.json();
@@ -880,18 +851,10 @@ function initAdminAuth(){
     verifyEmailBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=verify_email', {
-        method:'POST', headers:{'Content-Type':'application/json', 'x-csrf-token': getCsrfToken() },
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
-
-          if (d.session_id) saveAdminSessionId(d.session_id);
-    if (r.status === 429 || d.locked) {
-      hint2.textContent = d.error || "Acceso bloqueado por 1 hora.";
-      overlay.querySelectorAll('input,button').forEach(el => el.disabled = true);
-      return;
-    }
-
 
       if (!r.ok || !d.ok){
         hint2.textContent = d.error || 'Código incorrecto o vencido.';
@@ -931,18 +894,10 @@ function initAdminAuth(){
     verifyTotpBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=verify_totp', {
-        method:'POST', headers:{'Content-Type':'application/json', 'x-csrf-token': getCsrfToken() },
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
-
-          if (d.session_id) saveAdminSessionId(d.session_id);
-    if (r.status === 429 || d.locked) {
-      hint3.textContent = d.error || "Acceso bloqueado por 1 hora.";
-      overlay.querySelectorAll('input,button').forEach(el => el.disabled = true);
-      return;
-    }
-
 
       if (!r.ok || !d.ok){
         hint3.textContent = d.error || 'Código inválido.';
@@ -992,7 +947,7 @@ async function initReferralForest(){
 
   let roots = [];
   try{
-    const r = await fetch('/api/referrals/roots', { headers: { "x-csrf-token": getCsrfToken() } });
+    const r = await fetch('/api/referrals/roots');
     if (!r.ok) {
       wrap.textContent = `Error (${r.status}) al cargar raíces.`;
       return;
@@ -1025,9 +980,7 @@ async function initReferralForest(){
     // Cargar árbol del root
     wrap.textContent = 'Cargando árbol…';
     try{
-      const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(root.email)}`, {
-        headers: { "x-csrf-token": getCsrfToken() }
-      });
+      const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(root.email)}`);
       if (!r.ok) { wrap.textContent = `Error (${r.status}) al cargar árbol.`; return; }
       const d = await r.json();
 

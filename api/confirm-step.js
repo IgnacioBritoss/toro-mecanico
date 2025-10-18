@@ -11,15 +11,6 @@ function signToken(id, email){
   return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
 }
 
-// === NUEVO: safe compare para tokens
-function safeEq(a, b){
-  try{
-    const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
-    if (ba.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ba, bb);
-  }catch{ return false; }
-}
-
 // === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
 function formatFechaCortaUTC(dateLike){
   const d = new Date(dateLike);
@@ -30,25 +21,8 @@ function formatFechaCortaUTC(dateLike){
   return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
-// === NUEVO: rate limit
-const RL = new Map();
-function rateLimit(req, res, { windowMs=60_000, max=40 } = {}){
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
-  const now = Date.now();
-  const k = `${ip}:${Math.floor(now/windowMs)}`;
-  const n = (RL.get(k) || 0) + 1;
-  RL.set(k, n);
-  if (n > max){
-    return res.status(429).json({ error: "Too many requests" });
-  }
-  return true;
-}
-
 export default async function handler(req, res){
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
-  // NUEVO: RL
-  if (!rateLimit(req, res)) return;
-
   const { id, token } = req.body || {};
   if(!id || !token) return res.status(400).json({ error: "Faltan parámetros" });
 
@@ -66,7 +40,7 @@ export default async function handler(req, res){
 
     // validamos token
     const expected = signToken(r.id, r.email);
-    if(!safeEq(expected, token)) return res.status(403).json({ error: "Token inválido" });
+    if(expected !== token) return res.status(403).json({ error: "Token inválido" });
 
     // marcamos intención de seña (solo informativo)
     await pool.query(`UPDATE reservations SET deposit_intent_at = now() WHERE id = $1`, [r.id]);
