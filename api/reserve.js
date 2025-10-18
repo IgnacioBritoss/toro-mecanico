@@ -25,6 +25,20 @@ function formatFechaCortaUTC(dateLike){
   return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
+// === NUEVO: rate limit simple por IP (antispam formularios)
+const RL = new Map(); // ip:bucket -> count
+function rateLimit(req, res, { windowMs=60_000, max=10 } = {}){
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+  const now = Date.now();
+  const bucket = `${ip}:${Math.floor(now / windowMs)}`;
+  const n = (RL.get(bucket) || 0) + 1;
+  RL.set(bucket, n);
+  if (n > max){
+    return res.status(429).json({ error: "Too many requests" });
+  }
+  return true;
+}
+
 export default async function handler(req, res){
 // Permitir preflight y HEAD (evita "Método no permitido" en CORS o fetch interno)
 if (req.method === "OPTIONS") {
@@ -39,6 +53,9 @@ if (req.method === "HEAD") {
 if (req.method !== "POST") {
   return res.status(405).json({ error: "Método no permitido" });
 }
+
+  // === NUEVO: rate limit antes de tocar DB
+  if (!rateLimit(req, res)) return;
 
   try{
     const {

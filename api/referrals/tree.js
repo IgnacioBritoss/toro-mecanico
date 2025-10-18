@@ -1,11 +1,30 @@
 // /api/referrals/tree.js
 import { pool } from "../../lib/db.js";
 export const config = { runtime: "nodejs" };
+// === NUEVO: proteger como admin (usa la misma sesión/csrf) ===
+import { withAdmin } from "../admin/_auth.js";
 
 function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
 
-export default async function handler(req, res){
+// === NUEVO: rate limit simple por IP ===
+const RL = new Map();
+function rateLimit(req, res, { windowMs=60_000, max=150 } = {}){
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+  const now = Date.now();
+  const bucket = `${ip}:${Math.floor(now / windowMs)}`;
+  const n = (RL.get(bucket) || 0) + 1;
+  RL.set(bucket, n);
+  if (n > max){
+    return res.status(429).json({ error:"Too many requests" });
+  }
+  return true;
+}
+
+export default withAdmin(async function handler(req, res){
   if (req.method !== "GET") return res.status(405).json({ error: "Método no permitido" });
+
+  // NUEVO: rate limit
+  if (!rateLimit(req, res)) return;
 
   try{
     // validar tabla también aquí por si no existe
@@ -63,4 +82,4 @@ export default async function handler(req, res){
     console.error("TREE ERROR:", err);
     return res.status(500).json({ error: "Error interno" });
   }
-}
+});

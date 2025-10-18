@@ -1,148 +1,130 @@
-// public/admin-prices.js
+// Editor de precios para admin (inline)
+// Requiere ?editprices=1 y sesión admin válida.
+
 (function(){
-  const qs = new URLSearchParams(location.search);
-  const wantsEdit = qs.get('editprices') === '1';
+  const wrapId = "pricingCards";
 
-  const $ = (sel, ctx=document) => ctx.querySelector(sel);
-
-  async function ensureAdmin() {
-    try {
-      const r = await fetch('/api/admin/plans', { method: 'GET' });
-      if (r.status === 401) return false;
-      return true;
-    } catch {
-      return false;
-    }
+  function getCsrfToken(){
+    const m = (document.cookie || "").match(/(?:^|;\s*)adm_csrf=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  async function isAdmin(){
+    try{
+      const r = await fetch('/api/admin/plans', { headers: { "x-csrf-token": getCsrfToken() }});
+      return r.status !== 401;
+    }catch{ return false; }
   }
 
-  async function loadPlansForEdit() {
-    const r = await fetch('/api/admin/plans');
-    if (!r.ok) throw new Error('No se pudieron cargar los planes');
+  document.addEventListener("DOMContentLoaded", async () => {
+    const wantsEdit = new URLSearchParams(location.search).has("editprices");
+    if (!wantsEdit) return;
+    if (!(await isAdmin())) return;
+
+    // Inserta controles de edición en cada tarjeta de plan
+    try{
+      const plans = await fetchPlansAdmin();
+      enhanceCards(plans);
+      injectNotice();
+    }catch(e){
+      console.error("admin-prices enhance error:", e);
+    }
+  });
+
+  async function fetchPlansAdmin(){
+    const r = await fetch('/api/admin/plans', { headers: { "x-csrf-token": getCsrfToken() }});
+    if (!r.ok) throw new Error("No se pudieron cargar planes (admin).");
     const d = await r.json();
     return Array.isArray(d.plans) ? d.plans : [];
   }
 
-  async function savePlanPrice(id, newPrice) {
-    const r = await fetch('/api/admin/plans', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ action:'update', id, price_usd: Number(newPrice) })
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar');
-  }
+  function enhanceCards(plans){
+    const host = document.getElementById(wrapId);
+    if (!host) return;
+    const cards = [...host.querySelectorAll('.card')];
+    if (!cards.length) return;
 
-  // Editor FIJO (no sticky) debajo del título "Precios"
-  function renderEditor(plans){
-    const preciosSec = document.getElementById('precios');
-    const container  = $('.container', preciosSec) || preciosSec;
-    const titleH2    = $('.section__title', container);
+    // Mapear por label aproximado (simple) o por índice
+    plans.forEach((p, idx) => {
+      const card = cards[idx];
+      if (!card) return;
 
-    const holder = document.createElement('aside');
-    holder.id = 'tm-admin-editor';
-    holder.setAttribute('aria-label','Editor de precios');
-    // SIN sticky
-    holder.style.position = 'relative';
-    holder.style.zIndex = '1';
-    holder.style.background = '#ffffff';
-    holder.style.border = '1px solid #e5e7eb';
-    holder.style.borderRadius = '16px';
-    holder.style.padding = '16px';
-    holder.style.margin = '12px 0 20px';
-    holder.style.boxShadow = '0 8px 24px rgba(0,0,0,.06)';
+      // Bloque editor
+      const editor = document.createElement('div');
+      editor.className = "admin-editor";
+      editor.style.marginTop = "10px";
+      editor.innerHTML = `
+        <div class="admin-editor__row">
+          <label style="display:flex;align-items:center;gap:.5rem">
+            <span>USD</span>
+            <input type="number" min="0" step="1" value="${Number(p.price_usd).toFixed(0)}" class="admin-editor__input" style="width:120px" />
+          </label>
+          <button class="admin-editor__save btn btn--primary" type="button">Guardar</button>
+          <small class="admin-editor__hint hint" style="margin-left:.5rem"></small>
+        </div>
+      `;
 
-    const rowsWrap = document.createElement('div');
-    rowsWrap.style.display = 'grid';
-    rowsWrap.style.gridTemplateColumns = '1fr auto';
-    rowsWrap.style.gap = '10px 12px';
+      const priceEl = card.querySelector('.card__price');
+      const saveBtn = editor.querySelector('.admin-editor__save');
+      const input   = editor.querySelector('.admin-editor__input');
+      const hint    = editor.querySelector('.admin-editor__hint');
 
-    plans.forEach(p => {
-      const label = document.createElement('div');
-      label.textContent = `${p.label}`;
-      label.style.fontWeight = '600';
-
-      const right = document.createElement('div');
-      right.style.display = 'flex';
-      right.style.gap = '8px';
-      right.style.alignItems = 'center';
-
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.min = '0';
-      inp.step = '1';
-      inp.value = Number(p.price_usd || 0).toFixed(0);
-      inp.style.width = '110px';
-      inp.style.padding = '8px 10px';
-      inp.style.border = '1px solid #e5e7eb';
-      inp.style.borderRadius = '10px';
-      inp.setAttribute('aria-label', `USD para ${p.label}`);
-
-      const save = document.createElement('button');
-      save.textContent = 'Guardar';
-      save.className = 'btn btn--primary';
-      save.style.padding = '8px 14px';
-
-      save.onclick = async () => {
-        try{
-          save.disabled = true;
-          await savePlanPrice(p.id, inp.value);
-          save.textContent = 'Guardado ✓';
-          setTimeout(() => (save.textContent = 'Guardar', save.disabled=false), 1200);
-          try { window.__tm_refresh_plans__ && window.__tm_refresh_plans__(); } catch {}
-        }catch(e){
-          alert(e.message || 'Error al guardar');
-          save.disabled = false;
+      saveBtn.addEventListener('click', async () => {
+        const val = Math.round(Number(input.value));
+        if (!Number.isFinite(val) || val < 0){
+          hint.textContent = "Precio inválido";
+          return;
         }
-      };
+        saveBtn.disabled = true;
+        hint.textContent = "Guardando…";
+        try{
+          const res = await fetch('/api/admin/plans', {
+            method: 'POST',
+            headers: {
+              'Content-Type':'application/json',
+              'x-csrf-token': getCsrfToken()
+            },
+            body: JSON.stringify({ action:"update", id: p.id, price_usd: val })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok){
+            hint.textContent = data?.error || `Error (${res.status})`;
+            saveBtn.disabled = false;
+            return;
+          }
+          // Optimista: actualizar UI
+          if (priceEl) priceEl.innerHTML = `$${val.toFixed(0)} <span>USD</span>`;
+          hint.textContent = "Guardado ✓";
+          setTimeout(() => hint.textContent = "", 1200);
+          saveBtn.disabled = false;
+        }catch(e){
+          hint.textContent = "Error de red";
+          saveBtn.disabled = false;
+        }
+      });
 
-      right.appendChild(inp);
-      right.appendChild(save);
+      // Mostrar el editor
+      card.appendChild(editor);
 
-      rowsWrap.appendChild(label);
-      rowsWrap.appendChild(right);
+      // Marcar visualmente la tarjeta editable
+      card.style.boxShadow = "0 0 0 2px rgba(59,130,246,.25)";
+      card.style.position = "relative";
+      const tag = document.createElement('span');
+      tag.textContent = "Admin";
+      tag.className = "badge";
+      tag.style.position = "absolute";
+      tag.style.top = "10px";
+      tag.style.right = "10px";
+      card.appendChild(tag);
     });
-
-    holder.appendChild(rowsWrap);
-
-    // Insertar justo DESPUÉS del h2 de Precios
-    if (titleH2 && titleH2.parentNode){
-      titleH2.parentNode.insertBefore(holder, titleH2.nextSibling);
-    } else if (container){
-      container.insertBefore(holder, container.firstChild);
-    } else {
-      document.body.insertBefore(holder, document.body.firstChild);
-    }
   }
 
-  async function boot(){
-    if (!wantsEdit) return; // solo si ?editprices=1
-
-    const ok = await ensureAdmin();
-    if (!ok) {
-      location.href = '/admin'; // fuerza login si no hay sesión
-      return;
-    }
-
-    try {
-      const plans = await loadPlansForEdit();
-      renderEditor(plans);
-    } catch (e) {
-      console.error(e);
-      alert('No se pudo inicializar el editor de precios.');
-    }
+  function injectNotice(){
+    // Cartelito arriba del bloque precios
+    const title = document.querySelector('#precios .section__title');
+    if (!title) return;
+    const note = document.createElement('p');
+    note.className = "hint";
+    note.textContent = "Modo edición: podés actualizar el precio en USD de cada plan. (Solo visible para admin)";
+    title.insertAdjacentElement('afterend', note);
   }
-
-  document.addEventListener('DOMContentLoaded', boot);
-
-  // hook público para refrescar cards después de guardar
-  window.__tm_refresh_plans__ = async function(){
-    try{
-      const r = await fetch('/api/plans');
-      const d = await r.json();
-      if (Array.isArray(d.plans)) {
-        if (typeof renderPricingCards === 'function') renderPricingCards(d.plans);
-        if (typeof renderPlanRadios === 'function')  renderPlanRadios(d.plans);
-      }
-    }catch{}
-  };
 })();

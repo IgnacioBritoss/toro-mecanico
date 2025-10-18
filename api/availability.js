@@ -12,11 +12,32 @@ export const config = { runtime: "nodejs" };
   - Además: devolvemos la clave de día con TO_CHAR('YYYY-MM-DD') para evitar
     desfases de zona horaria al serializar fechas.
 */
+
+// === NUEVO: rate limit básico para GET público
+const RL = new Map();
+function rateLimit(req, res, { windowMs=60_000, max=240 } = {}){
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+  const now = Date.now();
+  const k = `${ip}:${Math.floor(now/windowMs)}`;
+  const n = (RL.get(k) || 0) + 1;
+  RL.set(k, n);
+  if (n > max){
+    return res.status(429).json({ error: "Too many requests" });
+  }
+  return true;
+}
+
 export default async function handler(req, res){
   if (req.method !== "GET") return res.status(405).json({ error: "Método no permitido" });
 
+  // NUEVO: RL
+  if (!rateLimit(req, res)) return;
+
   const { start, end } = req.query || {};
   if (!start || !end) return res.status(400).json({ error: "Faltan 'start' y 'end' (YYYY-MM-DD)" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(start)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(end))){
+    return res.status(400).json({ error: "Formato de fecha inválido" });
+  }
 
   try{
     const q = await pool.query(`

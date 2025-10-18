@@ -111,6 +111,7 @@ function buildOtpauthUri(email, base32Secret){
 }
 
 /* -------------------- cookie admin -------------------- */
+// NUEVO: también seteo una cookie de CSRF (no HttpOnly) y devuelvo el token
 function setAdminCookie(res){
   const parts = [
     "admin_session=ok",
@@ -120,10 +121,38 @@ function setAdminCookie(res){
     "SameSite=Lax",
     "Secure"
   ];
-  res.setHeader("Set-Cookie", parts.join("; "));
+  // CSRF token aleatorio para el cliente (lo mandará en x-csrf-token)
+  const csrfToken = crypto.randomBytes(16).toString("base64url");
+  const csrfCookie = [
+    `adm_csrf=${csrfToken}`,
+    "Path=/",
+    "Max-Age=86400",
+    "SameSite=Lax",
+    "Secure"
+  ];
+  res.setHeader("Set-Cookie", [parts.join("; "), csrfCookie.join("; ")]);
+  return csrfToken;
 }
 function clearAdminCookie(res){
-  res.setHeader("Set-Cookie", "admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure");
+  res.setHeader("Set-Cookie", [
+    "admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure",
+    "adm_csrf=; Path=/; Max-Age=0; SameSite=Lax; Secure"
+  ]);
+}
+
+/* -------------------- NUEVO: rate limit simple por IP -------------------- */
+const RL = new Map(); // key: ip:window -> count
+function rateLimit(req, res, { windowMs=60_000, max=20 } = {}){
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+  const now = Date.now();
+  const bucket = `${ip}:${Math.floor(now / windowMs)}`;
+  const n = (RL.get(bucket) || 0) + 1;
+  RL.set(bucket, n);
+  if (n > max){
+    json(res, 429, { ok:false, error:"Too many requests" });
+    return false;
+  }
+  return true;
 }
 
 /* ======================================================
@@ -138,6 +167,9 @@ export default async function handler(req, res){
   const action = (req.query.action || "").toString();
 
   try{
+    // Rate limit básico por seguridad (cada llamada)
+    if (!rateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
+
     // -------- logout (GET o POST)
     if (action === "logout"){
       clearAdminCookie(res);
@@ -199,8 +231,8 @@ export default async function handler(req, res){
       const base32Secret = FIXED_TOTP_BASE32 || payload.totp_secret || "";
       if (!base32Secret){
         // Sin TOTP => logueo directo (como antes cuando no exigías 2FA)
-        setAdminCookie(res);
-        return json(res, 200, { ok:true, done:true, session:"ok", totpDisabled:true });
+        const csrfToken = setAdminCookie(res);
+        return json(res, 200, { ok:true, done:true, session:"ok", totpDisabled:true, csrfToken });
       }
 
       // Con TOTP => devolvemos otpauth y QR. Front ya sabe mostrarlo.
@@ -234,8 +266,8 @@ export default async function handler(req, res){
         return json(res, 400, { ok:false, error:"Código inválido" });
       }
 
-      setAdminCookie(res);
-      return json(res, 200, { ok:true, done:true, session:"ok" });
+      const csrfToken = setAdminCookie(res);
+      return json(res, 200, { ok:true, done:true, session:"ok", csrfToken });
     }
 
     return json(res, 405, { ok:false, error:"Acción o método no permitido" });

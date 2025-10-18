@@ -9,6 +9,15 @@ function signToken(id, email){
   return crypto.createHmac("sha256", secret).update(`${id}:${email}`).digest("hex");
 }
 
+// === NUEVO: safe compare
+function safeEq(a, b){
+  try{
+    const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+    if (ba.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ba, bb);
+  }catch{ return false; }
+}
+
 // === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
 function formatFechaCortaUTC(dateLike){
   const d = new Date(dateLike);
@@ -19,8 +28,26 @@ function formatFechaCortaUTC(dateLike){
   return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
+// === NUEVO: rate limit (evita link-hammering)
+const RL = new Map();
+function rateLimit(req, res, { windowMs=60_000, max=60 } = {}){
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+  const now = Date.now();
+  const k = `${ip}:${Math.floor(now/windowMs)}`;
+  const n = (RL.get(k) || 0) + 1;
+  RL.set(k, n);
+  if (n > max){
+    res.setHeader("Content-Type","text/plain; charset=utf-8");
+    return res.status(429).send("Too many requests");
+  }
+  return true;
+}
+
 export default async function handler(req, res){
   if (req.method !== "GET") return res.status(405).send("Método no permitido");
+  // NUEVO: RL
+  if (!rateLimit(req, res)) return;
+
   const { id, token } = req.query || {};
   if (!id || !token) return res.status(400).send("Link inválido");
 
@@ -36,7 +63,7 @@ export default async function handler(req, res){
     const r = rows[0];
 
     const expected = signToken(r.id, r.email);
-    if (expected !== token) return res.status(403).send("Token inválido");
+    if (!safeEq(expected, token)) return res.status(403).send("Token inválido");
 
     if (r.status !== "aceptada"){
       await pool.query(`UPDATE reservations SET status='aceptada' WHERE id=$1`, [r.id]);

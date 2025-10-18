@@ -1,5 +1,7 @@
 // api/admin/day.js
 import { pool } from "../../lib/db.js";
+// === NUEVO: wrapper con sesión + CSRF ===
+import { withAdmin } from "./_auth.js";
 
 export const config = { runtime: "nodejs" };
 
@@ -12,13 +14,30 @@ function isoDay(s){
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s||"")) ? s : null;
 }
 
-export default async function handler(req, res){
+// === NUEVO: rate limit simple por IP ===
+const RL = new Map();
+function rateLimit(req, res, { windowMs=60_000, max=180 } = {}){
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim();
+  const now = Date.now();
+  const bucket = `${ip}:${Math.floor(now / windowMs)}`;
+  const n = (RL.get(bucket) || 0) + 1;
+  RL.set(bucket, n);
+  if (n > max){
+    return res.status(429).json({ ok:false, error:"Too many requests" });
+  }
+  return true;
+}
+
+export default withAdmin(async function handler(req, res){
   if (!isAdminFromCookie(req)) {
     return res.status(401).json({ ok:false, error:"Unauthorized" });
   }
   if (req.method !== "GET") {
     return res.status(405).json({ ok:false, error:"Método no permitido" });
   }
+
+  // NUEVO: rate limit
+  if (!rateLimit(req, res)) return;
 
   const day = isoDay(req.query.date);
   if (!day) return res.status(400).json({ ok:false, error:"Fecha inválida" });
@@ -63,4 +82,4 @@ export default async function handler(req, res){
     console.error("admin/day error:", e);
     return res.status(500).json({ ok:false, error:"Error interno" });
   }
-}
+});

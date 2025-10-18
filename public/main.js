@@ -45,9 +45,14 @@ function clearAdminSessionId(){
 }
 async function isAdmin(){
   try{
-    const r = await fetch('/api/admin/plans', { method:'GET' });
+    const r = await fetch('/api/admin/plans', { method:'GET', headers: { "x-csrf-token": getCsrfToken() } });
     return r.status !== 401;
   }catch{ return false; }
+}
+// === NUEVO: CSRF token (cookie no HttpOnly seteada en login admin)
+function getCsrfToken(){
+  const m = (document.cookie || "").match(/(?:^|;\s*)adm_csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : "";
 }
 
 // ================================
@@ -81,7 +86,6 @@ const paymentBlockManual = document.getElementById("paymentBlockManual");
 const mpButtonWrap = document.getElementById("mp-button-wrap");
 const mpLink1ars = document.getElementById("mp-link-1ars");
 const payWarn = document.getElementById("payWarn");
-
 
 // Admin UI
 const adminBadge = document.getElementById("adminBadge");
@@ -158,7 +162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // así no generamos 401 en la home.
     if (!ON_ADMIN) { adminBadge.classList.add("hidden"); return; }
     try{
-      const r = await fetch("/api/admin/plans", { method:"GET" });
+      const r = await fetch("/api/admin/plans", { method:"GET", headers: { "x-csrf-token": getCsrfToken() } });
       const isA = r.status !== 401;
       adminBadge.classList.toggle("hidden", !isA);
     }catch{
@@ -168,7 +172,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (adminBadge){
     adminBadge.addEventListener("click", async () => {
-      try { await fetch("/api/admin/auth?action=logout", { method:"POST" }); } catch {}
+      try { await fetch("/api/admin/auth?action=logout", { method:"POST", headers: { "x-csrf-token": getCsrfToken() } }); } catch {}
       clearAdminSessionId();
       const url = new URL(location.href);
       url.searchParams.delete("editprices");
@@ -392,7 +396,9 @@ async function openAdminDayModal(dateKey){
   document.body.classList.add('has-admin-overlay');
 
   try{
-    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`);
+    const res = await fetch(`/api/admin/day?date=${encodeURIComponent(dateKey)}`, {
+      headers: { "x-csrf-token": getCsrfToken() }
+    });
     const data = await res.json();
     if (!res.ok || !data.ok){
       dayList.innerHTML = `<p class="hint">No se pudo cargar (${data?.error || res.status}).</p>`;
@@ -450,7 +456,12 @@ function fetchSuggest(q){
   });
   if (USE_VIEWBOX){ params.append('viewbox', VIEWBOX); params.append('bounded','1'); }
 
-  fetch(`${base}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+  fetch(`${base}?${params.toString()}`, {
+    headers: { 'Accept': 'application/json' },
+    credentials: 'omit',
+    mode: 'cors',
+    cache: 'no-store'
+  })
     .then(r => r.json())
     .then(showSuggest)
     .catch(() => hideSuggest());
@@ -669,7 +680,6 @@ async function onSecondStep(){
       li.dataset.value = v;
       li.textContent = opt.textContent;
       li.setAttribute('role','option');
-      if (opt.selected) li.setAttribute('aria-selected','true');
       li.addEventListener('click', () => { setSelectValue(v); close(); btn.focus(); });
       list.appendChild(li);
     });
@@ -823,7 +833,7 @@ function initAdminAuth(){
     sendBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=start', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ email })
       });
       const d = await r.json();
@@ -851,7 +861,7 @@ function initAdminAuth(){
     verifyEmailBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=verify_email', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
@@ -894,7 +904,7 @@ function initAdminAuth(){
     verifyTotpBtn.disabled = true;
     try{
       const r = await fetch('/api/admin/auth?action=verify_totp', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ session_id, code })
       });
       const d = await r.json();
@@ -947,7 +957,7 @@ async function initReferralForest(){
 
   let roots = [];
   try{
-    const r = await fetch('/api/referrals/roots');
+    const r = await fetch('/api/referrals/roots', { headers: { "x-csrf-token": getCsrfToken() } });
     if (!r.ok) {
       wrap.textContent = `Error (${r.status}) al cargar raíces.`;
       return;
@@ -980,7 +990,9 @@ async function initReferralForest(){
     // Cargar árbol del root
     wrap.textContent = 'Cargando árbol…';
     try{
-      const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(root.email)}`);
+      const r = await fetch(`/api/referrals/tree?root=${encodeURIComponent(root.email)}`, {
+        headers: { "x-csrf-token": getCsrfToken() }
+      });
       if (!r.ok) { wrap.textContent = `Error (${r.status}) al cargar árbol.`; return; }
       const d = await r.json();
 
