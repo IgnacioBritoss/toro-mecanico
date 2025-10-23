@@ -56,16 +56,14 @@ body{
 .hero__img{
   display:block;
   width:100%;
-  height:100%;             /* no se deforma */
-  border-radius:22px;      /* bordes redondeados */
+  height:100%;
+  border-radius:22px;
   box-shadow:0 18px 38px rgba(15,23,42,.18), 0 4px 10px rgba(15,23,42,.12);
 }
-/* En desktop la hacemos “un poco más ancha que alta” visualmente
-   limitando la altura si la imagen es muy alta (sin recortar ni deformar). */
 @media (min-width: 900px){
   .hero__img{
-    max-height:520px;      /* ajustable; quitalo si querés toda la altura */
-    object-fit:contain;    /* no recorta si llega al tope */
+    max-height:520px;
+    object-fit:contain;
   }
 }
 
@@ -200,8 +198,8 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 input[type="number"] {
-  appearance: textfield;      /* Firefox/estándar */
-  -moz-appearance: textfield; /* Firefox legacy */
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 /* === 2) Select de Localidad con estilo (tipo Petcare) === */
@@ -293,7 +291,7 @@ input[type="number"] {
 
 .map-wrap{display:block;width:100%}
 .map{height:220px;border:1px solid var(--border);border-radius:12px;margin-top:8px}
-.hidden{display:none} /* ya lo tenés, sirve también para el mapa */
+.hidden{display:none}
 
 
 /* === Bloque de pago mitad/mitad con línea divisoria === */
@@ -321,88 +319,61 @@ input[type="number"] {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;   /* el mes centrado */
-  padding: 0 56px;           /* deja espacio para las flechas */
-  min-height: 44px;          /* alto cómodo para click/tap */
+  justify-content: center;
+  padding: 0 56px;
+  min-height: 44px;
 }
-
 .cal__head h3{
   margin: 0;
   font-size: 20px;
   font-weight: 800;
 }
-
-/* Misma pinta que los icon buttons actuales */
 .cal__arrow{
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 40px;               /* opcional: área táctil más grande */
+  width: 40px;
   height: 40px;
-  padding: 8px 0;            /* ya tiene estilos .btn--icon */
+  padding: 8px 0;
 }
-
-/* Izquierda y derecha */
 .cal__head .cal__arrow:first-of-type{ left: 8px; }
 .cal__head .cal__arrow:last-of-type{  right: 8px; }
-
-/* En mobile podés agrandar un toque el padding lateral si querés */
 @media (max-width: 420px){
   .cal__head{ padding: 0 48px; }
 }
 
-
 /* Bajar un poco el texto del hero en desktop */
 @media (min-width: 900px){
-  .hero__copy{
-    margin-top: 27px;   /* ajustá 10–32px a gusto */
-  }
+  .hero__copy{ margin-top: 27px; }
 }
 
 /* 1) Subtítulos (labels) 3px más separados del campo */
-.form label{
-  display:block;          /* asegura bloque */
-  margin-bottom: 0;       /* que no agregue huecos extra */
-}
-
-/* empuja el input/textarea/select 3px hacia abajo */
+.form label{ display:block; margin-bottom: 0; }
 .form label > input,
 .form label > textarea,
-.form label > select{
-  margin-top: 3px;
-}
+.form label > select{ margin-top: 3px; }
 
 /* Subir más el mapa solo en desktop */
 @media (min-width: 900px){
-  /* sube ~20px respecto del original */
-  #addrMap{
-    margin-top: -53px;   /* ajustá a -18 / -22 si hace falta fino */
-  }
+  #addrMap{ margin-top: -53px; }
 }
-
-/* En mobile lo dejamos como estaba */
 @media (max-width: 899px){
   #addrMap{ margin-top: 8px; }
 }
 
 /* ===== Admin Floating Badge — centrado en la navbar ===== */
 :root{
-  /* alto de la barra (tu .nav__inner) y tamaño del badge */
   --nav-h: 64px;
   --badge: 48px;
 }
-
 .admin-badge{
   position: fixed;
-  /* centrado vertical en la barra: (nav-h - badge)/2 */
   top: calc(env(safe-area-inset-top, 0px) + (var(--nav-h) - var(--badge))/2);
   left: calc(env(safe-area-inset-left, 0px) + 12px);
   z-index: 10000;
-
   width: var(--badge);
   height: var(--badge);
   border-radius: 9999px;
-
   padding: 0;
   margin: 0;
   border: 2px solid #111827;
@@ -413,20 +384,16 @@ input[type="number"] {
   line-height: 1;
   outline: none;
   -webkit-tap-highlight-color: transparent;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   box-shadow: 0 6px 18px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
   backdrop-filter: saturate(160%) blur(6px);
   -webkit-backdrop-filter: saturate(160%) blur(6px);
   cursor: pointer;
   transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
-
 .admin-badge.hidden{ display: none; }
-
 .admin-badge:hover{
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(0,0,0,.16), 0 4px 10px rgba(0,0,0,.08);
@@ -439,8 +406,6 @@ input[type="number"] {
 .admin-badge:focus-visible{
   box-shadow: 0 0 0 3px rgba(59,130,246,.35), 0 6px 18px rgba(0,0,0,.12);
 }
-
-/* Ícono (flecha) */
 .admin-badge__icon{
   width: 22px;
   height: 22px;
@@ -448,27 +413,22 @@ input[type="number"] {
   fill: #111827;
   pointer-events: none;
 }
-
-/* por si el botón está dentro del header en el DOM, igual que no afecte el layout */
 header .admin-badge{ position: fixed !important; }
-
-/* móvil: badge apenas más chico */
 @media (max-width: 420px){
   :root{ --badge: 44px; }
   .admin-badge__icon{ width: 20px; height: 20px; }
 }
 
-
 /* ===== Admin: overlay a pantalla completa ===== */
 .overlay{
-  position: fixed;               /* <-- clave: fuera del flujo normal */
-  inset: 0;                      /* top:0 right:0 bottom:0 left:0 */
-  z-index: 2000;                 /* por encima de navbar y resto */
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(10,15,25,.45); /* oscurece el fondo */
+  background: rgba(10,15,25,.45);
   backdrop-filter: blur(2px);
 }
 .overlay.hidden{ display:none; }
@@ -496,15 +456,12 @@ header .admin-badge{ position: fixed !important; }
 .ov-btn[disabled]{ opacity:.6; cursor:not-allowed; }
 .ov-ghost{ background:#fff; color:#0f172a; border:1px solid #cbd5e1; }
 .ov-actions{ display:flex; gap:10px; margin-top:8px; }
-.ov-hint{ color:#475569; font-size:13px; margin-top:6px; min-height:18px; }
+.ov-hint{ color:#475569; font-size:13px; margin-top:6px; }
 .ov-step{ display:none; }
 .ov-step.active{ display:block; }
 
 /* ===== Admin: badge flotante (flecha) ===== */
-:root{
-  --nav-h: 64px;  /* fallback; JS lo sobreescribe con el alto real */
-  --badge: 48px;
-}
+:root{ --nav-h: 64px; --badge: 48px; }
 .admin-badge{
   position: fixed;
   top: calc(env(safe-area-inset-top,0px) + (var(--nav-h) - var(--badge))/2);
@@ -537,9 +494,6 @@ body.has-admin-overlay{ overflow:hidden; }
 }
 .plan-edit__actions{ display:flex; gap:10px; margin-top:12px }
 
-
-
-
 /* Items dentro del modal de reservas del día */
 .day-item{
   border:1px solid var(--border);
@@ -557,6 +511,7 @@ body.has-admin-overlay{ overflow:hidden; }
   background:#0ea5e9; color:#fff;
 }
 
+/* ===== Árbol de relaciones ===== */
 #forestSection .forest__controls{
   display:flex; align-items:center; gap:.75rem; margin: .5rem 0 1rem;
 }
@@ -574,40 +529,27 @@ body.has-admin-overlay{ overflow:hidden; }
 }
 
 /* === Overrides / mejoras para Árbol de Referidos === */
-
-/* aire lateral de 20px dentro de la sección */
 #forestSection .container { padding-left: 20px; padding-right: 20px; }
-
-/* controles: flechas solo-ícono, centrado del root y espacios */
 #forestSection .forest__controls{
   display:flex; align-items:center; justify-content:space-between;
   gap:16px; margin:12px 0 16px;
 }
-
-/* botón “sólo flecha” (reemplaza al ghost visualmente, podés dejar ambas clases) */
 #forestSection .btn--icon{
   min-width:40px; height:36px; padding:0 6px;
   display:inline-flex; align-items:center; justify-content:center;
   background:transparent; border:1px solid #e5e7eb; border-radius:10px; cursor:pointer;
 }
-
-/* título centrado (nombre <email>) */
 #forestSection .forest__root{ text-align:center; font-weight:600; opacity:.95; }
-
-/* tarjeta del árbol: un poco más de padding y aire */
 #forestSection .forest__tree{
   background:#fff; border:1px solid #e5e7eb; border-radius:12px;
   padding:16px 20px; min-height:120px; max-height:360px; overflow:auto;
 }
-
-/* viñetas anidadas prolijas */
 #forestSection .forest__tree ul{ margin:6px 0; padding-left:1.25rem; list-style:disc; }
 #forestSection .forest__tree li{ margin:6px 0; line-height:1.6; }
 #forestSection .forest__tree li > strong{ font-weight:600; }
 
-
+/* ===== Sección de Alcance (Reach) ===== */
 .admin-only[hidden]{ display:none!important; }
-
 .card { background: var(--paper,#fff); border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
 .muted { color: var(--muted,#555); }
 
@@ -622,8 +564,21 @@ body.has-admin-overlay{ overflow:hidden; }
 .reach-controls select, .reach-controls input { flex: 1 1 220px; padding: 6px 8px; }
 .reach-controls .end { justify-content: flex-end; }
 
-.btn { padding: 8px 12px; border-radius: 10px; border: 1px solid #ddd; background: #000000; cursor: pointer; }
-.btn.primary { background: var(--blue,#0ea5e9); color: #fff; border-color: transparent; }
+/* ⬇⬇⬇ Encapsulado para que NO pise los botones globales */
+#reachSection .btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+#reachSection .btn.primary {
+  background: var(--blue, #0ea5e9);
+  color: #fff;
+  border-color: transparent;
+}
+/* ⬆⬆⬆ Fin del encapsulado */
 
 .tags { display: flex; gap: 8px; flex-wrap: wrap; }
 .tag { background: #eef3ff; border: 1px solid #cfdcff; padding: 6px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; }

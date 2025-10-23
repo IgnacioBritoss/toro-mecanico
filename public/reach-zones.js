@@ -88,7 +88,7 @@
     
       async function fetchZones() {
         try {
-          const r = await fetch("/api/service-zones");
+          const r = await fetch("/api/reserve?zones=1");
           const data = await r.json();
           zones = data.map(d => ({ province: d.province, city: d.city, active: d.active }));
           renderTags();
@@ -103,10 +103,11 @@
             .map(z => ({ province: z.province, city: z.city, active: !!z.active }));
     
           const r = await fetch("/api/service-zones", {
-            method: "PUT",
-            headers: { "Content-Type":"application/json", "x-admin":"1" },
-            body: JSON.stringify({ zones: filtered })
-          });
+  method: "PUT",
+  headers: { "Content-Type":"application/json", "x-admin":"1" },
+  body: JSON.stringify({ zones: filtered })
+});
+
     
           if (!r.ok) {
             const e = await r.json().catch(()=>({error:"Error"}));
