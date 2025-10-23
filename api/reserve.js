@@ -4,6 +4,7 @@ import crypto from "crypto";
 
 export const config = { runtime: "nodejs" };
 
+// ---------- helpers base ----------
 function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
@@ -15,19 +16,18 @@ function isValidLatLng(lat, lng){
   return la >= -90 && la <= 90 && ln >= -180 && ln <= 180;
 }
 
-// === NUEVO: formateo de fecha corta en UTC => "Mon 06/10/25"
+// fecha corta "Mon 06/10/25" en UTC
 function formatFechaCortaUTC(dateLike){
   const d = new Date(dateLike);
-  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }); // "Mon"
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
   const dd = String(d.getUTCDate()).padStart(2, "0");
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
   const yy = String(d.getUTCFullYear()).slice(-2);
   return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
-// === NUEVO: helpers mínimos para modo admin de zonas (mismo endpoint con ?zones=1)
+// ---------- admin/min helpers ----------
 function isAdmin(req){
-  // Ajustá a tu sesión real si tenés auth; mantenemos este fallback por header.
   return req.user?.is_admin || req.headers["x-admin"] === "1";
 }
 async function parseJSON(req){
@@ -47,28 +47,70 @@ function createTransporter(){
   });
 }
 
-export default async function handler(req, res){
-// Permitir preflight y HEAD (evita "Método no permitido" en CORS o fetch interno)
-if (req.method === "OPTIONS") {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin");
-  return res.status(200).end();
-}
-if (req.method === "HEAD") {
-  return res.status(200).end();
+// ---------- tablas mínimas (evita 500) ----------
+async function ensureTables(){
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.service_zones (
+      id BIGSERIAL PRIMARY KEY,
+      province TEXT NOT NULL,
+      city     TEXT NOT NULL,
+      active   BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (province, city)
+    );
+
+    CREATE TABLE IF NOT EXISTS public.service_interests (
+      id BIGSERIAL PRIMARY KEY,
+      province TEXT NOT NULL,
+      city     TEXT NOT NULL,
+      name     TEXT,
+      email    TEXT NOT NULL,
+      phone    TEXT,
+      notified_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (email, province, city)
+    );
+  `);
 }
 
-/* ===============================
- *  NUEVO: Gestión de ZONAS por la MISMA ruta
- *  Usar:  GET  /api/reserve?zones=1      -> listar zonas (admin)
- *         PUT  /api/reserve?zones=1      -> guardar zonas (admin) y notificar interesados
- *  (Si no viene ?zones=1, sigue el flujo normal de POST reserva)
- * =============================== */
-if ((req.method === "GET" || req.method === "PUT") && (req.query?.zones === "1" || req.query?.zones === 1)) {
-  try {
-    if (req.method === "GET") {
-      try {
+// ---------- lista negra (seguridad) ----------
+const RESTRICTED = [
+  { province: "CABA",         city: "Barrio Padre Mugica" },       // Villa 31
+  { province: "CABA",         city: "Barrio Padre Ricciardelli" }, // 1-11-14
+  { province: "CABA",         city: "Barrio 20" },
+  { province: "CABA",         city: "Villa 21-24" },
+  { province: "Buenos Aires", city: "Villa Itatí" },
+  { province: "Buenos Aires", city: "Villa Azul" },
+  { province: "Buenos Aires", city: "La Cava" }
+];
+function isRestrictedZone(p,c){
+  const n = s => String(s||"").trim().toLowerCase();
+  return RESTRICTED.some(z => n(z.province)===n(p) && n(z.city)===n(c));
+}
+
+// ===================================================================
+// Handler
+// ===================================================================
+export default async function handler(req, res){
+  // CORS/preflight
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin");
+    return res.status(200).end();
+  }
+  if (req.method === "HEAD") return res.status(200).end();
+
+  // ===============================
+  // Gestión de ZONAS por la MISMA ruta
+  // GET/PUT /api/reserve?zones=1
+  // ===============================
+  if ((req.method === "GET" || req.method === "PUT") && (req.query?.zones === "1" || req.query?.zones === 1)) {
+    try {
+      // crea tablas si faltan (evita 42P01/500)
+      await ensureTables();
+
+      if (req.method === "GET") {
         const { rows } = await pool.query(
           `SELECT id, province, city, active
              FROM public.service_zones
@@ -76,109 +118,111 @@ if ((req.method === "GET" || req.method === "PUT") && (req.query?.zones === "1" 
             ORDER BY province, city`
         );
         return res.status(200).json(rows);
-      } catch (e) {
-        // 42P01 = undefined_table (no existe la tabla)
-        if (e.code === "42P01") {
-          return res.status(200).json({ setup_needed: true, zones: [] });
-        }
-        throw e;
       }
-    }
-  
 
+      // PUT: upsert zonas + desactivar no incluidas + no permitir restringidas
+      if (!isAdmin(req)) return res.status(403).json({ error: "No autorizado" });
+      const body = await parseJSON(req);
+      const zones = Array.isArray(body?.zones) ? body.zones : null;
+      if (!zones) return res.status(400).json({ error: "Formato inválido (se espera { zones: [...] })" });
 
-    // PUT: upsert zonas + desactivar no incluidas + notificar interesados recién habilitados
-    if (!isAdmin(req)) return res.status(403).json({ error: "No autorizado" });
-    const body = await parseJSON(req);
-    const zones = Array.isArray(body?.zones) ? body.zones : null;
-    if (!zones) return res.status(400).json({ error: "Formato inválido (se espera { zones: [...] })" });
-
-    const client = await pool.connect();
-    const newlyActivated = []; // [{province,city}]
-    try {
-      await client.query("BEGIN");
-
-      const { rows: before } = await client.query(
-        `SELECT province, city, active
-           FROM public.service_zones
-          WHERE province IN ('CABA','Buenos Aires')`
-      );
-      const beforeMap = new Map(before.map(r => [`${r.province}||${r.city}`, !!r.active]));
-
-      const upsertText = `
-        INSERT INTO public.service_zones (province, city, active)
-        VALUES ($1,$2,$3)
-        ON CONFLICT (province, city)
-        DO UPDATE SET active = EXCLUDED.active, updated_at = now()
-        RETURNING province, city, active
-      `;
-      const keepSet = new Set();
-      for (const z of zones) {
+      // filtrar restringidas (no se guardan activas)
+      const denied = [];
+      const clean = [];
+      for (const z of zones){
         if (!z?.province || !z?.city) continue;
-        const active = z.active === false ? false : true;
-        const { rows } = await client.query(upsertText, [z.province, z.city, active]);
-        const k = `${rows[0].province}||${rows[0].city}`;
-        keepSet.add(k);
-      }
-
-      const { rows: all } = await client.query(
-        `SELECT province, city, active
-           FROM public.service_zones
-          WHERE province IN ('CABA','Buenos Aires')`
-      );
-      for (const r of all) {
-        const k = `${r.province}||${r.city}`;
-        if (!keepSet.has(k) && r.active) {
-          await client.query(
-            `UPDATE public.service_zones
-                SET active = FALSE, updated_at = now()
-              WHERE province = $1 AND city = $2`,
-            [r.province, r.city]
-          );
+        const active = z.active !== false;
+        if (active && isRestrictedZone(z.province, z.city)){
+          denied.push({ province:z.province, city:z.city });
+          continue;
         }
+        clean.push({ province:z.province, city:z.city, active });
       }
 
-      const { rows: after } = await client.query(
-        `SELECT province, city, active
-           FROM public.service_zones
-          WHERE province IN ('CABA','Buenos Aires')`
-      );
-      for (const r of after) {
-        const k = `${r.province}||${r.city}`;
-        const wasActive = beforeMap.get(k) || false;
-        if (!wasActive && r.active) newlyActivated.push({ province: r.province, city: r.city });
+      const client = await pool.connect();
+      const newlyActivated = []; // [{province,city}]
+      try {
+        await client.query("BEGIN");
+
+        const { rows: before } = await client.query(
+          `SELECT province, city, active
+             FROM public.service_zones
+            WHERE province IN ('CABA','Buenos Aires')`
+        );
+        const beforeMap = new Map(before.map(r => [`${r.province}||${r.city}`, !!r.active]));
+
+        const upsertText = `
+          INSERT INTO public.service_zones (province, city, active)
+          VALUES ($1,$2,$3)
+          ON CONFLICT (province, city)
+          DO UPDATE SET active = EXCLUDED.active, updated_at = now()
+          RETURNING province, city, active
+        `;
+        const keepSet = new Set();
+        for (const z of clean) {
+          const { rows } = await client.query(upsertText, [z.province, z.city, z.active]);
+          const k = `${rows[0].province}||${rows[0].city}`;
+          keepSet.add(k);
+        }
+
+        const { rows: all } = await client.query(
+          `SELECT province, city, active
+             FROM public.service_zones
+            WHERE province IN ('CABA','Buenos Aires')`
+        );
+        for (const r of all) {
+          const k = `${r.province}||${r.city}`;
+          if (!keepSet.has(k) && r.active) {
+            await client.query(
+              `UPDATE public.service_zones
+                  SET active = FALSE, updated_at = now()
+                WHERE province = $1 AND city = $2`,
+              [r.province, r.city]
+            );
+          }
+        }
+
+        const { rows: after } = await client.query(
+          `SELECT province, city, active
+             FROM public.service_zones
+            WHERE province IN ('CABA','Buenos Aires')`
+        );
+        for (const r of after) {
+          const k = `${r.province}||${r.city}`;
+          const wasActive = beforeMap.get(k) || false;
+          if (!wasActive && r.active) newlyActivated.push({ province: r.province, city: r.city });
+        }
+
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK");
+        console.error(e);
+        return res.status(500).json({ error: "Error guardando zonas" });
+      } finally {
+        client.release();
       }
 
-      await client.query("COMMIT");
-    } catch (e) {
-      await client.query("ROLLBACK");
-      console.error(e);
-      return res.status(500).json({ error: "Error guardando zonas" });
-    } finally {
-      client.release();
-    }
+      // (opcional) notificar interesados al activar nuevas zonas
+      const transporter = createTransporter();
+      const fromName = process.env.MAIL_FROM_NAME || "Toro Mecánico";
+      const fromAddr = process.env.MAIL_FROM_ADDR || process.env.SMTP_USER || "no-reply@tu-dominio.com";
 
-    // Notificar interesados de zonas recién activadas (opcional si hay SMTP)
-    const transporter = createTransporter();
-    const fromName = process.env.MAIL_FROM_NAME || "Toro Mecánico";
-    const fromAddr = process.env.MAIL_FROM_ADDR || process.env.SMTP_USER || "no-reply@tu-dominio.com";
+      for (const z of newlyActivated) {
+        const { rows: interested } = await pool.query(
+          `SELECT id, email
+             FROM public.service_interests
+            WHERE province = $1 AND city = $2 AND notified_at IS NULL`,
+          [z.province, z.city]
+        );
 
-    for (const z of newlyActivated) {
-      const { rows: interested } = await pool.query(
-        `SELECT id, email
-           FROM public.service_interests
-          WHERE province = $1 AND city = $2 AND notified_at IS NULL`,
-        [z.province, z.city]
-      );
-
-      for (const u of interested) {
-        try {
-          if (transporter) {
-            await transporter.sendMail({
-              from: `${fromName} <${fromAddr}>`,
-              to: u.email,
-              subject: "¡Llegamos a tu zona!",
-              text:
+        for (const u of interested) {
+          try {
+            if (transporter) {
+              await transporter.sendMail({
+                from: `${fromName} <${fromAddr}>`,
+                to: u.email,
+                subject: "¡Llegamos a tu zona!",
+                text:
 `Buenas,
 
 ¡Tenemos novedades! Ya estamos trabajando en ${z.city} (${z.province}).
@@ -186,41 +230,40 @@ Si querés reservar, podés hacerlo desde nuestra web.
 
 Gracias por tu interés.
 — Equipo Toro Mecánico`
-            });
+              });
+            }
+            await pool.query(
+              `UPDATE public.service_interests SET notified_at = now() WHERE id = $1`,
+              [u.id]
+            );
+          } catch (mailErr) {
+            console.error("Email error:", mailErr);
           }
-          await pool.query(
-            `UPDATE public.service_interests SET notified_at = now() WHERE id = $1`,
-            [u.id]
-          );
-        } catch (mailErr) {
-          console.error("Email error:", mailErr);
         }
       }
+
+      return res.status(200).json({ ok: true, newlyActivated, denied });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: "Error interno (zonas)" });
     }
-
-    return res.status(200).json({ ok: true, newlyActivated });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: "Error interno (zonas)" });
   }
-}
 
-// Si no es modo zonas, debe ser POST reserva
-if (req.method !== "POST") {
-  return res.status(405).json({ error: "Método no permitido" });
-}
+  // ===============================
+  // Flujo normal de reserva (POST)
+  // ===============================
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Método no permitido" });
+  }
 
   try{
     const {
       name, email, phone, postal_code, age, zone, message, date, time, plan,
       location,
-      // === NUEVO: referido
       referred_email,
-      // === NUEVO: provincia/ciudad que elegirá el usuario en el front
       province, city
     } = req.body || {};
 
-    // ⚠️ zone YA NO ES REQUERIDO
     if (!name || !email || !age || !date || !time || !phone || !postal_code){
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
@@ -230,7 +273,7 @@ if (req.method !== "POST") {
       return res.status(400).json({ error: "Falta ubicación exacta del evento." });
     }
 
-    // ===== NUEVO: validaciones de referido (opcionales pero firmes)
+    // referido (opcional)
     const referred = (referred_email || "").trim();
     if (referred) {
       if (!isValidEmail(referred)) {
@@ -240,16 +283,20 @@ if (req.method !== "POST") {
         return res.status(400).json({ error: "No podés referirte a vos mismo" });
       }
     }
-    // ===== FIN validaciones referido
 
-    // ======== NUEVO: VALIDAR ZONA DE SERVICIO Y GUARDAR INTERÉS ========
+    // validar provincia/ciudad
     const provinceNorm = (province || "").trim();
     const cityNorm     = (city || "").trim();
     if (!provinceNorm || !cityNorm) {
       return res.status(400).json({ error: "Falta provincia o ciudad/partido" });
     }
+    // bloquear zonas restringidas
+    if (isRestrictedZone(provinceNorm, cityNorm)) {
+      return res.status(409).json({ error: "No operamos en esa zona por seguridad." });
+    }
 
     // ¿Zona habilitada?
+    await ensureTables(); // por si es la primera vez
     const { rows: allowed } = await pool.query(
       `SELECT 1 FROM public.service_zones
         WHERE province = $1 AND city = $2 AND active = TRUE
@@ -258,41 +305,30 @@ if (req.method !== "POST") {
     );
 
     if (allowed.length === 0) {
-      // Guardar interés para avisarle cuando se habilite
+      // Guardar interés para avisarle cuando se habilite (sin índices raros)
       await pool.query(
         `INSERT INTO public.service_interests (province, city, name, email, phone)
          VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (lower(email), province, city)
-         WHERE notified_at IS NULL DO NOTHING`,
+         ON CONFLICT (email, province, city) DO NOTHING`,
         [provinceNorm, cityNorm, name || null, email, phone || null]
       );
-
       return res.status(409).json({ error: "Todavía no llegamos a tu zona" });
     }
-    // ======== FIN VALIDACIÓN ZONA ========
 
-    // ===== NUEVO: bloqueo de fechas (pasado, hoy y próximos 3 días)
+    // bloqueo fechas (pasado, hoy y próximos 3 días)
     function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)){
       return res.status(400).json({ error: "Fecha u hora inválidas" });
     }
-
     const now = new Date();
-    const minSel = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3); // hoy + 3 días 00:00
-
-    // Interpretación local del server; si querés UTC: new Date(`${date}T${time}:00Z`)
+    const minSel = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3);
     const reqDateTime = new Date(`${date}T${time}:00`);
     const reqDay = startOfDay(reqDateTime);
-
     if (reqDay < minSel){
       return res.status(400).json({ error: "Solo se aceptan reservas a partir de dentro de 3 días." });
     }
-    // ===== FIN BLOQUE NUEVO =====
 
     const planKey = (plan || "1h").toLowerCase();
-
-    // === NUEVO: buscar plan y precio en DB
     const qPlan = await pool.query(
       `SELECT code, label, price_usd::float
          FROM plans
@@ -311,7 +347,7 @@ if (req.method !== "POST") {
     try{
       await client.query("BEGIN");
 
-      // Upsert user (zone opcional)
+      // Upsert user
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -324,7 +360,10 @@ if (req.method !== "POST") {
       user = u.rows[0];
 
       // Disponibilidad
-      const qDay = await client.query(`SELECT event_hour FROM reservations WHERE event_date=$1 AND status <> 'rechazada'`, [date]);
+      const qDay = await client.query(
+        `SELECT event_hour FROM reservations WHERE event_date=$1 AND status <> 'rechazada'`,
+        [date]
+      );
       if (qDay.rowCount >= 2){
         await client.query("ROLLBACK");
         return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." });
@@ -334,7 +373,7 @@ if (req.method !== "POST") {
         return res.status(409).json({ error: "Esa hora ya está ocupada." });
       }
 
-      // Insert con ubicación + === NUEVO: referred_email
+      // Insert reserva con ubicación + referido + provincia/ciudad
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -360,7 +399,7 @@ if (req.method !== "POST") {
       );
       reservation = r.rows[0];
 
-      // === NUEVO: arista en referral_edges si vino por referido (A -> B)
+      // arista de referido (si aplica)
       if (referred) {
         await client.query(
           `INSERT INTO referral_edges (referrer_email, referee_email, reservation_id)
@@ -380,11 +419,10 @@ if (req.method !== "POST") {
       client.release();
     }
 
-    // === NUEVO: formateos reutilizables para los emails
+    // emails
     const fechaCorta = formatFechaCortaUTC(reservation.event_date);
     const horaStr = String(reservation.event_hour).padStart(2, "0");
 
-    // ---- Emails ----
     let mailError = null;
     try {
       if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -422,7 +460,7 @@ if (req.method !== "POST") {
             </div>
           </div>`;
 
-        // Mail al OWNER
+        // al dueño
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
@@ -444,7 +482,7 @@ if (req.method !== "POST") {
           </div>`
         });
 
-        // Mail al CLIENTE
+        // al cliente
         await transporter.sendMail({
           from: `Desde el equipo de Reservas Toro Mecánico <${fromEmail}>`,
           to: user.email,
