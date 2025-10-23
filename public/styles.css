@@ -1,6 +1,6 @@
 :root{
   --bg:#e8f1ff; --bg-2:#f6f9ff; --text:#0f172a; --muted:#475569;
-  --surface:#ffffff; --surface-2:#f1f5f9; --border:#e2e8f0;
+  --surface:#ffffff; --surface-2:#f1f5f9; --border:#000000;
   --accent:#facc15; --wa:#22c55e; --primary:#0f172a;
 }
 
