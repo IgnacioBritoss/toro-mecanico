@@ -12,8 +12,15 @@ let lastReservation = null; // { id, token }
 
 // --- NUEVO: cache admin y flag de ruta admin
 let IS_ADMIN = false;
-const ON_ADMIN = location.pathname.replace(/\/+$/,'') === "/admin" ||
-                 new URLSearchParams(location.search).has("editprices");
+const ON_ADMIN =
+  location.pathname.replace(/\/+$/,'') === "/admin" ||
+  new URLSearchParams(location.search).has("editprices") ||
+  new URLSearchParams(location.search).has("editzones");
+
+// ➜ exponer para reach-zones.js
+window.ON_ADMIN = ON_ADMIN;
+window.IS_ADMIN = IS_ADMIN;
+
 
 // ================================
 // Utilidades
@@ -188,6 +195,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // si no es admin, ni siquiera mostramos la sección bosque
     document.getElementById('forestSection')?.remove();
   }
+  
+window.IS_ADMIN = IS_ADMIN;   // ← para que reach-zones.js lo lea
 
   lockDateTimeFields();
 
