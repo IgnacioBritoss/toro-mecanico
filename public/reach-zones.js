@@ -1,232 +1,190 @@
 // public/js/reach-zones.js
-// Admin: “¿Hasta dónde llegamos?” con barrios de CABA, partidos PBA y restricciones
-
 (() => {
-  // ================================
-  // Catálogos
-  // ================================
+  // ========= Datos base =========
+  // Barrios oficiales de CABA (excluí explícitamente las "villas" del listado visible)
   const CABA_BARRIOS = [
-    "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito","Chacarita",
-    "Coghlan","Colegiales","Constitución","Flores","Floresta","La Boca","La Paternal",
-    "Liniers","Mataderos","Monte Castro","Montserrat","Nueva Pompeya","Núñez",
-    "Palermo","Parque Avellaneda","Parque Chacabuco","Parque Chas","Parque Patricios",
+    "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
+    "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta","La Boca",
+    "La Paternal","Liniers","Mataderos","Monte Castro","Montserrat","Nueva Pompeya",
+    "Núñez","Palermo","Parque Avellaneda","Parque Chacabuco","Parque Chas","Parque Patricios",
     "Puerto Madero","Recoleta","Retiro","Saavedra","San Cristóbal","San Nicolás",
     "San Telmo","Vélez Sarsfield","Versalles","Villa Crespo","Villa del Parque",
     "Villa Devoto","Villa General Mitre","Villa Lugano","Villa Luro","Villa Ortúzar",
     "Villa Pueyrredón","Villa Real","Villa Riachuelo","Villa Santa Rita","Villa Soldati",
     "Villa Urquiza"
   ];
-
+  // Partidos de PBA frecuentes + podés agregar más
   const PBA_PARTIDOS = [
-    "La Matanza","Lomas de Zamora","Quilmes","Lanús","Almirante Brown","Avellaneda","Merlo","General San Martín",
-    "Florencio Varela","Moreno","Tigre","Tres de Febrero","Berazategui","Esteban Echeverría","San Isidro","Malvinas Argentinas",
-    "Vicente López","Pilar","Ituzaingó","Hurlingham","San Miguel","Ezeiza","Berisso","Ensenada","Morón","José C. Paz",
-    "San Fernando","Escobar","La Plata","Brandsen","Marcos Paz","General Rodríguez","Cañuelas","Luján","Navarro","Campana",
-    "Zárate","Bahía Blanca","Mar del Plata"
+    "Avellaneda","Lanús","Quilmes","Lomas de Zamora","Almirante Brown","Esteban Echeverría",
+    "Ezeiza","Florencio Varela","Berazategui","Morón","Ituzaingó","Hurlingham","Merlo",
+    "La Matanza","Tres de Febrero","San Martín","San Isidro","Vicente López","San Miguel",
+    "Malvinas Argentinas","Tigre","San Fernando","Pilar","Escobar","Campana","Zárate",
+    "General Rodríguez","Marcos Paz","Cañuelas","Luján","La Plata","Berisso","Ensenada"
   ];
 
-  // **Restricciones** (no operamos ahí). Se puede extender.
-  // Para CABA usamos barrios; para PBA villas/zonas conflictivas.
-  const RESTRICTED = [
-    { province: "CABA",         city: "Barrio Padre Mugica" },     // Villa 31
-    { province: "CABA",         city: "Barrio Padre Ricciardelli" },// 1-11-14
-    { province: "CABA",         city: "Barrio 20" },
-    { province: "CABA",         city: "Villa 21-24" },
-    { province: "Buenos Aires", city: "Villa Itatí" },
-    { province: "Buenos Aires", city: "Villa Azul" },
-    { province: "Buenos Aires", city: "La Cava" }
-  ];
-
-  // ================================
-  // Mostrar la sección si es admin o ?editzones
-  // ================================
-  document.addEventListener("DOMContentLoaded", () => {
-    const reach = document.getElementById("reachSection");
-    if (!reach) return;
-
-    const qs = new URLSearchParams(location.search);
-    if ((window.IS_ADMIN || window.ON_ADMIN) || qs.has("editzones")) {
-      reach.hidden = false;
-    }
-
-    initReachSection();
-    renderAdvisories();
-  });
-
-  // ================================
-  // UI / Lógica
-  // ================================
-  function initReachSection() {
-    const selProv = document.getElementById("reachProvince");
-    const selCity = document.getElementById("reachCity");
-    const addBtn  = document.getElementById("reachAdd");
-    const saveBtn = document.getElementById("reachSave");
-    const tagsBox = document.getElementById("reachTags");
-    const msg     = document.getElementById("reachMsg");
-
-    const pbaShape  = document.getElementById("pba-shape");
-    const cabaShape = document.getElementById("caba-shape");
-
-    let zones = []; // {province, city, active:true}
-
-    const isRestricted = (p, c) => !!RESTRICTED.find(z =>
-      z.province === p && normalize(z.city) === normalize(c)
-    );
-
-    function normalize(s){ return String(s||"").trim().toLowerCase(); }
-
-    function paintCities() {
-      const prov = selProv.value;
-      const list = prov === "CABA" ? CABA_BARRIOS : PBA_PARTIDOS;
-      selCity.innerHTML = "";
-      for (const c of list) {
-        const opt = document.createElement("option");
-        opt.value = c; opt.textContent = c;
-        selCity.appendChild(opt);
-      }
-    }
-
-    function renderTags() {
-      tagsBox.innerHTML = "";
-      zones.filter(z => z.active).forEach(z => {
-        const danger = isRestricted(z.province, z.city);
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.innerHTML = `
-          ${z.province} — ${z.city}
-          ${danger ? '<span class="badge" title="Zona restringida">R</span>' : ''}
-          <span class="x" title="Quitar">×</span>
-        `;
-        tag.querySelector(".x").addEventListener("click", () => {
-          z.active = false;
-          renderTags();
-        });
-        tagsBox.appendChild(tag);
-      });
-    }
-
-    function setMsg(text, ok=false) {
-      msg.textContent = text || "";
-      msg.className = ok ? "msg ok" : (text ? "msg err" : "msg");
-    }
-
-    async function fetchZones() {
-      try {
-        const r = await fetch("/api/reserve?zones=1");
-        if (!r.ok) {
-          setMsg("Error cargando zonas (HTTP " + r.status + ")", false);
-          zones = [];
-          renderTags();
-          return;
-        }
-        const data = await r.json();
-        const list = Array.isArray(data) ? data
-                   : Array.isArray(data?.zones) ? data.zones
-                   : [];
-        zones = list.map(d => ({ province: d.province, city: d.city, active: !!d.active }));
-        if (data?.setup_needed) {
-          setMsg("Falta crear la tabla service_zones (el back la crea automáticamente al guardar).", false);
-        } else {
-          setMsg("");
-        }
-        renderTags();
-      } catch (e) {
-        console.error(e);
-        setMsg("Error de red al cargar zonas", false);
-        zones = [];
-        renderTags();
-      }
-    }
-
-    async function saveZones() {
-      try {
-        setMsg("");
-
-        // Bloqueo en UI: no enviar restringidas activas
-        const denied = zones.filter(z => z.active && isRestricted(z.province, z.city));
-        if (denied.length) {
-          setMsg("Quitá las zonas restringidas antes de guardar.", false);
-          return;
-        }
-
-        const filtered = zones
-          .filter(z => z.province === "CABA" || z.province === "Buenos Aires")
-          .map(z => ({ province: z.province, city: z.city, active: !!z.active }));
-
-        const r = await fetch("/api/reserve?zones=1", {
-          method: "PUT",
-          headers: { "Content-Type":"application/json", "x-admin":"1" },
-          body: JSON.stringify({ zones: filtered })
-        });
-
-        const resp = await r.json().catch(()=>({}));
-        if (!r.ok || resp.error) {
-          setMsg(resp.error || "Error guardando zonas", false);
-        } else {
-          // el back puede devolver denied (servidor bloquea por blacklist)
-          if (Array.isArray(resp.denied) && resp.denied.length) {
-            setMsg("Guardado parcial. Se bloquearon zonas restringidas.", false);
-          } else {
-            setMsg("Zonas guardadas", true);
-          }
-        }
-      } catch (e) {
-        console.error(e);
-        setMsg("Error de red", false);
-      }
-    }
-
-    selProv.addEventListener("change", paintCities);
-    addBtn.addEventListener("click", () => {
-      const province = selProv.value;
-      const city = selCity.value;
-      if (isRestricted(province, city)) {
-        setMsg("Esa zona está restringida por seguridad.", false);
-        return;
-      }
-      const z = { province, city, active: true };
-      const idx = zones.findIndex(x => x.province===z.province && x.city===z.city);
-      if (idx >= 0) zones[idx].active = true; else zones.push(z);
-      renderTags();
-    });
-    saveBtn.addEventListener("click", saveZones);
-
-    // mapa clicable
-    pbaShape?.addEventListener("click", () => { selProv.value = "Buenos Aires"; paintCities(); });
-    cabaShape?.addEventListener("click", () => { selProv.value = "CABA"; paintCities(); });
-
-    // init
-    paintCities();
-    fetchZones();
+  // Detecta “villas”/barrios populares (no habilitables)
+  function isDangerWord(s){
+    return /\bvilla[\s\-_.]/i.test(s) ||
+           /\bbarrio\s+(popular|de\s+emergencia|carenciado)/i.test(s.toLowerCase()) ||
+           /\basentamiento\b/i.test(s) ||
+           /\b1-11-14\b|\b21-24\b|\b31\b|\bmugica\b|\bricciardelli\b|\bla\s*cava\b|\bvilla\s*azul\b|\bvilla\s*itat[ií]\b/i.test(s);
   }
 
-  // ================================
-  // Lista compacta “Zonas con restricciones”
-  // ================================
-  function renderAdvisories() {
-    const host = document.getElementById("reachAdvisories");
-    if (!host) return;
+  // ========= Estado UI =========
+  const reach = document.getElementById("reachSection");
+  if (!reach) return;
 
-    const count = RESTRICTED.length;
-    host.innerHTML = `
-      <details class="advisory" open>
-        <summary>
-          Zonas con restricciones operativas
-          <span class="badge">${count}</span>
-        </summary>
-        <p class="advisory-note">
-          Estas zonas no se pueden reservar por motivos de seguridad y acceso.
-        </p>
-        <ul class="pill-list" id="advisoryList"></ul>
-      </details>
-    `;
+  const root = document.createElement("div");
+  root.className = "card";
+  root.innerHTML = `
+    <h2>¿Hasta dónde llegamos?</h2>
+    <p class="muted">Activá las zonas donde trabajás. Todas las “villas” están bloqueadas por seguridad.</p>
 
-    const ul = host.querySelector("#advisoryList");
-    RESTRICTED.forEach(item => {
+    <div class="tabs">
+      <button class="tab on" data-tab="caba">CABA</button>
+      <button class="tab" data-tab="pba">Provincia</button>
+    </div>
+
+    <div class="reach-boards">
+      <div id="board-caba" class="board on"></div>
+      <div id="board-pba" class="board"></div>
+    </div>
+
+    <div class="row end" style="margin-top:10px">
+      <button id="reachSave" class="btn primary">Guardar zonas</button>
+      <span id="reachMsg" class="msg"></span>
+    </div>
+
+    <details class="advisory" style="margin-top:10px">
+      <summary>Zonas con restricciones (bloqueadas)</summary>
+      <div id="denyList" class="pill-list"></div>
+    </details>
+  `;
+  reach.replaceChildren(root);
+
+  const tabs = root.querySelectorAll(".tab");
+  const boardCABA = root.querySelector("#board-caba");
+  const boardPBA  = root.querySelector("#board-pba");
+  const saveBtn   = root.querySelector("#reachSave");
+  const msgEl     = root.querySelector("#reachMsg");
+  const denyList  = root.querySelector("#denyList");
+
+  // dataset → items clickeables
+  function renderBoard(host, province, items){
+    host.innerHTML = "";
+    const ul = document.createElement("ul");
+    ul.className = "pill-list";
+    items.forEach(name => {
       const li = document.createElement("li");
-      li.className = "pill";
-      li.textContent = `${item.province} — ${item.city}`;
+      const danger = isDangerWord(name);
+      li.className = "pill zone-chip";
+      li.dataset.province = province;
+      li.dataset.city = name;
+      li.dataset.locked = danger ? "1" : "0";
+      li.dataset.active = "0";
+      li.textContent = name;
+      if (danger){
+        li.classList.add("pill-locked");
+        const lock = document.createElement("span");
+        lock.setAttribute("aria-hidden","true");
+        lock.textContent = " 🔒";
+        li.appendChild(lock);
+        li.title = "Zona bloqueada por seguridad";
+      }else{
+        li.addEventListener("click", () => {
+          const on = li.dataset.active === "1";
+          li.dataset.active = on ? "0" : "1";
+          li.classList.toggle("pill-on", !on);
+        });
+      }
       ul.appendChild(li);
     });
+    host.appendChild(ul);
   }
+
+  // tabs
+  tabs.forEach(b => b.addEventListener("click", () => {
+    tabs.forEach(t => t.classList.remove("on"));
+    b.classList.add("on");
+    const tab = b.dataset.tab;
+    boardCABA.classList.toggle("on", tab==="caba");
+    boardPBA.classList.toggle("on",  tab==="pba");
+  }));
+
+  // carga inicial desde backend
+  let current = []; // [{province,city,active}]
+  async function fetchZones(){
+    try{
+      const r = await fetch("/api/reserve?zones=1");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.error || "Error");
+      current = Array.isArray(d) ? d : (d.zones||[]);
+    }catch(e){
+      current = [];
+    }
+  }
+
+  // marca las zonas activas según DB
+  function applyActiveFromDB(){
+    const chips = root.querySelectorAll(".zone-chip");
+    const set = new Set(current.filter(z=>z.active).map(z => `${z.province}||${z.city}`));
+    chips.forEach(ch => {
+      const key = `${ch.dataset.province}||${ch.dataset.city}`;
+      if (set.has(key) && ch.dataset.locked !== "1"){
+        ch.dataset.active = "1";
+        ch.classList.add("pill-on");
+      }
+    });
+
+    // lista de bloqueadas (informativo)
+    const denied = [...chips].filter(ch => ch.dataset.locked === "1").map(ch => `${ch.dataset.province} — ${ch.dataset.city}`);
+    denyList.innerHTML = denied.map(t => `<span class="pill">${t}</span>`).join("");
+  }
+
+  async function saveZones(){
+    msgEl.textContent = "";
+    const payload = [];
+    root.querySelectorAll(".zone-chip").forEach(ch => {
+      const province = ch.dataset.province;
+      const city     = ch.dataset.city;
+      const locked   = ch.dataset.locked === "1";
+      const active   = ch.dataset.active === "1";
+      // nunca mandamos locked=true como activo
+      payload.push({ province, city, active: locked ? false : active });
+    });
+
+    try{
+      const r = await fetch("/api/reserve?zones=1",{
+        method:"PUT",
+        headers: { "Content-Type":"application/json", "x-admin":"1" },
+        body: JSON.stringify({ zones: payload })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.error || "Error guardando");
+      msgEl.textContent = "Zonas guardadas";
+      msgEl.className = "msg ok";
+
+      // refrescar estado
+      await fetchZones();
+      render(); // re-pinta
+    }catch(e){
+      msgEl.textContent = "Error guardando zonas";
+      msgEl.className = "msg err";
+    }
+  }
+
+  function render(){
+    renderBoard(boardCABA, "CABA", CABA_BARRIOS);
+    renderBoard(boardPBA,  "Buenos Aires", PBA_PARTIDOS);
+    applyActiveFromDB();
+  }
+
+  saveBtn.addEventListener("click", saveZones);
+
+  // init
+  (async () => {
+    render();           // pinta primero
+    await fetchZones(); // trae DB
+    applyActiveFromDB();
+  })();
 })();
