@@ -87,13 +87,35 @@
       }
     
       async function fetchZones() {
-        try {
-          const r = await fetch("/api/reserve?zones=1");
-          const data = await r.json();
-          zones = data.map(d => ({ province: d.province, city: d.city, active: d.active }));
-          renderTags();
-        } catch (e) { console.error(e); }
-      }
+  try {
+    const r = await fetch("/api/reserve?zones=1");
+    // si el server tira 500, evitá .json que puede fallar:
+    if (!r.ok) {
+      setMsg("Error cargando zonas (HTTP " + r.status + ")", false);
+      zones = [];
+      renderTags();
+      return;
+    }
+    const data = await r.json();
+    // nuevo: aceptar tanto array como objeto envoltorio
+    const list = Array.isArray(data) ? data
+               : Array.isArray(data?.zones) ? data.zones
+               : [];
+    zones = list.map(d => ({ province: d.province, city: d.city, active: !!d.active }));
+    if (data?.setup_needed) {
+      setMsg("Falta crear la tabla service_zones (ver SQL)", false);
+    } else {
+      setMsg("");
+    }
+    renderTags();
+  } catch (e) {
+    console.error(e);
+    setMsg("Error de red al cargar zonas", false);
+    zones = [];
+    renderTags();
+  }
+}
+
     
       async function saveZones() {
         try {

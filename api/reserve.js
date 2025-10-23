@@ -68,14 +68,24 @@ if (req.method === "HEAD") {
 if ((req.method === "GET" || req.method === "PUT") && (req.query?.zones === "1" || req.query?.zones === 1)) {
   try {
     if (req.method === "GET") {
-      const { rows } = await pool.query(
-        `SELECT id, province, city, active
-           FROM public.service_zones
-          WHERE province IN ('CABA','Buenos Aires')
-          ORDER BY province, city`
-      );
-      return res.status(200).json(rows);
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, province, city, active
+             FROM public.service_zones
+            WHERE province IN ('CABA','Buenos Aires')
+            ORDER BY province, city`
+        );
+        return res.status(200).json(rows);
+      } catch (e) {
+        // 42P01 = undefined_table (no existe la tabla)
+        if (e.code === "42P01") {
+          return res.status(200).json({ setup_needed: true, zones: [] });
+        }
+        throw e;
+      }
     }
+  
+
 
     // PUT: upsert zonas + desactivar no incluidas + notificar interesados recién habilitados
     if (!isAdmin(req)) return res.status(403).json({ error: "No autorizado" });
