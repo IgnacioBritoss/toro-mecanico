@@ -557,7 +557,6 @@ async function onSubmitReservation(e){
       display_name: addrDisplay?.value || '',
       osm_id: addrOsmId?.value || ''
     },
-    // NUEVO: referido
     referred_email: (fReferred?.value || '').trim()
   };
 
@@ -565,7 +564,6 @@ async function onSubmitReservation(e){
     formHint.textContent="Completá todos los campos."; return;
   }
   if(payload.age<18){ formHint.textContent="Solo mayores de 18 años."; return; }
-
   if (!payload.location.lat || !payload.location.lng || !payload.location.display_name){
     formHint.textContent = "Indicá la dirección y elegí una sugerencia para fijar el punto en el mapa.";
     document.getElementById('fAddress')?.focus();
@@ -573,10 +571,25 @@ async function onSubmitReservation(e){
   }
 
   try{
-    const res=await fetch("/api/reserve",{ method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(payload) });
-    const data=await res.json();
-    if(!res.ok){ formHint.textContent=data.error||"No se pudo procesar la reserva."; return; }
+    const res = await fetch("/api/reserve",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
 
+    if(!res.ok){
+      // 409 por zona bloqueada con suscripción
+      if (res.status === 409 && data?.can_subscribe){
+        formHint.textContent = "Todavía no llegamos a tu zona. Podés dejar tu email y te avisamos 🤝";
+        if (window.handleZoneBlocked) window.handleZoneBlocked(data);
+        return;
+      }
+      formHint.textContent = data?.error || "No se pudo procesar la reserva.";
+      return;
+    }
+
+    // OK
     lastReservation = { id: data.reservation?.id, token: data.token };
     formHint.textContent="Reserva enviada. Ahora seguí el segundo paso.";
     reserveForm.reset();
@@ -588,13 +601,13 @@ async function onSubmitReservation(e){
     secondStepHint.textContent="";
     paymentBlockManual.classList.add("hidden");
 
-    // IMPORTANTE: refresco disponibilidad para que persista visualmente
     await fetchAvailabilityForMonth(activeMonth);
     renderCalendar(); renderHours(); updateSummary();
   }catch{
     formHint.textContent="Error de red. Intentá nuevamente.";
   }
 }
+
 
 // ================================
 // Segundo paso

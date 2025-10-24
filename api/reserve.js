@@ -35,11 +35,10 @@ async function parseJSON(req){
   try { return JSON.parse(raw); } catch { return {}; }
 }
 function isAdmin(req){
-  // usá tu auth real si la tenés; para el panel alcanza con este header
   return req.headers["x-admin"] === "1" || req.user?.is_admin === true;
 }
 
-/* ===== Barrios de CABA (para inferencia de ciudad/barrio) */
+/* ===== Barrios CABA (para inferencia de ciudad/barrio) */
 const CABA_BARRIOS = [
   "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
   "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta",
@@ -56,9 +55,7 @@ const BARRIOS_REGEX = CABA_BARRIOS.map(b => ({
   re: new RegExp(`\\b${b.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b`, "i")
 }));
 
-/* =================================================================
-   Blacklist de VILLAS (CABA + GBA) — match por texto en display_name
-================================================================= */
+/* ===== Blacklist de villas (CABA + GBA) */
 const VILLA_BLACKLIST = [
   // CABA
   "villa 31","barrio padre mugica","padre mugica","villa 20","villa lugano 20","barrio papa francisco",
@@ -75,9 +72,7 @@ function isVilla(displayName=""){
   return VILLA_BLACKLIST.some(k => t.includes(k));
 }
 
-/* ===========================================================
-   Inferencia provincia/ciudad/barrio desde display_name
-=========================================================== */
+/* ===== Inferencia provincia/ciudad/barrio desde la dirección */
 function inferProvinceCity(display_name=""){
   const low = (display_name || "").toLowerCase();
   const isCABA = /c\.?a\.?b\.?a|ciudad aut[oó]noma de buenos aires|capital federal|caba\b/.test(low);
@@ -100,9 +95,7 @@ function inferProvinceCity(display_name=""){
   return { province, city: "" };
 }
 
-/* ===========================================================
-   ¿Ciudad/partido/barrio deshabilitado?
-=========================================================== */
+/* ===== Chequeo de ciudad/partido/barrio deshabilitado */
 async function isDisabledCity(province, city){
   try{
     const exist = await pool.query(`
@@ -110,7 +103,6 @@ async function isDisabledCity(province, city){
       WHERE table_schema='public' AND table_name='service_zones'
     `);
     if (exist.rowCount === 0) return false;
-
     const any = await pool.query(`SELECT 1 FROM public.service_zones LIMIT 1`);
     if (any.rowCount === 0) return false;
 
@@ -120,16 +112,11 @@ async function isDisabledCity(province, city){
       [province || "Buenos Aires", city || "CABA"]
     );
     return q.rowCount > 0;
-  }catch{
-    return false;
-  }
+  }catch{ return false; }
 }
 
-/* ===========================================================
-   GET/PUT ?zones=1 para el panel + POST ?interest=1
-=========================================================== */
+/* ===== GET/PUT ?zones=1 y POST ?interest=1 */
 async function handleZones(req, res){
-  // GET listado de zonas
   if (req.method === "GET"){
     try{
       const { rows } = await pool.query(
@@ -146,15 +133,13 @@ async function handleZones(req, res){
     }
   }
 
-  // PUT guardar zonas + notificar interesados re-habilitados
   if (req.method === "PUT"){
     if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
-
     const body = await parseJSON(req);
     const zones = Array.isArray(body?.zones) ? body.zones : [];
 
     const client = await pool.connect();
-    let enabledNow = [];
+    let becameEnabled = []; // transiciones false/undefined -> true
     try{
       await client.query("BEGIN");
       await client.query(`
@@ -176,6 +161,14 @@ async function handleZones(req, res){
           PRIMARY KEY (email, province, city)
         )`);
 
+      // Mapear estado previo
+      const prevMap = new Map();
+      const { rows: prevRows } = await client.query(`SELECT province, city, active FROM public.service_zones`);
+      for (const r of prevRows){
+        prevMap.set(`${r.province}||${r.city}`.toLowerCase(), !!r.active);
+      }
+
+      // Upserts
       const upsert = `
         INSERT INTO public.service_zones (province, city, active)
         VALUES ($1,$2,$3)
@@ -187,10 +180,16 @@ async function handleZones(req, res){
         if (!z?.province || !z?.city) continue;
         const act = z.active === false ? false : true;
         const r = await client.query(upsert, [z.province, z.city, act]);
-        if (r.rows?.[0]?.active === true){
-          enabledNow.push({ province: r.rows[0].province, city: r.rows[0].city });
+        const row = r.rows?.[0];
+        if (!row) continue;
+
+        const k = `${row.province}||${row.city}`.toLowerCase();
+        const before = prevMap.get(k); // true/false/undefined
+        if (row.active === true && before !== true){
+          becameEnabled.push({ province: row.province, city: row.city });
         }
       }
+
       await client.query("COMMIT");
     }catch(e){
       await client.query("ROLLBACK");
@@ -200,17 +199,17 @@ async function handleZones(req, res){
     }
     client.release();
 
-    // Notificar interesados (best-effort)
+    // Notificar interesados SOLO si hubo transiciones a true
     try{
-      if (enabledNow.length){
+      if (becameEnabled.length){
         const transporter = createTransporter();
         const seen = new Set();
-        enabledNow = enabledNow.filter(z => {
+        becameEnabled = becameEnabled.filter(z => {
           const k = `${z.province}||${z.city}`.toLowerCase();
           if (seen.has(k)) return false; seen.add(k); return true;
         });
 
-        for (const z of enabledNow){
+        for (const z of becameEnabled){
           const { rows } = await pool.query(
             `SELECT email FROM public.service_interests
              WHERE province=$1 AND city=$2 AND notified_at IS NULL`,
@@ -230,6 +229,7 @@ async function handleZones(req, res){
               }catch(e){ console.error("MAIL interest ERROR:", e); }
             }
           }
+
           await pool.query(
             `UPDATE public.service_interests
                SET notified_at=now()
@@ -253,7 +253,6 @@ async function handleInterest(req, res){
     const province = body?.province || "";
     const city = body?.city || "";
     const display_name = body?.display_name || "";
-
     if (!isValidEmail(email) || !province || !city){
       return res.status(400).json({ error:"Datos inválidos" });
     }
@@ -283,9 +282,9 @@ async function handleInterest(req, res){
   }
 }
 
-/* ===========================================================
+/* =========================
    HANDLER PRINCIPAL
-=========================================================== */
+========================= */
 export default async function handler(req, res){
   // CORS/health
   if (req.method === "OPTIONS"){
@@ -302,7 +301,7 @@ export default async function handler(req, res){
     return handleZones(req, res);
   }
 
-  // Suscripción de interés (cuando la zona está deshabilitada)
+  // Suscripción de interés
   if (req.method === "POST" &&
       (req.query?.interest === "1" || req.query?.interest === 1)){
     return handleInterest(req, res);
@@ -320,36 +319,31 @@ export default async function handler(req, res){
       location, referred_email
     } = body || {};
 
-    // Requisitos base (exactos a tu front)
     if (!name || !email || !age || !date || !time || !phone || !postal_code){
       return res.status(400).json({ error:"Faltan campos obligatorios" });
     }
     if (!isValidEmail(email))  return res.status(400).json({ error:"Email inválido" });
     if (parseInt(age,10) < 18) return res.status(400).json({ error:"Solo mayores de 18 años" });
 
-    // Ubicación requerida (con coordenadas válidas)
     if (!location || !location.display_name || !isValidLatLng(location.lat, location.lng)){
       return res.status(400).json({ error:"Falta ubicación exacta del evento." });
     }
 
-    // REFERIDO opcional
     const referred = (referred_email || "").trim();
     if (referred){
       if (!isValidEmail(referred)) return res.status(400).json({ error:"Email de referido inválido" });
       if (referred.toLowerCase() === email.toLowerCase()) return res.status(400).json({ error:"No podés referirte a vos mismo" });
     }
 
-    // Fechas válidas
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)){
       return res.status(400).json({ error:"Fecha u hora inválidas" });
     }
 
-    // 1) Bloqueo por villas
+    // Bloqueos
     if (isVilla(location.display_name)) {
       return res.status(409).json({ error:"No trabajamos en esa zona." });
     }
 
-    // 2) Bloqueo por zona deshabilitada (ciudad/partido/barrio)
     const { province, city } = inferProvinceCity(location.display_name);
     if (await isDisabledCity(province, city)){
       return res.status(409).json({
@@ -368,7 +362,7 @@ export default async function handler(req, res){
     );
     if (qPlan.rowCount === 0) return res.status(400).json({ error:"Plan inválido o no disponible" });
 
-    // Disponibilidad (máx 2 por día y hora única)
+    // Disponibilidad
     const hourInt = parseInt(String(time).split(":")[0], 10);
 
     const client = await pool.connect();
@@ -376,7 +370,6 @@ export default async function handler(req, res){
     try{
       await client.query("BEGIN");
 
-      // Upsert usuario
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -388,7 +381,6 @@ export default async function handler(req, res){
       );
       user = u.rows[0];
 
-      // Chequear día/hora
       const qDay = await client.query(
         `SELECT event_hour FROM reservations
           WHERE event_date=$1 AND status <> 'rechazada'`, [date]
@@ -402,7 +394,6 @@ export default async function handler(req, res){
         return res.status(409).json({ error:"Esa hora ya está ocupada." });
       }
 
-      // Insert reserva
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -437,7 +428,7 @@ export default async function handler(req, res){
       client.release();
     }
 
-    // Emails (propietario + cliente) – opcional
+    // Emails
     const transporter = createTransporter();
     try{
       if (transporter){
@@ -464,7 +455,6 @@ export default async function handler(req, res){
               ? `https://www.google.com/maps?q=${encodeURIComponent(reservation.location_address)}`
               : "");
 
-        // Dueño
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
@@ -488,7 +478,6 @@ export default async function handler(req, res){
             </div>`
         });
 
-        // Cliente
         await transporter.sendMail({
           from: `Equipo de Toro Mecánico <${fromEmail}>`,
           to: user.email,
