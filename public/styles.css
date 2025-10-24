@@ -625,3 +625,9 @@ body.has-admin-overlay{ overflow:hidden; }
   font-size: 12px;
   white-space: nowrap;
 }
+
+
+.cards--reviews-admin { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:12px; }
+.card--review-admin .review__stars { font-size: 18px; margin: 6px 0; }
+.card--review-admin .review__comment { white-space: pre-wrap; }
+.btn--danger { background:#dc2626; color:#fff; }

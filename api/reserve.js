@@ -180,8 +180,10 @@ async function ensureReviewsTable(){
 }
 
 async function handleReview(req, res){
-  // POST /api/reserve?review=1    -> crea reseña (con pass)
-  // GET  /api/reserve?review=public -> lista reseñas publicadas
+  // POST /api/reserve?review=1           -> crea reseña (con pass)
+  // GET  /api/reserve?review=public      -> lista reseñas publicadas (para el carrusel)
+  // GET  /api/reserve?review=all         -> lista TODAS (admin)
+  // DELETE /api/reserve?review=delete&id=123 -> borra por id (admin)
   try{
     const mode = String(req.query?.review || "").toLowerCase();
 
@@ -189,7 +191,7 @@ async function handleReview(req, res){
       await ensureReviewsTable();
       const body = await parseJSON(req);
       const pass = (body?.pass || "").trim();
-      if (!pass || pass !== REVIEW_PASS){
+      if (!pass || pass !== (process.env.REVIEW_PASS || "toro2025").trim()){
         return res.status(401).json({ error: "Contraseña inválida" });
       }
       const rating = parseInt(body?.rating, 10);
@@ -207,7 +209,6 @@ async function handleReview(req, res){
         [name, rating, comment, publish]
       );
 
-      // Notificación opcional al dueño
       try{
         const transporter = createTransporter();
         if (transporter){
@@ -220,10 +221,10 @@ async function handleReview(req, res){
             html: `
               <div style="font-family:system-ui,Segoe UI,Roboto">
                 <h3>Nueva reseña</h3>
-                <p><strong>Rating:</strong> ${rating} / 5</p>
-                ${name ? `<p><strong>Nombre:</strong> ${name}</p>` : ""}
-                <p style="white-space:pre-wrap"><strong>Comentario:</strong><br/>${comment}</p>
-                <p><em>Publicar:</em> ${publish ? "Sí" : "No"}</p>
+                <p><strong>Rating:</strong> ${rows[0].rating} / 5</p>
+                ${rows[0].name ? `<p><strong>Nombre:</strong> ${rows[0].name}</p>` : ""}
+                <p style="white-space:pre-wrap"><strong>Comentario:</strong><br/>${rows[0].comment}</p>
+                <p><em>Publicar:</em> ${rows[0].publish ? "Sí" : "No"}</p>
               </div>`
           });
         }
@@ -242,6 +243,28 @@ async function handleReview(req, res){
          LIMIT 30`
       );
       return res.status(200).json({ ok:true, reviews: rows });
+    }
+
+    if (req.method === "GET" && mode === "all"){
+      if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
+      await ensureReviewsTable();
+      const { rows } = await pool.query(
+        `SELECT id, name, rating, comment, publish, created_at
+         FROM public.reviews
+         ORDER BY created_at DESC
+         LIMIT 200`
+      );
+      return res.status(200).json({ ok:true, reviews: rows });
+    }
+
+    if (req.method === "DELETE" && mode === "delete"){
+      if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
+      const id = parseInt(String(req.query?.id || ""), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error:"ID inválido" });
+
+      await ensureReviewsTable();
+      const r = await pool.query(`DELETE FROM public.reviews WHERE id=$1`, [id]);
+      return res.status(200).json({ ok:true, deleted: r.rowCount });
     }
 
     return res.status(405).json({ error:"Método no permitido (review)" });

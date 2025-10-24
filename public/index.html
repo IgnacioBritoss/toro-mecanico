@@ -110,6 +110,20 @@
   </style>
 </section>
 
+<!-- ===== ADMIN: Reseñas ===== -->
+<section id="reviewsAdmin" class="section admin-only" hidden>
+  <div class="container">
+    <h2 class="section__title">Reseñas (admin)</h2>
+    <p class="muted">Listado de reseñas recibidas. Podés borrar las que correspondan.</p>
+
+    <div id="reviewsAdminList" class="cards cards--reviews-admin">
+      <!-- admin-reviews.js rellena acá -->
+    </div>
+    <div id="reviewsAdminHint" class="hint"></div>
+  </div>
+</section>
+
+
 <!-- Carga del feed de reseñas -->
 <script src="/review-feed.js" defer></script>
 
@@ -401,6 +415,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./main.js"></script>
+  <script src="admin-reviews.js"></script>
   <script src="reach-zones.js" defer></script>
   <script src="week-activity.js"></script>
   <script src="./admin-prices.js"></script>
