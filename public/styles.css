@@ -725,3 +725,20 @@ body.has-admin-overlay{ overflow:hidden; }
 }
 
 
+/* Flechas del Árbol de relaciones en negro (match con el resto) */
+#forestSection .btn--icon{
+  min-width:40px; height:36px; padding:0 6px;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:#0f172a;          /* negro */
+  color:#fff;
+  border:none;
+  border-radius:12px;
+  cursor:pointer;
+  box-shadow:0 4px 10px rgba(0,0,0,.12);
+  transition:opacity .15s ease, transform .08s ease;
+}
+#forestSection .btn--icon:hover{ opacity:.92; }
+#forestSection .btn--icon:active{ transform:translateY(1px); }
+#forestSection .btn--icon:disabled{
+  opacity:.5; cursor:default; transform:none;
+}
