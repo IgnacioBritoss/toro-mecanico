@@ -1,47 +1,31 @@
-// /public/review.js
 (function(){
-  const $ = s => document.querySelector(s);
-  const $$ = s => Array.from(document.querySelectorAll(s));
+  const qs = new URLSearchParams(location.search);
+  const qrToken = (qs.get('q') || '').trim();          // si viene de QR
+  const fromQR  = !!qrToken;
 
-  const form = $('#reviewForm');
-  if (!form) return;
+  const form   = document.getElementById('reviewForm');
+  const pass   = document.getElementById('revPass');
+  const passWrap = document.getElementById('passWrap');
+  const name   = document.getElementById('revName');
+  const text   = document.getElementById('revText');
+  const ratingInput = document.getElementById('revRating');
+  const stars  = document.getElementById('revStars');
+  const hint   = document.getElementById('revHint');
+  const btn    = document.getElementById('revSend');
 
-  const title = $('#revTitle');
-  const subtitle = $('#revSubtitle');
+  // Si viene con ?q=... (QR): ocultar password
+  if (fromQR && passWrap) passWrap.classList.add('hide');
 
-  const passLabel = $('#revPassLabel');
-  const pass = $('#revPass');
-  const name = $('#revName');
-  const text = $('#revText');
-  const ratingInput = $('#revRating');
-  const starsWrap = $('#revStars');
-  const publishWrap = $('#revPublishWrap');
-  const publish = $('#revPublish');
-  const hint = $('#revHint');
-  const btn = $('#revSend');
-
-  const params = new URLSearchParams(location.search);
-  const qrToken = params.get('q');
-
-  // Modo QR: no pide pass, no muestra "acepto publicar", y cambia textos
-  if (qrToken) {
-    if (passLabel) passLabel.style.display = 'none';
-    if (publishWrap) publishWrap.style.display = 'none';
-    if (publish) publish.checked = true;
-
-    if (title) title.textContent = '¡Gracias por colaborar! ⭐';
-    if (subtitle) subtitle.textContent = 'Ingresaste desde el QR. Podés dejarnos tu reseña sin ingresar contraseña.';
-  }
-
+  // Estrellas
   function paint(n){
-    $$('#revStars button').forEach(b => {
+    [...stars.querySelectorAll('button')].forEach(b => {
       const v = Number(b.dataset.v);
       b.textContent = v <= n ? '★' : '☆';
     });
   }
-  paint(Number(ratingInput?.value) || 5);
+  paint(Number(ratingInput.value) || 5);
 
-  starsWrap?.addEventListener('click', (e) => {
+  stars.addEventListener('click', (e) => {
     const v = Number(e.target?.dataset?.v || 0);
     if (!v) return;
     ratingInput.value = String(v);
@@ -54,50 +38,33 @@
     hint.className = 'hint';
 
     const payload = {
-      pass: (pass?.value || '').trim(),
+      // Si hay QR uso qr_token; si no, uso pass
+      pass: fromQR ? '' : (pass?.value || '').trim(),
+      qr_token: fromQR ? qrToken : '',
       name: (name?.value || '').trim(),
       rating: Number(ratingInput?.value || 5),
       comment: (text?.value || '').trim(),
-      publish: qrToken ? true : !!publish?.checked
+      publish: true  // ya no mostramos checkbox
     };
 
-    if (!qrToken && !payload.pass){
-      hint.textContent = 'Ingresá la contraseña.';
-      return;
-    }
-    if (!payload.comment){
-      hint.textContent = 'Escribí un comentario.';
-      return;
-    }
-    if (payload.rating < 1 || payload.rating > 5){
-      hint.textContent = 'Calificación inválida.';
-      return;
-    }
+    if (!fromQR && !payload.pass){ hint.textContent = 'Ingresá la contraseña.'; return; }
+    if (!payload.comment){ hint.textContent = 'Escribí un comentario.'; return; }
+    if (payload.rating < 1 || payload.rating > 5){ hint.textContent = 'Calificación inválida.'; return; }
 
     try{
       btn.disabled = true;
       hint.textContent = 'Enviando...';
-
-      const headers = { 'Content-Type': 'application/json' };
-      if (qrToken) headers['X-Review-QR'] = qrToken;
-
       const r = await fetch('/api/reserve?review=1', {
         method:'POST',
-        headers,
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify(payload)
       });
       const d = await r.json().catch(()=>({}));
-
       if (!r.ok || !d?.ok){
-        if (r.status === 401) {
-          hint.textContent = qrToken ? 'QR inválido o vencido.' : 'Contraseña inválida.';
-        } else {
-          hint.textContent = d?.error || 'No se pudo guardar la reseña.';
-        }
+        hint.textContent = d?.error || 'No se pudo guardar la reseña.';
         btn.disabled = false;
         return;
       }
-
       hint.textContent = '¡Gracias! Tu reseña fue enviada.';
       hint.className = 'ok';
       form.reset();

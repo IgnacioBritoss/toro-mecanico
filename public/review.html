@@ -7,6 +7,8 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
   <style>
+    /* Fondo plano para esta página (sin gradiente) */
+    body { background: #e8f1ff !important; }
     .wrap { max-width: 760px; margin: 32px auto; padding: 16px; }
     .card { background: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: 20px; }
     .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
@@ -21,18 +23,21 @@
     input, textarea { width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:10px; }
     label { display:block; font-weight:600; margin:10px 0 6px; }
     .muted { color:#6b7280; }
+    .hide { display:none !important; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h2 id="revTitle">¡Gracias por tu evento! ⭐</h2>
-      <p id="revSubtitle" class="muted">Esta página es privada. Necesitás la contraseña que te dimos con el QR.</p>
+      <h2>¡Gracias por colaborar! ⭐</h2>
+      <p class="muted">Tu opinión nos ayuda a mejorar y a que más personas disfruten de la experiencia. abajo pon la contraseña que esta en la tarjeta</p>
 
       <form id="reviewForm" novalidate>
-        <label id="revPassLabel">Contraseña
-          <input id="revPass" type="password" placeholder="••••••" autocomplete="off" required />
-        </label>
+        <!-- Password se oculta si viene con ?q= (QR) -->
+        <div id="passWrap">
+          <label>Contraseña</label>
+          <input id="revPass" type="password" placeholder="••••••" autocomplete="off" />
+        </div>
 
         <div class="row">
           <div>
@@ -49,20 +54,13 @@
               <button type="button" data-v="5" aria-label="5 estrellas">☆</button>
             </div>
             <input id="revRating" type="hidden" value="5" />
-            <div class="hint">Tocá las estrellas para elegir (5 = excelente).</div>
           </div>
         </div>
 
-        <label>Comentario
-          <textarea id="revText" rows="4" placeholder="¿Cómo la pasaron? ¿Qué te gustó?" required></textarea>
-        </label>
+        <label>Comentario</label>
+        <textarea id="revText" rows="4" placeholder="¿Cómo la pasaron? ¿Qué te gustó?"></textarea>
 
-        <div id="revPublishWrap" style="margin:10px 0">
-          <label style="display:flex; gap:8px; align-items:center; font-weight:500">
-            <input id="revPublish" type="checkbox" checked />
-            Acepto que publiquen mi reseña en la web.
-          </label>
-        </div>
+        <!-- Se quitó el checkbox de 'publicar' -->
 
         <button id="revSend" class="btn" type="submit">Enviar reseña</button>
         <div id="revHint" class="hint" aria-live="polite"></div>
@@ -70,7 +68,6 @@
     </div>
   </div>
 
-  <!-- OJO: tu archivo se llama review.js -->
   <script src="/review.js"></script>
 </body>
 </html>
