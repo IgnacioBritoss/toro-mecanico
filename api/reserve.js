@@ -1,4 +1,3 @@
-// api/reserve.js
 import { pool } from "../lib/db.js";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
@@ -6,8 +5,8 @@ import crypto from "crypto";
 export const config = { runtime: "nodejs" };
 
 /* =========================
- * Helpers básicos
- * ========================= */
+   Helpers básicos
+========================= */
 function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
 function signToken(id, email){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
@@ -18,25 +17,6 @@ function isValidLatLng(lat, lng){
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return false;
   return la >= -90 && la <= 90 && ln >= -180 && ln <= 180;
 }
-function formatFechaCortaUTC(dateLike){
-  const d = new Date(dateLike);
-  const weekday = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yy = String(d.getUTCFullYear()).slice(-2);
-  return `${weekday} ${dd}/${mm}/${yy}`;
-}
-function isAdmin(req){
-  // Ajustá a tu sesión real si tenés auth. Fallback por header para pruebas.
-  return req.user?.is_admin || req.headers["x-admin"] === "1";
-}
-async function parseJSON(req){
-  if (req.body && typeof req.body === "object") return req.body;
-  const chunks = [];
-  for await (const ch of req) chunks.push(ch);
-  const raw = Buffer.concat(chunks).toString("utf8") || "{}";
-  try { return JSON.parse(raw); } catch { return {}; }
-}
 function createTransporter(){
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
   return nodemailer.createTransport({
@@ -46,284 +26,382 @@ function createTransporter(){
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
   });
 }
-
-/* =========================
- * Villas de emergencia (lista curada)
- *  – Solo éstas se bloquean
- * ========================= */
-const DANGER_AREAS = {
-  "CABA": [
-    "Barrio Padre Mugica","Villa 31","31 bis",
-    "Barrio Padre Ricciardelli","1-11-14","Rivadavia 1-11-14",
-    "Barrio 20","Villa 20",
-    "Barrio 21-24","21-24",
-    "Rodrigo Bueno",
-    "Playón de Chacarita"
-  ],
-  "Buenos Aires": [
-    "La Cava",                 // San Isidro
-    "Villa Itatí",             // Quilmes
-    "Villa Azul",              // Avellaneda/Quilmes
-    "Fuerte Apache",           // Ejército de los Andes – Tres de Febrero
-    "Barrio Carlos Gardel",    // El Palomar / Morón
-    "Villa Palito",            // La Matanza
-    "Puerta de Hierro",        // La Matanza
-    "Villa La Rana"            // San Martín
-  ]
-};
-
-function norm(s){
-  return String(s||"")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu,"")
-    .trim();
+function isAdmin(req){
+  // Ajustalo a tu auth real si tenés sesión.
+  return req.user?.is_admin || req.headers["x-admin"] === "1";
 }
-function containsDangerToken(province, cityOrBarrio){
-  const prov = (String(province||"").trim() === "CABA") ? "CABA" : "Buenos Aires";
-  const haystack = norm(cityOrBarrio);
-  const list = DANGER_AREAS[prov] || [];
-  return list.some(label => haystack.includes(norm(label)));
-}
-// Bloqueo duro solo si pertenece a la lista curada (no por tener “Villa ” en el nombre)
-function isRestrictedZone(province, cityOrBarrio){
-  const p = String(province||"").trim();
-  if (p !== "CABA" && p !== "Buenos Aires") return false;
-  return containsDangerToken(p, cityOrBarrio);
+async function parseJSON(req){
+  if (req.body && typeof req.body === "object") return req.body;
+  const chunks = [];
+  for await (const ch of req) chunks.push(ch);
+  const raw = Buffer.concat(chunks).toString("utf8") || "{}";
+  try { return JSON.parse(raw); } catch { return {}; }
 }
 
-/* =========================
- * Handler
- * ========================= */
+/* =================================================================
+   LISTA NEGRA de VILLAS (CABA + GBA) — bloquea por coincidencia.
+   Podés extender sin tocar DB.
+================================================================= */
+const VILLA_BLACKLIST = [
+  // CABA (alias históricos y oficiales)
+  "villa 31", "barrio padre mugica", "padre mugica",
+  "villa 20", "villa lugano 20", "barrio papa francisco",
+  "villa 1-11-14", "1-11-14", "riccardelli", "ricciardelli", "bajo flores",
+  "villa 21-24", "zavaleta", "villa 15", "ciudad oculta", "villa 3",
+  "villa 6", "villa 17", "villa 19", "villa 31 bis", "villa 31bis",
+  "villa 26", "villa 2", "villa 7", "villa 8", "villa 13 bis",
+  // GBA destacadas
+  "villa itatí", "villa azúl", "villa azul",
+  "fuerte apache", "ejército de los andes",
+  "villa caraza", "villa la cava", "villa palito",
+  "villa jardÍn", "villa jardín", "villa trujui", "villa los paraguayos",
+  "la saladita", "la saladita de wilde",
+].map(s => s.toLowerCase());
+
+function looksBlacklisted(displayName=""){
+  const t = displayName.toLowerCase();
+  return VILLA_BLACKLIST.some(k => t.includes(k));
+}
+
+/* ===========================================================
+   Normalización mínima de provincia/ciudad/barrio
+   (no rompe tu front si no mandás esos campos)
+=========================================================== */
+function inferProvinceCityNeighborhood({ display_name="" } = {}){
+  const txt = (display_name||"").toLowerCase();
+
+  // Provincia:
+  // si aparece "ciudad autónoma de buenos aires" o "caba" => "CABA"
+  // caso contrario "Buenos Aires"
+  const province = /c\.?a\.?b\.?a|ciudad aut[oó]noma de buenos aires|capital federal/.test(txt)
+    ? "CABA" : "Buenos Aires";
+
+  // Ciudad / Partido (heurística simple desde display_name)
+  // tomamos el primer token que parezca partido/barriada conocida
+  // Si no, dejamos vacío; no bloquea reserva.
+  let city = "";
+  const tokens = display_name.split(",").map(s => s.trim());
+  for (const tk of tokens){
+    const t = tk.toLowerCase();
+    // algunos partidos clásicos GBA
+    if (/quilmes|avellaneda|lan[uú]s|tigre|san isidro|san mart[ií]n|mor[oó]n|lomas de zamora|la matanza|berazategui|almirante brown|esteban echeverr[ií]a|ezeiza|ituzaing[oó]|merlo|vicente l[oó]pez|san miguel|malvinas argentinas|hurlingham|tres de febrero|berisso|ensenada/.test(t)){
+      city = tk; break;
+    }
+    if (province==="CABA" && /caba|buenos aires/.test(t)){ city = "CABA"; }
+  }
+
+  // Barrio (si figura algo estilo "Saavedra", "Palermo", etc.)
+  // tomamos el primer token ANTES de "CABA".
+  let neighborhood = "";
+  if (province==="CABA"){
+    const iCaba = tokens.findIndex(x => /caba|ciudad aut[oó]noma/.test(x.toLowerCase()));
+    if (iCaba > 0) neighborhood = tokens[iCaba-1].trim();
+  }
+
+  return { province, city, neighborhood };
+}
+
+/* ===========================================================
+   Rutas auxiliares de administración de ZONAS/BARRIOS
+=========================================================== */
+/*
+  GET /api/reserve?zones=1
+      -> { zones:[{province,city,active}], blocks:[{province,city,neighborhood,active:false}], blacklist:[...] }
+  PUT /api/reserve?zones=1   (admin)
+      body: { zones:[...], blocks:[...] }
+*/
 export default async function handler(req, res){
-  // Preflight + HEAD
-  if (req.method === "OPTIONS") {
+  // CORS/health
+  if (req.method === "OPTIONS"){
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin");
     return res.status(200).end();
   }
-  if (req.method === "HEAD") {
-    return res.status(200).end();
-  }
+  if (req.method === "HEAD"){ return res.status(200).end(); }
 
-  /* ============================================================
-   * ZONAS (admin) en la misma ruta: /api/reserve?zones=1
-   *   GET -> lista zonas
-   *   PUT -> guarda zonas (ignora villas de emergencia)
-   * ============================================================ */
+  // ========== ADMIN ZONES ==========
   if ((req.method === "GET" || req.method === "PUT") &&
       (req.query?.zones === "1" || req.query?.zones === 1)) {
-    try {
-      // GET: devolver lista o arreglo vacío si aún no hay tabla
-      if (req.method === "GET") {
-        try {
-          const { rows } = await pool.query(
-            `SELECT id, province, city, active
+    try{
+      if (req.method === "GET"){
+        try{
+          const { rows: zones } = await pool.query(
+            `SELECT province, city, active
                FROM public.service_zones
               WHERE province IN ('CABA','Buenos Aires')
               ORDER BY province, city`
           );
-          // Para el front: siempre un array
-          return res.status(200).json(rows || []);
-        } catch (e) {
-          // 42P01 = undefined_table (no existe la tabla)
-          if (e.code === "42P01") {
-            return res.status(200).json([]); // nunca 500
+          let blocks = [];
+          try{
+            const q = await pool.query(
+              `SELECT province, city, neighborhood, active
+                 FROM public.service_blocks
+                WHERE province IN ('CABA','Buenos Aires')
+                ORDER BY province, city, neighborhood`
+            );
+            blocks = q.rows || [];
+          }catch(e2){
+            if (e2.code !== "42P01") throw e2; // tabla no existe => ignoramos
+          }
+          return res.status(200).json({ zones, blocks, blacklist: VILLA_BLACKLIST });
+        }catch(e){
+          if (e.code === "42P01"){ // ninguna tabla creada
+            return res.status(200).json({ setup_needed:true, zones:[], blocks:[], blacklist: VILLA_BLACKLIST });
           }
           throw e;
         }
       }
 
-      // PUT: upsert de zonas; bloquea villas de emergencia
-      if (!isAdmin(req)) return res.status(403).json({ error: "No autorizado" });
-      const body  = await parseJSON(req);
-      const zones = Array.isArray(body?.zones) ? body.zones : null;
-      if (!zones) return res.status(400).json({ error: "Formato inválido (se espera { zones: [...] })" });
-
-      // Filtrar y marcar bloqueadas (no las guardamos activas)
-      const blocked = [];
-      const filtered = [];
-      for (const z of zones) {
-        if (!z?.province || !z?.city) continue;
-        if (isRestrictedZone(z.province, z.city)) {
-          blocked.push({ province: z.province, city: z.city });
-          filtered.push({ province: z.province, city: z.city, active: false });
-        } else {
-          filtered.push({ province: z.province, city: z.city, active: !!z.active });
-        }
-      }
+      // PUT
+      if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
+      const body = await parseJSON(req);
+      const zones = Array.isArray(body?.zones) ? body.zones : [];
+      const blocks = Array.isArray(body?.blocks) ? body.blocks : [];
 
       const client = await pool.connect();
-      try {
+      try{
         await client.query("BEGIN");
 
-        // Zonas "antes" para detectar newlyActivated
-        const { rows: before } = await client.query(
-          `SELECT province, city, active
-             FROM public.service_zones
-            WHERE province IN ('CABA','Buenos Aires')`
-        );
-        const beforeMap = new Map(before.map(r => [`${r.province}||${r.city}`, !!r.active]));
-
-        const keepSet = new Set();
-        for (const z of filtered) {
-          const { rows } = await client.query(
-            `INSERT INTO public.service_zones (province, city, active)
-             VALUES ($1,$2,$3)
-             ON CONFLICT (province, city)
-             DO UPDATE SET active = EXCLUDED.active, updated_at = now()
-             RETURNING province, city, active`,
-            [z.province, z.city, z.active]
-          );
-          keepSet.add(`${rows[0].province}||${rows[0].city}`);
+        // Upsert zonas (ciudades/partidos)
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS public.service_zones(
+            province text NOT NULL,
+            city     text NOT NULL,
+            active   boolean NOT NULL DEFAULT true,
+            updated_at timestamp with time zone DEFAULT now(),
+            PRIMARY KEY (province, city)
+          )`);
+        const upsertZone = `
+          INSERT INTO public.service_zones (province, city, active)
+          VALUES ($1,$2,$3)
+          ON CONFLICT (province, city)
+          DO UPDATE SET active=EXCLUDED.active, updated_at=now()
+        `;
+        const keepZones = new Set();
+        for (const z of zones){
+          if (!z?.province || !z?.city) continue;
+          const act = z.active === false ? false : true;
+          await client.query(upsertZone, [z.province, z.city, act]);
+          keepZones.add(`${z.province}||${z.city}`);
         }
-
-        // Desactivar las que no vinieron en el payload
-        const { rows: all } = await client.query(
-          `SELECT province, city, active
-             FROM public.service_zones
-            WHERE province IN ('CABA','Buenos Aires')`
+        // Desactivar lo que no mandaron
+        const { rows: allZones } = await client.query(
+          `SELECT province, city, active FROM public.service_zones WHERE province IN ('CABA','Buenos Aires')`
         );
-        for (const r of all) {
+        for (const r of allZones){
           const k = `${r.province}||${r.city}`;
-          if (!keepSet.has(k) && r.active) {
-            await client.query(
-              `UPDATE public.service_zones
-                  SET active = FALSE, updated_at = now()
-                WHERE province = $1 AND city = $2`,
-              [r.province, r.city]
-            );
+          if (!keepZones.has(k) && r.active){
+            await client.query(`UPDATE public.service_zones SET active=false, updated_at=now()
+                                 WHERE province=$1 AND city=$2`, [r.province, r.city]);
           }
         }
 
-        // newlyActivated (solo informativo)
-        const { rows: after } = await client.query(
-          `SELECT province, city, active
-             FROM public.service_zones
-            WHERE province IN ('CABA','Buenos Aires')`
-        );
-        const newlyActivated = [];
-        for (const r of after) {
-          const k = `${r.province}||${r.city}`;
-          const wasActive = beforeMap.get(k) || false;
-          if (!wasActive && r.active) newlyActivated.push({ province: r.province, city: r.city });
+        // Upsert BLOQUEOS de barrios
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS public.service_blocks(
+            province     text NOT NULL,
+            city         text NOT NULL,
+            neighborhood text NOT NULL,
+            active       boolean NOT NULL DEFAULT false, -- false= bloqueado
+            updated_at   timestamp with time zone DEFAULT now(),
+            PRIMARY KEY (province, city, neighborhood)
+          )`);
+        const upsertBlock = `
+          INSERT INTO public.service_blocks (province, city, neighborhood, active)
+          VALUES ($1,$2,$3,$4)
+          ON CONFLICT (province, city, neighborhood)
+          DO UPDATE SET active=EXCLUDED.active, updated_at=now()
+        `;
+        const keepBlocks = new Set();
+        for (const b of blocks){
+          if (!b?.province || !b?.city || !b?.neighborhood) continue;
+          const act = b.active === false ? false : false; // siempre false == bloqueado
+          await client.query(upsertBlock, [b.province, b.city, b.neighborhood, act]);
+          keepBlocks.add(`${b.province}||${b.city}||${b.neighborhood}`);
         }
+        // Eliminar bloqueos que no mandaron (opcional). Preferimos NO borrar.
+        // Si quisieras borrar, descomentá:
+        // await client.query(`DELETE FROM public.service_blocks WHERE ...not in keepBlocks`)
 
         await client.query("COMMIT");
-        return res.status(200).json({ ok: true, newlyActivated, blocked });
-      } catch (e) {
+      }catch(e){
         await client.query("ROLLBACK");
-        console.error("ZONES PUT ERROR:", e);
-        return res.status(500).json({ error: "Error guardando zonas" });
-      } finally {
+        console.error("PUT /zones error:", e);
+        return res.status(500).json({ error:"Error guardando zonas/bloqueos" });
+      }finally{
         client.release();
       }
-    } catch (e) {
-      console.error("ZONES ERROR:", e);
-      return res.status(200).json([]); // fallback seguro para evitar 500 en el front
+
+      return res.status(200).json({ ok:true });
+    }catch(e){
+      console.error(e);
+      return res.status(500).json({ error:"Error interno (zonas)" });
     }
   }
 
-  // Si no es modo zonas, debe ser POST reserva
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Método no permitido" });
+  // ========== POST RESERVA ==========
+  if (req.method !== "POST"){
+    return res.status(405).json({ error:"Método no permitido" });
   }
 
-  /* ============================================================
-   * POST /api/reserve  (crear reserva)
-   * ============================================================ */
   try{
     const {
-      name, email, phone, postal_code, age, zone, message, date, time, plan,
-      location,
-      referred_email,
-      province, city
+      name, email, phone, postal_code, age, message, date, time, plan,
+      location, referred_email,
+      province: provinceIn, city: cityIn, neighborhood: neighIn
     } = req.body || {};
 
-    // Campos obligatorios
+    // Requisitos base (igual que antes)
     if (!name || !email || !age || !date || !time || !phone || !postal_code){
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
+      return res.status(400).json({ error:"Faltan campos obligatorios" });
     }
-    if (!isValidEmail(email))        return res.status(400).json({ error: "Email inválido" });
-    if (parseInt(age,10) < 18)       return res.status(400).json({ error: "Solo mayores de 18 años" });
+    if (!isValidEmail(email))  return res.status(400).json({ error:"Email inválido" });
+    if (parseInt(age,10) < 18) return res.status(400).json({ error:"Solo mayores de 18 años" });
     if (!location || !location.display_name || !isValidLatLng(location.lat, location.lng)){
-      return res.status(400).json({ error: "Falta ubicación exacta del evento." });
+      return res.status(400).json({ error:"Falta ubicación exacta del evento." });
     }
 
-    // Referido (opcional)
+    // REFERIDO (opcional)
     const referred = (referred_email || "").trim();
-    if (referred) {
-      if (!isValidEmail(referred)) {
-        return res.status(400).json({ error: "Email de referido inválido" });
-      }
-      if (referred.toLowerCase() === (email||"").toLowerCase()) {
-        return res.status(400).json({ error: "No podés referirte a vos mismo" });
-      }
+    if (referred){
+      if (!isValidEmail(referred))               return res.status(400).json({ error:"Email de referido inválido" });
+      if (referred.toLowerCase() === email.toLowerCase()) return res.status(400).json({ error:"No podés referirte a vos mismo" });
     }
 
-    // Provincia / Ciudad (o barrio) + bloqueo por villas de emergencia
-    const provinceNorm = (province || "").trim();
-    const cityNorm     = (city || "").trim();
-    if (!provinceNorm || !cityNorm) {
-      return res.status(400).json({ error: "Falta provincia o ciudad/partido" });
-    }
-    if (isRestrictedZone(provinceNorm, cityNorm)) {
-      return res.status(409).json({ error: "No operamos en esa zona por seguridad." });
-    }
-
-    // Validar zona habilitada (service_zones)
-    const { rows: allowed } = await pool.query(
-      `SELECT 1 FROM public.service_zones
-        WHERE province = $1 AND city = $2 AND active = TRUE
-        LIMIT 1`,
-      [provinceNorm, cityNorm]
-    );
-    if (allowed.length === 0) {
-      // Guardar interés para avisarle cuando se habilite
-      await pool.query(
-        `INSERT INTO public.service_interests (province, city, name, email, phone)
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (lower(email), province, city)
-         WHERE notified_at IS NULL DO NOTHING`,
-        [provinceNorm, cityNorm, name || null, email, phone || null]
-      );
-      return res.status(409).json({ error: "Todavía no llegamos a tu zona" });
-    }
-
-    // Bloqueo de fechas: pasado, hoy y próximos 3 días
-    function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+    // Bloqueo de short-notice (hoy + 3 días)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)){
-      return res.status(400).json({ error: "Fecha u hora inválidas" });
+      return res.status(400).json({ error:"Fecha u hora inválidas" });
     }
     const now = new Date();
     const minSel = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3);
     const reqDateTime = new Date(`${date}T${time}:00`);
-    const reqDay = startOfDay(reqDateTime);
+    const reqDay = new Date(reqDateTime.getFullYear(), reqDateTime.getMonth(), reqDateTime.getDate());
     if (reqDay < minSel){
-      return res.status(400).json({ error: "Solo se aceptan reservas a partir de dentro de 3 días." });
+      return res.status(400).json({ error:"Solo se aceptan reservas a partir de dentro de 3 días." });
     }
 
+    // === Provincia/Ciudad/Barrio: inferencia si no viene del front
+    const inferred = inferProvinceCityNeighborhood({ display_name: location.display_name });
+    const province = (provinceIn || inferred.province || "").trim();
+    const city     = (cityIn || inferred.city || "").trim();
+    const neighborhood = (neighIn || inferred.neighborhood || "").trim();
+
+    // === LISTA NEGRA AUTOMÁTICA (Villas)
+    if (looksBlacklisted(location.display_name)) {
+      // Guardar interés para posible aviso (marca barrio rechazado)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS public.service_interests(
+          id serial PRIMARY KEY,
+          province text,
+          city text,
+          neighborhood text,
+          name text,
+          email text NOT NULL,
+          phone text,
+          lat double precision,
+          lng double precision,
+          display_name text,
+          created_at timestamp with time zone DEFAULT now(),
+          notified_at timestamp with time zone
+        )`);
+      await pool.query(
+        `INSERT INTO public.service_interests
+           (province, city, neighborhood, name, email, phone, lat, lng, display_name)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT DO NOTHING`,
+        [province||null, city||null, neighborhood||null, name||null, email, phone||null,
+         Number(location.lat)||null, Number(location.lng)||null, location.display_name||null]
+      );
+      return res.status(409).json({ error:"No trabajamos en esa zona." });
+    }
+
+    // === Validación por CIUDAD habilitada (admin controla esto)
+    let cityAllowed = true;
+    try{
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS public.service_zones(
+          province text NOT NULL,
+          city     text NOT NULL,
+          active   boolean NOT NULL DEFAULT true,
+          updated_at timestamp with time zone DEFAULT now(),
+          PRIMARY KEY (province, city)
+        )`);
+      const q = await pool.query(
+        `SELECT 1 FROM public.service_zones
+          WHERE province=$1 AND city=$2 AND active=TRUE LIMIT 1`,
+        [province || "Buenos Aires", city || "CABA"]
+      );
+      cityAllowed = q.rowCount > 0;
+    }catch{}
+
+    // === Bloqueo puntual de BARRIO por admin
+    let neighborhoodBlocked = false;
+    if (neighborhood){
+      try{
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS public.service_blocks(
+            province     text NOT NULL,
+            city         text NOT NULL,
+            neighborhood text NOT NULL,
+            active       boolean NOT NULL DEFAULT false,
+            updated_at   timestamp with time zone DEFAULT now(),
+            PRIMARY KEY (province, city, neighborhood)
+          )`);
+        const qb = await pool.query(
+          `SELECT 1 FROM public.service_blocks
+            WHERE province=$1 AND city=$2 AND neighborhood=$3 AND active=FALSE LIMIT 1`,
+          [province || "Buenos Aires", city || "CABA", neighborhood]
+        );
+        neighborhoodBlocked = qb.rowCount > 0;
+      }catch{}
+    }
+
+    if (!cityAllowed || neighborhoodBlocked){
+      // Guardar interés y rechazar
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS public.service_interests(
+          id serial PRIMARY KEY,
+          province text,
+          city text,
+          neighborhood text,
+          name text,
+          email text NOT NULL,
+          phone text,
+          lat double precision,
+          lng double precision,
+          display_name text,
+          created_at timestamp with time zone DEFAULT now(),
+          notified_at timestamp with time zone
+        )`);
+      await pool.query(
+        `INSERT INTO public.service_interests
+           (province, city, neighborhood, name, email, phone, lat, lng, display_name)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT DO NOTHING`,
+        [province||null, city||null, neighborhood||null, name||null, email, phone||null,
+         Number(location.lat)||null, Number(location.lng)||null, location.display_name||null]
+      );
+      return res.status(409).json({ error:"Todavía no llegamos a tu zona" });
+    }
+
+    // === Plan válido
     const planKey = (plan || "1h").toLowerCase();
     const qPlan = await pool.query(
-      `SELECT code, label, price_usd::float
-         FROM plans
-        WHERE code = $1 AND active = TRUE`,
+      `SELECT code, label, price_usd::float FROM plans WHERE code=$1 AND active=TRUE`,
       [planKey]
     );
-    if (qPlan.rowCount === 0){
-      return res.status(400).json({ error: "Plan inválido o no disponible" });
-    }
+    if (qPlan.rowCount === 0) return res.status(400).json({ error:"Plan inválido o no disponible" });
     const planRow = qPlan.rows[0];
-    const hourInt = parseInt(String(time).split(":")[0], 10);
 
-    // Transacción
+    // === Disponibilidad
+    const hourInt = parseInt(String(time).split(":")[0], 10);
     const client = await pool.connect();
     let reservation, user;
     try{
       await client.query("BEGIN");
 
-      // Upsert user
+      // Upsert usuario
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -331,56 +409,54 @@ export default async function handler(req, res){
            name=EXCLUDED.name, age=EXCLUDED.age, zone=EXCLUDED.zone,
            phone=EXCLUDED.phone, postal_code=EXCLUDED.postal_code, updated_at=now()
          RETURNING id, name, email, age, zone, phone, postal_code`,
-        [name, email, age, zone || null, phone || null, postal_code || null]
+        [name, email, age, null, phone || null, postal_code || null]
       );
       user = u.rows[0];
 
-      // Disponibilidad
+      // Chequear día/hora
       const qDay = await client.query(
         `SELECT event_hour FROM reservations
-          WHERE event_date=$1 AND status <> 'rechazada'`,
-        [date]
+          WHERE event_date=$1 AND status <> 'rechazada'`, [date]
       );
       if (qDay.rowCount >= 2){
         await client.query("ROLLBACK");
-        return res.status(409).json({ error: "Ese día ya está completo. Elegí otro." });
+        return res.status(409).json({ error:"Ese día ya está completo. Elegí otro." });
       }
       if (new Set(qDay.rows.map(r=>r.event_hour)).has(hourInt)){
         await client.query("ROLLBACK");
-        return res.status(409).json({ error: "Esa hora ya está ocupada." });
+        return res.status(409).json({ error:"Esa hora ya está ocupada." });
       }
 
-      // Insert reserva
+      // Insert reserva (guardamos provincia/ciudad/barrio inferidos)
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
             location_display, location_address, location_lat, location_lng, location_osm_id,
-            referred_email, province, city)
+            referred_email, province, city, neighborhood)
          VALUES
            ($1,$2,$3,$4,$5,$6,'pendiente',
             $7,$8,$9,$10,$11,
-            $12,$13,$14)
+            $12,$13,$14,$15)
          RETURNING id, event_date, event_hour, plan, zone, message, created_at,
                    location_display, location_address, location_lat, location_lng, location_osm_id,
-                   referred_email, province, city`,
+                   referred_email, province, city, neighborhood`,
         [
-          user.id, date, hourInt, planRow.code, zone || null, message || null,
+          user.id, date, hourInt, planRow.code, null, message || null,
           location.display_name || null,
           (location.address || location.display_name || null),
-          Number(location.lat),
-          Number(location.lng),
+          Number(location.lat), Number(location.lng),
           location.osm_id ? Number(location.osm_id) : null,
           referred ? referred.toLowerCase() : null,
-          provinceNorm, cityNorm
+          province || null, city || null, neighborhood || null
         ]
       );
       reservation = r.rows[0];
 
-      // Relación de referidos
-      if (referred) {
+      // Arista de referidos
+      if (referred){
         await client.query(
           `INSERT INTO referral_edges (referrer_email, referee_email, reservation_id)
-           VALUES ($1, $2, $3)
+           VALUES ($1,$2,$3)
            ON CONFLICT ON CONSTRAINT uniq_edge_once DO NOTHING`,
           [referred.toLowerCase(), email.toLowerCase(), reservation.id]
         );
@@ -389,22 +465,17 @@ export default async function handler(req, res){
       await client.query("COMMIT");
     }catch(e){
       await client.query("ROLLBACK");
-      if (e.code === "23505") return res.status(409).json({ error: "Ese horario ya está reservado." });
+      if (e.code === "23505") return res.status(409).json({ error:"Ese horario ya está reservado." });
       console.error("DB ERROR:", e);
-      return res.status(500).json({ error: "Error interno (DB)" });
+      return res.status(500).json({ error:"Error interno (DB)" });
     }finally{
       client.release();
     }
 
-    // Emails (si hay SMTP)
-    const fechaCorta = formatFechaCortaUTC(reservation.event_date);
-    const horaStr = String(reservation.event_hour).padStart(2, "0");
-    let mailError = null;
-
-    try {
-      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-        const transporter = createTransporter();
-
+    // Emails (propietario + cliente) – igual que antes (simplificado)
+    const transporter = createTransporter();
+    try{
+      if (transporter){
         const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
         const fromEmail  = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
 
@@ -412,74 +483,50 @@ export default async function handler(req, res){
         const baseUrl =
           process.env.PUBLIC_BASE_URL?.trim() ||
           (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-
         const acceptUrl = `${baseUrl}/api/accept?id=${reservation.id}&token=${token}`;
         const rejectUrl = `${baseUrl}/api/reject?id=${reservation.id}&token=${token}`;
-        const price = planRow.price_usd;
 
-        const locHtml = `
-          <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px">
-            <div><strong>Ubicación exacta</strong></div>
-            <div>${reservation.location_display || "-"}</div>
-            <div>Lat: ${reservation.location_lat} &nbsp; Lng: ${reservation.location_lng}
-                &nbsp; (OSM ${reservation.location_osm_id || "-"})</div>
-            <div style="margin-top:8px">
-              <a href="https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}"
-                 target="_blank" rel="noreferrer"
-                 style="display:inline-block;background:#0ea5e9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">
-                Abrir en Google Maps
-              </a>
-            </div>
-          </div>`;
+        const hh = String(reservation.event_hour).padStart(2,"0");
+        const d = new Date(reservation.event_date);
+        const dd = String(d.getUTCDate()).padStart(2,"0");
+        const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+        const yy = String(d.getUTCFullYear()).slice(-2);
+        const fechaCorta = `${dd}/${mm}/${yy}`;
 
-        // Owner
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
-          subject: "Nueva reserva — Toro Mecánico",
+          subject: "Nueva reserva",
           html: `
-          <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
-            <h2>Nueva reserva</h2>
-            <p>Datos del usuario: <strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
-            <p>Tel: ${user.phone || "-"} — CP: ${user.postal_code || "-"}</p>
-            <p><strong>${fechaCorta}</strong> — la hora del evento: ${horaStr}</p>
-            <p>Plan: <strong>${reservation.plan}</strong> — USD ${price}</p>
-            ${reservation.referred_email ? `<p><strong>Referido por:</strong> ${reservation.referred_email}</p>` : ""}
-            ${message ? `<p style="white-space:pre-wrap">Mensaje: ${message}</p>` : ""}
-            ${locHtml}
-            <p style="margin-top:16px">
-              <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;margin-right:8px">Aceptar</a>
-              <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">Rechazar</a>
-            </p>
-          </div>`
+            <div style="font-family:system-ui,Segoe UI,Roboto">
+              <h2>Nueva reserva</h2>
+              <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
+              <p>Tel: ${user.phone||"-"} — CP: ${user.postal_code||"-"}</p>
+              <p><strong>${fechaCorta}</strong> · ${hh}:00 — Plan: <strong>${reservation.plan}</strong></p>
+              <p>Prov/Ciudad/Barrio: ${reservation.province||"-"} / ${reservation.city||"-"} / ${reservation.neighborhood||"-"}</p>
+              <p>Ubicación: ${reservation.location_display||"-"}</p>
+              ${reservation.referred_email ? `<p><strong>Referido por:</strong> ${reservation.referred_email}</p>` : ""}
+              <p style="margin-top:12px">
+                <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;margin-right:6px">Aceptar</a>
+                <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">Rechazar</a>
+              </p>
+            </div>`
         });
 
-        // Cliente
         await transporter.sendMail({
-          from: `Desde el equipo de Reservas Toro Mecánico <${fromEmail}>`,
+          from: `Equipo de Toro Mecánico <${fromEmail}>`,
           to: user.email,
-          subject: "Recibimos tu solicitud de reserva",
-          text:
-`Hola ${user.name},
-
-Recibimos tu solicitud para el ${fechaCorta} a las ${horaStr} (plan ${reservation.plan}).
-Ubicación: ${reservation.location_display}
-Mapa: https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}
-
-Para confirmar nuestra presencia, por favor realizá la seña.
-¡Gracias!`
+          subject: "Recibimos tu solicitud",
+          text: `Hola ${user.name}, recibimos tu solicitud para el ${fechaCorta} a las ${hh}:00 (plan ${reservation.plan}).`
         });
       }
-    } catch (e) {
-      console.error("MAIL ERROR:", e);
-      mailError = e.message || "email failed";
-    }
+    }catch(e){ console.error("MAIL ERROR:", e); }
 
     const token = signToken(reservation.id, user.email);
-    return res.status(200).json({ ok: true, reservation, token, mailError });
+    return res.status(200).json({ ok:true, reservation, token });
 
   }catch(err){
     console.error("GENERIC ERROR:", err);
-    return res.status(500).json({ error: "Error interno" });
+    return res.status(500).json({ error:"Error interno" });
   }
 }

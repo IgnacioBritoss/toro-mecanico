@@ -105,52 +105,75 @@
   </section>
 
 
-  <section id="reachSection" class="card admin-only" hidden>
-    <h2>¿Hasta dónde llegamos?</h2>
-    <p class="muted">Elegí las localidades donde trabajás. Las que no habilites quedarán bloqueadas y no podrán reservar.</p>
-  
-    <div class="reach-grid">
-      <div class="reach-map" aria-label="Mapa rápido de CABA y Provincia de Buenos Aires">
-        <svg viewBox="0 0 400 300" role="img">
-          <polygon id="pba-shape" points="30,80 80,40 190,30 280,60 360,130 310,230 200,260 100,230 50,160"
-                   class="shape-pba"></polygon>
-          <circle id="caba-shape" cx="305" cy="125" r="14" class="shape-caba"></circle>
-          <text x="292" y="155" class="label">CABA</text>
-          <text x="140" y="140" class="label">Provincia de Buenos Aires</text>
-        </svg>
+ <!-- ===================== ZONAS (ADMIN) ===================== -->
+<section id="zonesPanel" class="card admin-only" hidden>
+  <h2>¿Hasta dónde llegamos?</h2>
+  <p class="muted">Elegí las localidades donde trabajás. Las que no habilites quedarán bloqueadas y no podrán reservar.</p>
+
+  <div class="reach-grid">
+    <!-- gráfico simple -->
+    <div class="reach-map" aria-label="Mapa rápido de CABA y Provincia de Buenos Aires">
+      <svg viewBox="0 0 400 300" role="img">
+        <polygon id="pba-shape" points="30,80 80,40 190,30 280,60 360,130 310,230 200,260 100,230 50,160"
+                 class="shape-pba"></polygon>
+        <circle id="caba-shape" cx="305" cy="125" r="14" class="shape-caba"></circle>
+        <text x="292" y="155" class="label">CABA</text>
+        <text x="120" y="140" class="label">Provincia de Buenos Aires</text>
+      </svg>
+    </div>
+
+    <!-- controles -->
+    <div class="reach-controls" id="zonesPanelControls">
+      <!-- agregar ciudad/partido habilitado -->
+      <form id="zoneAddForm" class="row" onsubmit="return false">
+        <div>
+          <label for="zoneProv">Provincia</label>
+          <select id="zoneProv"></select>
+        </div>
+        <div>
+          <label for="zoneCity">Ciudad/Partido</label>
+          <select id="zoneCity"></select>
+        </div>
+        <button type="button" id="btnAddZone" class="btn">Agregar</button>
+      </form>
+
+      <!-- chips de zonas actualmente habilitadas -->
+      <div class="row">
+        <label>Zonas habilitadas</label>
+        <ul id="zonesEnabled" class="chips"></ul>
       </div>
-  
-      <div class="reach-controls">
+
+      <!-- bloqueos por barrio -->
+      <div id="blocksWrap">
+        <h3 style="margin-top:1rem">Bloquear barrios puntuales</h3>
         <div class="row">
-          <label for="reachProvince">Provincia</label>
-          <select id="reachProvince">
-            <option value="CABA">CABA</option>
-            <option value="Buenos Aires">Buenos Aires</option>
-          </select>
+          <div>
+            <label for="blkCitySelect">Ciudad/Partido</label>
+            <select id="blkCitySelect"></select>
+          </div>
+          <div>
+            <label for="blkInput">Barrio</label>
+            <input id="blkInput" type="text" placeholder="Saavedra, Palermo, …" />
+          </div>
+          <button type="button" id="blkAddBtn" class="btn">Bloquear</button>
         </div>
-  
-        <div class="row">
-          <label for="reachCity">Ciudad/Partido</label>
-          <select id="reachCity"></select>
-          <button type="button" id="reachAdd" class="btn">Agregar</button>
-        </div>
-  
-        <div class="row">
-          <label>Zonas habilitadas</label>
-          <div id="reachTags" class="tags"></div>
-        </div>
-  
-        <div class="row end">
-          <button type="button" id="reachSave" class="btn primary">Guardar zonas</button>
-          <span id="reachMsg" class="msg"></span>
-        </div>
+        <ul id="blkList" class="chips"></ul>
+      </div>
+
+      <!-- blacklist automática de villas (solo lectura) -->
+      <div class="row">
+        <h3 style="margin-top:1rem">Villas (bloqueadas automáticamente)</h3>
+        <ul id="villaBlacklist" class="list--compact"></ul>
+      </div>
+
+      <!-- guardar -->
+      <div class="row end">
+        <button type="button" id="zonesSaveBtn" class="btn primary">Guardar zonas</button>
+        <span id="zonesHint" class="msg"></span>
       </div>
     </div>
-  
-    <!-- Lista compacta de zonas con restricciones (desplegable) -->
-    <div id="reachAdvisories"></div>
-  </section>
-  
+  </div>
+</section>
 
   <!-- Reserva -->
   <section id="reserva" class="section">
