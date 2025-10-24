@@ -1,7 +1,6 @@
-// reach-zones.js — compatible con index.html provisto (IDs: zonesPanel, zoneProv, ...)
+// reach-zones.js — panel simple: listas con checkboxes (sin gráfico)
 
-// ---------- Catálogo base ----------
-const PROVS = ["CABA", "Buenos Aires"];
+// ===== Catálogo base =====
 const CABA_BARRIOS = [
   "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
   "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta",
@@ -13,151 +12,129 @@ const CABA_BARRIOS = [
   "Villa Pueyrredón","Villa Real","Villa Riachuelo","Villa Santa Rita","Villa Soldati",
   "Villa Urquiza"
 ];
-const BA_CITIES = [
+
+const BA_PARTIDOS = [
   "Avellaneda","Lanús","Quilmes","Berazategui","Florencio Varela","Lomas de Zamora",
   "Almirante Brown","Esteban Echeverría","Ezeiza","La Matanza","Morón","Ituzaingó",
   "Hurlingham","Merlo","Tres de Febrero","San Martín","Vicente López","San Isidro",
   "San Fernando","Tigre"
 ];
 
-// ---------- DOM (IDs del HTML actual) ----------
-const panel = document.getElementById("zonesPanel");
-
-const selProv = document.getElementById("zoneProv");
-const selCity = document.getElementById("zoneCity");
-const btnAddZone = document.getElementById("btnAddZone");
-const chipsZones = document.getElementById("zonesEnabled");
-
-const blocksWrap = document.getElementById("blocksWrap");
-const blkCitySelect = document.getElementById("blkCitySelect");
-const blkInput = document.getElementById("blkInput");
-const blkAddBtn = document.getElementById("blkAddBtn");
-const blkList = document.getElementById("blkList");
-
-const villaList = document.getElementById("villaBlacklist");
-
+// ===== DOM =====
+const panel   = document.getElementById("zonesPanel");
+const controls = document.getElementById("zonesPanelControls"); // contenedor de listas
 const btnSave = document.getElementById("zonesSaveBtn");
-const hintEl = document.getElementById("zonesHint");
+const hintEl  = document.getElementById("zonesHint");
 
-// ---------- State ----------
-let zonesEnabled = [];   // [{province, city, active:true}]
-let blocks = [];         // [{province, city, neighborhood, active:false}]
-let blacklist = [];      // ["villa 31", ...] (solo lectura)
+// ===== Estado =====
+// Siempre trabajamos con una lista de "habilitadas".
+let enabled = [];   // [{province:"CABA"|"Buenos Aires", city:"..." }]
+let blacklist = []; // villas (solo lectura)
 
-// ---------- Utils ----------
-const keyZone = (p, c) => `${p}||${c}`;
-const keyBlock = (p, c, n) => `${p}||${c}||${n}`.toLowerCase();
-
-function dedupZones(arr){
-  const m = new Map();
-  arr.forEach(z => {
-    if (!z?.province || !z?.city) return;
-    m.set(keyZone(z.province, z.city), {province:z.province, city:z.city, active: z.active!==false});
-  });
+// ===== Utils =====
+const key = (p,c) => `${p}||${c}`;
+function hint(t, kind=""){ if(!hintEl) return; hintEl.textContent=t||""; hintEl.className="msg"+(kind?` ${kind}`:""); }
+function group(title, id){
+  const wrap = document.createElement("div");
+  wrap.className = "row";
+  wrap.innerHTML = `<h3 style="margin:.5rem 0">${title}</h3><div id="${id}" class="checklist"></div>`;
+  return wrap;
+}
+function checkbox(id, label, checked){
+  const div = document.createElement("label");
+  div.className = "chk";
+  div.innerHTML = `<input type="checkbox" id="${id}" ${checked?"checked":""} /> <span>${label}</span>`;
+  return div;
+}
+function dedup(arr){
+  const m=new Map();
+  arr.forEach(z => { if(z?.province && z?.city) m.set(key(z.province,z.city), {province:z.province, city:z.city}); });
   return [...m.values()];
 }
-function dedupBlocks(arr){
-  const m = new Map();
-  arr.forEach(b => {
-    if (!b?.province || !b?.city || !b?.neighborhood) return;
-    m.set(keyBlock(b.province, b.city, b.neighborhood), {
-      province:b.province, city:b.city, neighborhood:b.neighborhood, active:false
+
+// ===== Render =====
+function renderLists(){
+  if (!controls) return;
+  controls.innerHTML = "";
+
+  // Secciones
+  const gCaba = group("CABA — Barrios", "lstCaba");
+  const gGba  = group("Gran Buenos Aires — Partidos", "lstGba");
+  controls.appendChild(gCaba);
+  controls.appendChild(gGba);
+
+  const lstCaba = gCaba.querySelector("#lstCaba");
+  const lstGba  = gGba.querySelector("#lstGba");
+
+  // Conjunto de habilitadas para togglear rápido
+  const enabledSet = new Set(enabled.map(z => key(z.province, z.city)));
+
+  // CABA
+  CABA_BARRIOS.forEach(b => {
+    const id = `caba_${b.replace(/\s+/g,"_")}`;
+    const checked = enabledSet.has(key("CABA", b));
+    const node = checkbox(id, b, checked);
+    node.querySelector("input").addEventListener("change", (e) => {
+      const k = key("CABA", b);
+      if (e.target.checked){
+        enabled.push({ province:"CABA", city:b });
+      }else{
+        enabled = enabled.filter(z => key(z.province,z.city)!==k);
+      }
+      enabled = dedup(enabled);
     });
+    lstCaba.appendChild(node);
   });
-  return [...m.values()];
-}
-function hint(t, kind=""){ if(!hintEl) return; hintEl.textContent = t||""; hintEl.className = "msg"+(kind?` ${kind}`:""); }
-function chip(text, onClose){
-  const li = document.createElement("li");
-  li.className = "chip";
-  li.innerHTML = `${text} <button type="button" class="chip__x" aria-label="Quitar">×</button>`;
-  li.querySelector("button").addEventListener("click", onClose);
-  return li;
-}
 
-// ---------- UI ----------
-function fillProvinces(){
-  if (!selProv) return;
-  selProv.innerHTML = PROVS.map(p=>`<option value="${p}">${p}</option>`).join("");
-}
-function fillCities(){
-  if (!selCity || !selProv) return;
-  const list = selProv.value === "CABA" ? CABA_BARRIOS : BA_CITIES;
-  selCity.innerHTML = list.map(c=>`<option value="${c}">${c}</option>`).join("");
-}
-function fillBlkCitySelect(){
-  if (!blkCitySelect) return;
-  // Para bloqueos: "CABA" (para barrios de capital) + todos los partidos del GBA
-  blkCitySelect.innerHTML = [`<option value="CABA">CABA</option>`]
-    .concat(BA_CITIES.map(c=>`<option value="${c}">${c}</option>`))
-    .join("");
-}
-
-function renderZones(){
-  if (!chipsZones) return;
-  chipsZones.innerHTML = "";
-  if (!zonesEnabled.length){
-    chipsZones.innerHTML = `<span class="muted">No hay zonas habilitadas todavía.</span>`;
-    return;
-  }
-  zonesEnabled.forEach(z => {
-    chipsZones.appendChild(
-      chip(`${z.province} — ${z.city}`, () => {
-        zonesEnabled = zonesEnabled.filter(x => keyZone(x.province, x.city) !== keyZone(z.province, z.city));
-        renderZones();
-      })
-    );
+  // GBA
+  BA_PARTIDOS.forEach(p => {
+    const id = `gba_${p.replace(/\s+/g,"_")}`;
+    const checked = enabledSet.has(key("Buenos Aires", p));
+    const node = checkbox(id, p, checked);
+    node.querySelector("input").addEventListener("change", (e) => {
+      const k = key("Buenos Aires", p);
+      if (e.target.checked){
+        enabled.push({ province:"Buenos Aires", city:p });
+      }else{
+        enabled = enabled.filter(z => key(z.province,z.city)!==k);
+      }
+      enabled = dedup(enabled);
+    });
+    lstGba.appendChild(node);
   });
+
+  // Lista de villas (texto)
+  const villasBox = document.createElement("div");
+  villasBox.className = "row";
+  villasBox.innerHTML = `
+    <h3 style="margin-top:1rem">Villas de emergencia (bloqueadas automáticamente)</h3>
+    <ul class="list--compact">${(blacklist||[]).map(v=>`<li>${v}</li>`).join("")}</ul>
+  `;
+  controls.appendChild(villasBox);
 }
 
-function renderBlocks(){
-  if (!blkList) return;
-  blkList.innerHTML = "";
-  if (!blocks.length){
-    blkList.innerHTML = `<span class="muted">No hay barrios bloqueados.</span>`;
-    return;
-  }
-  blocks.forEach(b => {
-    blkList.appendChild(
-      chip(`${b.city} — ${b.neighborhood}`, () => {
-        blocks = blocks.filter(x => keyBlock(x.province,x.city,x.neighborhood) !== keyBlock(b.province,b.city,b.neighborhood));
-        renderBlocks();
-      })
-    );
-  });
-}
-
-function renderBlacklist(){
-  if (!villaList) return;
-  villaList.innerHTML = "";
-  if (!blacklist.length){
-    villaList.innerHTML = `<li class="muted">—</li>`;
-    return;
-  }
-  blacklist.forEach(v => {
-    const li = document.createElement("li");
-    li.textContent = v;
-    villaList.appendChild(li);
-  });
-}
-
-// ---------- Server ----------
+// ===== Server =====
 async function loadFromServer(){
   try{
-    const r = await fetch("/api/reserve?zones=1", { method: "GET" });
-    if (!r.ok) throw new Error(String(r.status));
+    const r = await fetch("/api/reserve?zones=1");
     const d = await r.json();
 
-    zonesEnabled = dedupZones((d?.zones || []).filter(z => z.active!==false));
-    blocks       = dedupBlocks(d?.blocks || []);
-    blacklist    = Array.isArray(d?.blacklist) ? d.blacklist : [];
+    // Si no hay filas guardadas => por defecto TODO habilitado (menos villas).
+    const came = Array.isArray(d?.zones) ? d.zones : [];
+    if (came.length){
+      enabled = dedup(came.filter(z => z.active!==false).map(z => ({province:z.province, city:z.city})));
+    }else{
+      enabled = [
+        ...CABA_BARRIOS.map(b => ({province:"CABA", city:b})),
+        ...BA_PARTIDOS.map(p => ({province:"Buenos Aires", city:p}))
+      ];
+    }
 
-    renderZones();
-    renderBlocks();
-    renderBlacklist();
+    blacklist = Array.isArray(d?.blacklist) ? d.blacklist : [];
+    renderLists();
     hint("");
   }catch(e){
-    console.warn("No se pudieron cargar zonas/bloqueos:", e);
+    console.warn("Error cargando zonas:", e);
     hint("No se pudieron cargar zonas.","err");
   }
 }
@@ -169,79 +146,40 @@ async function saveToServer(){
     const r = await fetch("/api/reserve?zones=1", {
       method: "PUT",
       headers: { "Content-Type":"application/json", "X-Admin":"1" },
-      body: JSON.stringify({ zones: dedupZones(zonesEnabled), blocks: dedupBlocks(blocks) })
+      body: JSON.stringify({ zones: dedup(enabled) })
     });
     const d = await r.json().catch(()=>({}));
     if (!r.ok) throw new Error(d?.error || String(r.status));
     hint("Zonas guardadas.","ok");
   }catch(e){
-    console.error("Error guardando:", e);
-    hint("Error guardando zonas/bloqueos","err");
+    console.error("PUT zonas:", e);
+    hint("Error guardando zonas.","err");
   }finally{
     btnSave && (btnSave.disabled = false);
   }
 }
 
-// ---------- Eventos ----------
-btnAddZone?.addEventListener("click", () => {
-  const p = selProv?.value;
-  const c = selCity?.value;
-  if (!p || !c) return;
-  zonesEnabled.push({ province:p, city:c, active:true });
-  zonesEnabled = dedupZones(zonesEnabled);
-  renderZones();
-});
-
-blkAddBtn?.addEventListener("click", () => {
-  const citySel = blkCitySelect?.value;
-  const neigh = (blkInput?.value || "").trim();
-  if (!citySel || !neigh) return;
-  const province = citySel === "CABA" ? "CABA" : "Buenos Aires";
-  const city = citySel;
-  blocks.push({ province, city, neighborhood: neigh, active:false });
-  blocks = dedupBlocks(blocks);
-  blkInput.value = "";
-  renderBlocks();
-});
-
-btnSave?.addEventListener("click", saveToServer);
-selProv?.addEventListener("change", fillCities);
-
-// ---------- Esperar a que main.js determine admin ----------
+// ===== Espera admin =====
 function waitForAdminReady(maxMs=8000){
-  return new Promise((resolve) => {
-    const start = Date.now();
+  return new Promise(res => {
+    const t0 = Date.now();
     (function tick(){
-      if (typeof window.IS_ADMIN !== "undefined") {
-        if (window.IS_ADMIN || (Date.now()-start) > maxMs) return resolve(Boolean(window.IS_ADMIN));
+      if (typeof window.IS_ADMIN !== "undefined"){
+        if (window.IS_ADMIN || Date.now()-t0>maxMs) return res(Boolean(window.IS_ADMIN));
       }
-      setTimeout(tick, 100);
+      setTimeout(tick,100);
     })();
   });
 }
 
-// ---------- Init ----------
+// ===== Init =====
 async function init(){
   if (!panel) return;
-
   const isAdmin = await waitForAdminReady();
-  if (!isAdmin) {
-    panel.hidden = true;
-    return; // si no es admin, no mostramos nada (coincide con tu UI)
-  }
-
+  if (!isAdmin){ panel.hidden = true; return; }
   panel.hidden = false;
-  fillProvinces();
-  fillCities();
-  fillBlkCitySelect();
-  renderZones();
-  renderBlocks();
-  renderBlacklist();
+  renderLists();
   await loadFromServer();
 }
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
