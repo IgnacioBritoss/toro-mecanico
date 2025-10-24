@@ -1,4 +1,4 @@
-// reach-zones.js — panel simple: listas con checkboxes (sin gráfico)
+// reach-zones.js — listas con checkboxes + “Lugares peligrosos” en cajita scrolleable
 
 // ===== Catálogo base =====
 const CABA_BARRIOS = [
@@ -22,17 +22,16 @@ const BA_PARTIDOS = [
 
 // ===== DOM =====
 const panel   = document.getElementById("zonesPanel");
-const controls = document.getElementById("zonesPanelControls"); // contenedor de listas
+const controls = document.getElementById("zonesPanelControls");
 const btnSave = document.getElementById("zonesSaveBtn");
 const hintEl  = document.getElementById("zonesHint");
 
 // ===== Estado =====
-// Siempre trabajamos con una lista de "habilitadas".
-let enabled = [];   // [{province:"CABA"|"Buenos Aires", city:"..." }]
+let enabled = [];   // [{province:"CABA"|"Buenos Aires", city:"..."}]
 let blacklist = []; // villas (solo lectura)
 
 // ===== Utils =====
-const key = (p,c) => `${p}||${c}`;
+const key = (p,c)=>`${p}||${c}`;
 function hint(t, kind=""){ if(!hintEl) return; hintEl.textContent=t||""; hintEl.className="msg"+(kind?` ${kind}`:""); }
 function group(title, id){
   const wrap = document.createElement("div");
@@ -40,15 +39,15 @@ function group(title, id){
   wrap.innerHTML = `<h3 style="margin:.5rem 0">${title}</h3><div id="${id}" class="checklist"></div>`;
   return wrap;
 }
-function checkbox(id, label, checked){
+function checkbox(id,label,checked){
   const div = document.createElement("label");
   div.className = "chk";
-  div.innerHTML = `<input type="checkbox" id="${id}" ${checked?"checked":""} /> <span>${label}</span>`;
+  div.innerHTML = `<input type="checkbox" id="${id}" ${checked?"checked":""}/> <span>${label}</span>`;
   return div;
 }
 function dedup(arr){
   const m=new Map();
-  arr.forEach(z => { if(z?.province && z?.city) m.set(key(z.province,z.city), {province:z.province, city:z.city}); });
+  arr.forEach(z => { if(z?.province&&z?.city) m.set(key(z.province,z.city), {province:z.province, city:z.city}); });
   return [...m.values()];
 }
 
@@ -57,7 +56,6 @@ function renderLists(){
   if (!controls) return;
   controls.innerHTML = "";
 
-  // Secciones
   const gCaba = group("CABA — Barrios", "lstCaba");
   const gGba  = group("Gran Buenos Aires — Partidos", "lstGba");
   controls.appendChild(gCaba);
@@ -65,107 +63,99 @@ function renderLists(){
 
   const lstCaba = gCaba.querySelector("#lstCaba");
   const lstGba  = gGba.querySelector("#lstGba");
+  const enabledSet = new Set(enabled.map(z=>key(z.province,z.city)));
 
-  // Conjunto de habilitadas para togglear rápido
-  const enabledSet = new Set(enabled.map(z => key(z.province, z.city)));
-
-  // CABA
-  CABA_BARRIOS.forEach(b => {
-    const id = `caba_${b.replace(/\s+/g,"_")}`;
-    const checked = enabledSet.has(key("CABA", b));
-    const node = checkbox(id, b, checked);
-    node.querySelector("input").addEventListener("change", (e) => {
-      const k = key("CABA", b);
-      if (e.target.checked){
-        enabled.push({ province:"CABA", city:b });
-      }else{
-        enabled = enabled.filter(z => key(z.province,z.city)!==k);
-      }
-      enabled = dedup(enabled);
+  CABA_BARRIOS.forEach(b=>{
+    const id=`caba_${b.replace(/\s+/g,"_")}`;
+    const node=checkbox(id,b,enabledSet.has(key("CABA",b)));
+    node.querySelector("input").addEventListener("change",(e)=>{
+      const k=key("CABA",b);
+      if(e.target.checked) enabled.push({province:"CABA",city:b});
+      else enabled=enabled.filter(z=>key(z.province,z.city)!==k);
+      enabled=dedup(enabled);
     });
     lstCaba.appendChild(node);
   });
 
-  // GBA
-  BA_PARTIDOS.forEach(p => {
-    const id = `gba_${p.replace(/\s+/g,"_")}`;
-    const checked = enabledSet.has(key("Buenos Aires", p));
-    const node = checkbox(id, p, checked);
-    node.querySelector("input").addEventListener("change", (e) => {
-      const k = key("Buenos Aires", p);
-      if (e.target.checked){
-        enabled.push({ province:"Buenos Aires", city:p });
-      }else{
-        enabled = enabled.filter(z => key(z.province,z.city)!==k);
-      }
-      enabled = dedup(enabled);
+  BA_PARTIDOS.forEach(p=>{
+    const id=`gba_${p.replace(/\s+/g,"_")}`;
+    const node=checkbox(id,p,enabledSet.has(key("Buenos Aires",p)));
+    node.querySelector("input").addEventListener("change",(e)=>{
+      const k=key("Buenos Aires",p);
+      if(e.target.checked) enabled.push({province:"Buenos Aires",city:p});
+      else enabled=enabled.filter(z=>key(z.province,z.city)!==k);
+      enabled=dedup(enabled);
     });
     lstGba.appendChild(node);
   });
 
-  // Lista de villas (texto)
-  const villasBox = document.createElement("div");
-  villasBox.className = "row";
-  villasBox.innerHTML = `
-    <h3 style="margin-top:1rem">Villas de emergencia (bloqueadas automáticamente)</h3>
-    <ul class="list--compact">${(blacklist||[]).map(v=>`<li>${v}</li>`).join("")}</ul>
+  // Cajita scrolleable “Lugares peligrosos”
+  const box=document.createElement("div");
+  box.className="row";
+  box.innerHTML=`
+    <h3 style="margin-top:1rem">Lugares peligrosos</h3>
+    <div style="border:1px solid #e5e7eb;border-radius:10px;padding:8px;max-width:420px;">
+      <div style="max-height:6.2rem; overflow:auto;"> 
+        <ul id="dangerList" style="margin:0;padding-left:18px">
+          ${(blacklist||[]).map(v=>`<li>${v}</li>`).join("")}
+        </ul>
+      </div>
+      <small class="muted">Bloqueados automáticamente (no se pueden habilitar)</small>
+    </div>
   `;
-  controls.appendChild(villasBox);
+  controls.appendChild(box);
 }
 
 // ===== Server =====
 async function loadFromServer(){
   try{
-    const r = await fetch("/api/reserve?zones=1");
-    const d = await r.json();
+    const r=await fetch("/api/reserve?zones=1");
+    const d=await r.json();
 
-    // Si no hay filas guardadas => por defecto TODO habilitado (menos villas).
-    const came = Array.isArray(d?.zones) ? d.zones : [];
-    if (came.length){
-      enabled = dedup(came.filter(z => z.active!==false).map(z => ({province:z.province, city:z.city})));
+    const came=Array.isArray(d?.zones)?d.zones:[];
+    if(came.length){
+      enabled=dedup(came.filter(z=>z.active!==false).map(z=>({province:z.province,city:z.city})));
     }else{
-      enabled = [
-        ...CABA_BARRIOS.map(b => ({province:"CABA", city:b})),
-        ...BA_PARTIDOS.map(p => ({province:"Buenos Aires", city:p}))
-      ];
+      // por defecto TODO habilitado
+      enabled=[...CABA_BARRIOS.map(b=>({province:"CABA",city:b})),
+               ...BA_PARTIDOS.map(p=>({province:"Buenos Aires",city:p}))];
     }
-
-    blacklist = Array.isArray(d?.blacklist) ? d.blacklist : [];
+    blacklist=Array.isArray(d?.blacklist)?d.blacklist:[];
     renderLists();
     hint("");
   }catch(e){
-    console.warn("Error cargando zonas:", e);
+    console.warn("Error cargando zonas:",e);
     hint("No se pudieron cargar zonas.","err");
   }
 }
 
 async function saveToServer(){
   try{
-    btnSave && (btnSave.disabled = true);
+    btnSave&&(btnSave.disabled=true);
     hint("Guardando…");
-    const r = await fetch("/api/reserve?zones=1", {
-      method: "PUT",
-      headers: { "Content-Type":"application/json", "X-Admin":"1" },
-      body: JSON.stringify({ zones: dedup(enabled) })
+    const r=await fetch("/api/reserve?zones=1",{
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", "X-Admin":"1" },
+      body:JSON.stringify({ zones:dedup(enabled) })
     });
-    const d = await r.json().catch(()=>({}));
-    if (!r.ok) throw new Error(d?.error || String(r.status));
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d?.error||String(r.status));
     hint("Zonas guardadas.","ok");
   }catch(e){
-    console.error("PUT zonas:", e);
+    console.error("PUT zonas:",e);
     hint("Error guardando zonas.","err");
   }finally{
-    btnSave && (btnSave.disabled = false);
+    btnSave&&(btnSave.disabled=false);
   }
 }
 
 // ===== Espera admin =====
 function waitForAdminReady(maxMs=8000){
-  return new Promise(res => {
-    const t0 = Date.now();
+  return new Promise(res=>{
+    const t0=Date.now();
     (function tick(){
-      if (typeof window.IS_ADMIN !== "undefined"){
-        if (window.IS_ADMIN || Date.now()-t0>maxMs) return res(Boolean(window.IS_ADMIN));
+      if(typeof window.IS_ADMIN!=="undefined"){
+        if(window.IS_ADMIN || Date.now()-t0>maxMs) return res(Boolean(window.IS_ADMIN));
       }
       setTimeout(tick,100);
     })();
@@ -174,12 +164,12 @@ function waitForAdminReady(maxMs=8000){
 
 // ===== Init =====
 async function init(){
-  if (!panel) return;
-  const isAdmin = await waitForAdminReady();
-  if (!isAdmin){ panel.hidden = true; return; }
-  panel.hidden = false;
+  if(!panel) return;
+  const isAdmin=await waitForAdminReady();
+  if(!isAdmin){ panel.hidden=true; return; }
+  panel.hidden=false;
   renderLists();
   await loadFromServer();
+  btnSave?.addEventListener("click", saveToServer);
 }
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
-
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init); else init();
