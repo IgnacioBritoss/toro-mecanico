@@ -150,9 +150,12 @@ async function handleInterest(req, res){
     );
 
     return res.status(200).json({ ok:true });
-  }catch(e){
-    console.error("interest handler:", e?.code, e?.message || e);
-    return res.status(500).json({ error:"Error interno (interest)" });
+  } catch(e){
+    console.error("interest handler:", e);
+    return res.status(500).json({
+      error: "Error interno (interest)",
+      detail: e?.message || e?.code || String(e)
+    });
   }
 }
 
