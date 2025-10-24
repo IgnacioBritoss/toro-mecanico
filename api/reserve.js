@@ -62,6 +62,7 @@ const VILLA_BLACKLIST = [
   "villa itatí","villa azul","villa azúl","fuerte apache","ejército de los andes","villa caraza",
   "villa la cava","villa palito","villa jardín","villa trujui","villa los paraguayos","la saladita","la saladita de wilde"
 ].map(s => s.toLowerCase());
+
 function isVilla(displayName=""){
   const t = (displayName || "").toLowerCase();
   return VILLA_BLACKLIST.some(k => t.includes(k));
@@ -156,8 +157,13 @@ async function handleInterest(req, res){
 }
 
 /* ============= Reseñas ============= */
-const REVIEW_PASS = (process.env.REVIEW_PASS ?? "lezama").trim();  // fallback seguro
-const REVIEW_QR_TOKEN = (process.env.REVIEW_QR_TOKEN || "").trim();
+const REVIEW_PASS = process.env.REVIEW_PASS;          // sin fallback
+const REVIEW_QR_TOKEN = process.env.REVIEW_QR_TOKEN;  // sin fallback
+
+function reviewConfigOk(){
+  return typeof REVIEW_PASS === "string" && REVIEW_PASS.length > 0 &&
+         typeof REVIEW_QR_TOKEN === "string" && REVIEW_QR_TOKEN.length > 0;
+}
 
 async function ensureReviewsTable(){
   try{
@@ -180,9 +186,13 @@ async function ensureReviewsTable(){
 
 async function handleReview(req, res){
   try{
+    // Si faltan credenciales, no aceptamos reseñas
+    if (!reviewConfigOk()){
+      return res.status(503).json({ error: "Reviews deshabilitadas: falta configurar credenciales" });
+    }
+
     const mode = String(req.query?.review || "").toLowerCase();
 
-    // GET "public" (feed para la web)
     if (req.method === "GET" && (mode === "public" || mode === "feed")){
       await ensureReviewsTable();
       const { rows } = await pool.query(
@@ -195,7 +205,6 @@ async function handleReview(req, res){
       return res.status(200).json({ ok:true, reviews: rows });
     }
 
-    // GET "all" (admin)
     if (req.method === "GET" && mode === "all"){
       if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
       await ensureReviewsTable();
@@ -208,7 +217,6 @@ async function handleReview(req, res){
       return res.status(200).json({ ok:true, reviews: rows });
     }
 
-    // DELETE "delete" (admin)
     if (req.method === "DELETE" && mode === "delete"){
       if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
       const id = parseInt(String(req.query?.id || ""), 10);
@@ -219,24 +227,24 @@ async function handleReview(req, res){
       return res.status(200).json({ ok:true, deleted: r.rowCount });
     }
 
-    // POST: crear reseña => /api/reserve?review=1
     if (req.method === "POST"){
       await ensureReviewsTable();
 
       const body = await parseJSON(req);
 
-      const pass = (body?.pass || "").trim();
-      const qrHeader = String(req.headers["x-review-qr"] || "").trim();
+      const pass = (body?.pass || "").toString();
+      const qrHeader = (req.headers["x-review-qr"] || "").toString();
 
-      const passOk = !!pass && pass === REVIEW_PASS;
-      const qrOk   = !!REVIEW_QR_TOKEN && !!qrHeader && qrHeader === REVIEW_QR_TOKEN;
+      // Solo válidas estas dos rutas: pass EXACTO o header EXACTO
+      const passOk = pass === REVIEW_PASS;
+      const qrOk   = qrHeader === REVIEW_QR_TOKEN;
 
       if (!(passOk || qrOk)){
         return res.status(401).json({ error: "Contraseña inválida" });
       }
 
-      const rating = parseInt(body?.rating, 10);
-      const name = (body?.name || "").toString().trim().slice(0,80) || null;
+      const rating  = parseInt(body?.rating, 10);
+      const name    = (body?.name || "").toString().trim().slice(0,80) || null;
       const comment = (body?.comment || "").toString().trim().slice(0,2000);
       const publish = body?.publish === false ? false : true;
 
@@ -255,7 +263,6 @@ async function handleReview(req, res){
           [name, rating, comment, publish]
         );
 
-        // correo opcional
         try{
           const transporter = createTransporter();
           if (transporter){
@@ -287,7 +294,6 @@ async function handleReview(req, res){
       }
     }
 
-    // Si llega GET a ?review=1 (sin modo), aclaramos que es POST.
     if (req.method === "GET"){
       return res.status(405).json({ error: "Usá POST para enviar reseñas" });
     }
