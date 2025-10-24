@@ -20,21 +20,19 @@
   const hint = $('#revHint');
   const btn = $('#revSend');
 
-  // Detectar QR (?q=TOKEN)
   const params = new URLSearchParams(location.search);
   const qrToken = params.get('q');
 
-  // Si viene por QR: ocultar contraseña + “acepto publicar”, y ajustar textos
+  // Modo QR: no pide pass, no muestra "acepto publicar", y cambia textos
   if (qrToken) {
     if (passLabel) passLabel.style.display = 'none';
     if (publishWrap) publishWrap.style.display = 'none';
-    if (publish) publish.checked = true; // forzar publish
+    if (publish) publish.checked = true;
 
     if (title) title.textContent = '¡Gracias por colaborar! ⭐';
     if (subtitle) subtitle.textContent = 'Ingresaste desde el QR. Podés dejarnos tu reseña sin ingresar contraseña.';
   }
 
-  // estrellas
   function paint(n){
     $$('#revStars button').forEach(b => {
       const v = Number(b.dataset.v);
@@ -91,11 +89,8 @@
       const d = await r.json().catch(()=>({}));
 
       if (!r.ok || !d?.ok){
-        // Si el server devolvió 401, mostrá mensaje claro
         if (r.status === 401) {
-          hint.textContent = qrToken
-            ? 'QR inválido o vencido.'
-            : 'Contraseña inválida.';
+          hint.textContent = qrToken ? 'QR inválido o vencido.' : 'Contraseña inválida.';
         } else {
           hint.textContent = d?.error || 'No se pudo guardar la reseña.';
         }

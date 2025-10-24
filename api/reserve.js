@@ -55,12 +55,10 @@ const BARRIOS_REGEX = CABA_BARRIOS.map(b => ({
 
 /* ============= Blacklist de villas ============= */
 const VILLA_BLACKLIST = [
-  // CABA
   "villa 31","barrio padre mugica","padre mugica","villa 20","villa lugano 20","barrio papa francisco",
   "villa 1-11-14","1-11-14","riccardelli","ricciardelli","bajo flores","villa 21-24","zavaleta",
   "villa 15","ciudad oculta","villa 3","villa 6","villa 17","villa 19","villa 31 bis","villa 31bis",
   "villa 26","villa 2","villa 7","villa 8","villa 13 bis",
-  // GBA
   "villa itatí","villa azul","villa azúl","fuerte apache","ejército de los andes","villa caraza",
   "villa la cava","villa palito","villa jardín","villa trujui","villa los paraguayos","la saladita","la saladita de wilde"
 ].map(s => s.toLowerCase());
@@ -80,10 +78,9 @@ function inferProvinceCity(display_name=""){
     for (const {name, re} of BARRIOS_REGEX){
       if (re.test(display_name || "")) return { province, city: name };
     }
-    return { province, city: "CABA" }; // fallback
+    return { province, city: "CABA" };
   }
 
-  // Provincia (partidos frecuentes)
   const tokens = (display_name || "").split(",").map(s => s.trim());
   for (const tk of tokens){
     const t = tk.toLowerCase();
@@ -160,9 +157,7 @@ async function handleInterest(req, res){
 }
 
 /* ============= Reseñas: config + tabla + handler ============= */
-// Contraseña: SETEALA en env. (sin fallback)
 const REVIEW_PASS = (process.env.REVIEW_PASS || "").trim();
-// Token QR opcional (si no lo seteás, no hay bypass por QR)
 const REVIEW_QR_TOKEN = (process.env.REVIEW_QR_TOKEN || "").trim();
 
 async function ensureReviewsTable(){
@@ -183,14 +178,11 @@ async function ensureReviewsTable(){
 }
 
 async function handleReview(req, res){
-  // POST /api/reserve?review=1
-  // GET  /api/reserve?review=public
-  // GET  /api/reserve?review=all
-  // DELETE /api/reserve?review=delete&id=123
   try{
     const mode = String(req.query?.review || "").toLowerCase();
 
-    if (req.method === "POST" && (mode === "1" || mode === "true")){
+    // **CAMBIO**: cualquier POST a /api/reserve?review=... crea reseña
+    if (req.method === "POST"){
       await ensureReviewsTable();
 
       const body = await parseJSON(req);
@@ -322,7 +314,6 @@ async function handleZones(req, res){
           )
         `);
 
-        // Snapshot previo
         const prev = await client.query(`SELECT province, city, active FROM public.service_zones`);
         const prevMap = new Map(prev.rows.map(r => [`${r.province}||${r.city}`, r.active]));
 
@@ -338,7 +329,6 @@ async function handleZones(req, res){
           await client.query(upsert, [z.province, z.city, act]);
         }
 
-        // Cambios false->true => “Llegamos”
         const nowRows = await client.query(`SELECT province, city, active FROM public.service_zones`);
         const enabledNow = nowRows.rows.filter(r => {
           const k = `${r.province}||${r.city}`;
@@ -409,14 +399,13 @@ export default async function handler(req, res){
   if (req.method === "OPTIONS"){
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD");
-    // agregado X-Review-QR
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin, X-Review-QR");
     return res.status(200).end();
   }
   if (req.method === "HEAD"){ return res.status(200).end(); }
 
   // Reseñas (QR + feed público)
-  if ((req.method === "POST" || req.method === "GET") &&
+  if ((req.method === "POST" || req.method === "GET" || req.method === "DELETE") &&
       (req.query?.review !== undefined)){
     return handleReview(req, res);
   }
@@ -444,36 +433,30 @@ export default async function handler(req, res){
       location, referred_email
     } = body || {};
 
-    // Requisitos base (exactos a tu front)
     if (!name || !email || !age || !date || !time || !phone || !postal_code){
       return res.status(400).json({ error:"Faltan campos obligatorios" });
     }
     if (!isValidEmail(email))  return res.status(400).json({ error:"Email inválido" });
     if (parseInt(age,10) < 18) return res.status(400).json({ error:"Solo mayores de 18 años" });
 
-    // Ubicación requerida
     if (!location || !location.display_name || !isValidLatLng(location.lat, location.lng)){
       return res.status(400).json({ error:"Falta ubicación exacta del evento." });
     }
 
-    // REFERIDO opcional
     const referred = (referred_email || "").trim();
     if (referred){
       if (!isValidEmail(referred)) return res.status(400).json({ error:"Email de referido inválido" });
       if (referred.toLowerCase() === email.toLowerCase()) return res.status(400).json({ error:"No podés referirte a vos mismo" });
     }
 
-    // Fechas válidas
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)){
       return res.status(400).json({ error:"Fecha u hora inválidas" });
     }
 
-    // 1) Villas (bloqueo sin suscripción)
     if (isVilla(location.display_name)) {
       return res.status(409).json({ error:"No trabajamos en esa zona." });
     }
 
-    // 2) Zona deshabilitada => permitir “avisame”
     const { province, city } = inferProvinceCity(location.display_name);
     if (await isDisabledCity(province, city)){
       return res.status(409).json({
@@ -484,7 +467,6 @@ export default async function handler(req, res){
       });
     }
 
-    // Plan válido
     const planKey = (plan || "1h").toLowerCase();
     const qPlan = await pool.query(
       `SELECT code, label, price_usd::float FROM plans WHERE code=$1 AND active=TRUE`,
@@ -492,7 +474,6 @@ export default async function handler(req, res){
     );
     if (qPlan.rowCount === 0) return res.status(400).json({ error:"Plan inválido o no disponible" });
 
-    // Disponibilidad (máx 2 por día y hora única)
     const hourInt = parseInt(String(time).split(":")[0], 10);
 
     const client = await pool.connect();
@@ -500,7 +481,6 @@ export default async function handler(req, res){
     try{
       await client.query("BEGIN");
 
-      // Upsert usuario
       const u = await client.query(
         `INSERT INTO users (name, email, age, zone, phone, postal_code)
          VALUES ($1,$2,$3,$4,$5,$6)
@@ -512,7 +492,6 @@ export default async function handler(req, res){
       );
       user = u.rows[0];
 
-      // Chequear día/hora
       const qDay = await client.query(
         `SELECT event_hour FROM reservations
           WHERE event_date=$1 AND status <> 'rechazada'`, [date]
@@ -526,7 +505,6 @@ export default async function handler(req, res){
         return res.status(409).json({ error:"Esa hora ya está ocupada." });
       }
 
-      // Insert reserva
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,
@@ -561,7 +539,6 @@ export default async function handler(req, res){
       client.release();
     }
 
-    // Emails (propietario + cliente) – opcional
     const transporter = createTransporter();
     try{
       if (transporter){
