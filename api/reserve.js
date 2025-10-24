@@ -39,6 +39,25 @@ function isAdmin(req){
   return req.headers["x-admin"] === "1" || req.user?.is_admin === true;
 }
 
+/* ===========================================================
+   Barrios de CABA (para inferencia de ciudad/barrio)
+=========================================================== */
+const CABA_BARRIOS = [
+  "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
+  "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta",
+  "La Boca","La Paternal","Liniers","Mataderos","Monte Castro","Monserrat",
+  "Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco",
+  "Parque Chas","Parque Patricios","Puerto Madero","Recoleta","Retiro",
+  "Saavedra","San Cristóbal","San Nicolás","San Telmo","Versalles",
+  "Villa Crespo","Villa del Parque","Villa Devoto","Villa General Mitre",
+  "Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real",
+  "Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza"
+];
+const BARRIOS_REGEX = CABA_BARRIOS.map(b => ({
+  name: b,
+  re: new RegExp(`\\b${b.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\b`, "i")
+}));
+
 /* =================================================================
    Blacklist de VILLAS (CABA + GBA) — match por texto en display_name
 ================================================================= */
@@ -53,21 +72,30 @@ const VILLA_BLACKLIST = [
   "villa la cava","villa palito","villa jardín","villa trujui","villa los paraguayos","la saladita","la saladita de wilde"
 ].map(s => s.toLowerCase());
 
-function isVilla(displayName=""){
+function isVilla(displayName = ""){
   const t = (displayName || "").toLowerCase();
   return VILLA_BLACKLIST.some(k => t.includes(k));
 }
 
 /* ===========================================================
-   Inferencia mínima de provincia/ciudad desde display_name
+   Inferencia de provincia/ciudad (CABA=barrios, BA=partidos)
 =========================================================== */
-function inferProvinceCity(display_name=""){
+function inferProvinceCity(display_name = ""){
   const low = (display_name || "").toLowerCase();
-  const province = /c\.?a\.?b\.?a|ciudad aut[oó]noma de buenos aires|capital federal/.test(low)
-    ? "CABA" : "Buenos Aires";
 
-  if (province === "CABA") return { province, city: "CABA" };
+  // Provincia
+  const isCABA = /c\.?a\.?b\.?a|ciudad aut[oó]noma de buenos aires|capital federal|caba\b/.test(low);
+  const province = isCABA ? "CABA" : "Buenos Aires";
 
+  // En CABA devolvemos BARRIO si aparece en el display_name; si no, "CABA"
+  if (province === "CABA"){
+    for (const { name, re } of BARRIOS_REGEX){
+      if (re.test(display_name || "")) return { province, city: name };
+    }
+    return { province, city: "CABA" };
+  }
+
+  // En Provincia intentamos detectar partidos frecuentes
   const tokens = (display_name || "").split(",").map(s => s.trim());
   for (const tk of tokens){
     const t = tk.toLowerCase();
@@ -75,17 +103,18 @@ function inferProvinceCity(display_name=""){
       return { province, city: tk };
     }
   }
+  // fallback: BA sin ciudad ⇒ no bloqueamos por ciudad
   return { province, city: "" };
 }
 
 /* ===========================================================
-   ¿Ciudad/partido deshabilitado?
+   ¿Ciudad/partido/barrio deshabilitado?
    Tabla opcional public.service_zones (province, city, active)
    • Si NO existe o está VACÍA => todo habilitado
    • Si existe => bloquea si hay fila active=false para (province,city)
 =========================================================== */
 async function isDisabledCity(province, city){
-  // Si no pudimos inferir ciudad, no bloqueamos (fallback a todo habilitado)
+  // Si no pudimos inferir ciudad/barrio, no bloqueamos
   if (!city) return false;
   try{
     const exist = await pool.query(`
@@ -107,7 +136,6 @@ async function isDisabledCity(province, city){
     return false;
   }
 }
-
 
 /* ===========================================================
    GET/PUT ?zones=1 para el panel (opcional)
@@ -237,7 +265,7 @@ export default async function handler(req, res){
       return res.status(409).json({ error:"No trabajamos en esa zona." });
     }
 
-    // === 2) Bloqueo si la CIUDAD/PARTIDO está deshabilitada (por defecto todo habilitado)
+    // === 2) Bloqueo si la CIUDAD/PARTIDO/BARRIO está deshabilitada (por defecto todo habilitado)
     const { province, city } = inferProvinceCity(location.display_name);
     if (await isDisabledCity(province, city)){
       return res.status(409).json({ error:"Todavía no llegamos a tu zona" });
@@ -285,7 +313,7 @@ export default async function handler(req, res){
         return res.status(409).json({ error:"Esa hora ya está ocupada." });
       }
 
-      // Insert reserva (sin tocar tu esquema)
+      // Insert reserva
       const r = await client.query(
         `INSERT INTO reservations
            (user_id, event_date, event_hour, plan, zone, message, status,

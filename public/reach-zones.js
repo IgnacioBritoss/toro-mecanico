@@ -1,12 +1,31 @@
-// reach-zones.js — Admin: deshabilitar zonas puntuales (por defecto TODO habilitado)
+// reach-zones.js — Admin: deshabilitar zonas (por defecto TODO habilitado)
+// • En CABA: lista de BARRIOS
+// • En Provincia de Buenos Aires: Partidos/Ciudades
+// Guarda solo las DESHABILITADAS como "chips". Al guardar:
+//   - active:false para las que quedan en UI
+//   - active:true para las que estaban deshabilitadas y sacaste de la UI
 
 const PROVS = ["CABA", "Buenos Aires"];
-const CABA_CIUDAD = ["CABA"];
+
+// 48 barrios oficiales de CABA
+const CABA_BARRIOS = [
+  "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
+  "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta",
+  "La Boca","La Paternal","Liniers","Mataderos","Monte Castro","Monserrat",
+  "Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco",
+  "Parque Chas","Parque Patricios","Puerto Madero","Recoleta","Retiro",
+  "Saavedra","San Cristóbal","San Nicolás","San Telmo","Versalles",
+  "Villa Crespo","Villa del Parque","Villa Devoto","Villa General Mitre",
+  "Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real",
+  "Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza"
+];
+
+// Partidos frecuentes de GBA
 const BA_CITIES = [
   "Avellaneda","Lanús","Quilmes","Berazategui","Florencio Varela","Lomas de Zamora",
   "Almirante Brown","Esteban Echeverría","Ezeiza","La Matanza","Morón","Ituzaingó",
   "Hurlingham","Merlo","Tres de Febrero","San Martín","Vicente López","San Isidro",
-  "San Fernando","Tigre"
+  "San Fernando","Tigre","Berisso","Ensenada","Malvinas Argentinas","San Miguel"
 ];
 
 // DOM
@@ -14,7 +33,7 @@ const panel    = document.getElementById("zonesPanel");
 const controls = document.getElementById("zonesPanelControls");
 
 if (!panel || !controls) {
-  // nada que hacer
+  // nada
 } else {
   const selProv = document.getElementById("zoneProv");
   const selCity = document.getElementById("zoneCity");
@@ -23,15 +42,15 @@ if (!panel || !controls) {
   const btnSave = document.getElementById("zonesSaveBtn");
   const hint    = document.getElementById("zonesHint");
 
-  let uiDisabled = [];        // [{province, city, active:false}]
-  let serverDisabled = new Set(); // "prov||city"
+  let uiDisabled = [];             // [{province, city, active:false}]
+  let serverDisabled = new Set();  // "prov||city"
   const key = (p,c) => `${p}||${c}`;
 
   function msg(t, kind=""){ if(!hint) return; hint.textContent=t||""; hint.className="msg"+(kind?` ${kind}`:""); }
   function fillProvs(){ if(selProv) selProv.innerHTML = PROVS.map(p=>`<option value="${p}">${p}</option>`).join(""); }
   function fillCities(){
     if(!selProv || !selCity) return;
-    const src = selProv.value === "CABA" ? CABA_CIUDAD : BA_CITIES;
+    const src = selProv.value === "CABA" ? CABA_BARRIOS : BA_CITIES;
     selCity.innerHTML = src.map(c=>`<option value="${c}">${c}</option>`).join("");
   }
   function render(){
@@ -69,32 +88,31 @@ if (!panel || !controls) {
 
   async function save(){
     try{
-      btnSave && (btnSave.disabled = true);
+      if (btnSave) btnSave.disabled = true;
       msg("Guardando…");
       const uiKeys = new Set(uiDisabled.map(z => key(z.province, z.city)));
-      const toFalse = uiDisabled.map(z => ({province:z.province, city:z.city, active:false}));
+      const toFalse = uiDisabled.map(z => ({ province:z.province, city:z.city, active:false }));
       const toTrue  = [];
       serverDisabled.forEach(k=>{
         if(!uiKeys.has(k)){
           const [p,c] = k.split("||");
-          toTrue.push({province:p, city:c, active:true});
+          toTrue.push({ province:p, city:c, active:true });
         }
       });
-      const payload = { zones: [...toFalse, ...toTrue] };
       const r = await fetch("/api/reserve?zones=1", {
         method:"PUT",
         headers:{ "Content-Type":"application/json", "X-Admin":"1" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ zones:[...toFalse, ...toTrue] })
       });
       const d = await r.json().catch(()=>({}));
       if (!r.ok) throw new Error(d?.error || String(r.status));
-      serverDisabled = new Set(uiDisabled.map(z=>key(z.province,z.city)));
+      serverDisabled = new Set(uiDisabled.map(z => key(z.province, z.city)));
       msg("Zonas guardadas.","ok");
     }catch(e){
       console.error("save zones:", e);
       msg("Error guardando zonas","err");
     }finally{
-      btnSave && (btnSave.disabled = false);
+      if (btnSave) btnSave.disabled = false;
     }
   }
 
@@ -110,7 +128,7 @@ if (!panel || !controls) {
 
   fillProvs(); fillCities(); render();
 
-  // visibilidad controlada por main.js cuando resuelve admin
+  // visibilidad: main.js dispara admin:ready
   panel.hidden = true;
   if (window.IS_ADMIN === true){ panel.hidden = false; load(); }
   window.addEventListener("admin:ready", (ev)=>{
