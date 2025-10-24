@@ -246,17 +246,20 @@ async function handleZones(req, res){
   return res.status(405).json({ error:"Método no permitido" });
 }
 
+// === REEMPLAZO de handleInterest en api/reserve.js ===
 async function handleInterest(req, res){
   try{
     const body = await parseJSON(req);
     const email = (body?.email || "").trim().toLowerCase();
-    const province = body?.province || "";
-    const city = body?.city || "";
-    const display_name = body?.display_name || "";
+    const province = (body?.province || "").trim();
+    const city = (body?.city || "").trim();
+    const display_name = (body?.display_name || "").trim();
+
     if (!isValidEmail(email) || !province || !city){
       return res.status(400).json({ error:"Datos inválidos" });
     }
 
+    // Asegurar tabla (idempotente)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.service_interests(
         email        text NOT NULL,
@@ -266,8 +269,10 @@ async function handleInterest(req, res){
         created_at   timestamptz DEFAULT now(),
         notified_at  timestamptz,
         PRIMARY KEY (email, province, city)
-      )`);
+      )
+    `);
 
+    // Guardar interés (sin duplicar)
     await pool.query(
       `INSERT INTO public.service_interests(email, province, city, display_name)
        VALUES ($1,$2,$3,$4)
@@ -277,10 +282,12 @@ async function handleInterest(req, res){
 
     return res.status(200).json({ ok:true });
   }catch(e){
-    console.error("interest handler:", e);
+    console.error("interest handler:", e?.code, e?.message || e);
+    // No revelamos stack al cliente; devolvemos error claro
     return res.status(500).json({ error:"Error interno (interest)" });
   }
 }
+
 
 /* =========================
    HANDLER PRINCIPAL
