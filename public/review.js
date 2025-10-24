@@ -36,7 +36,6 @@
     });
   }
 
-  // Evitar submit nativo accidental (por si el HTML tuviera action)
   if (form){
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -52,7 +51,7 @@
     el.addEventListener('keydown', (e)=>{
       if (e.key === 'Enter'){
         e.preventDefault();
-        if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', {cancelable:true, bubbles:true}));
+        form?.requestSubmit?.();
       }
     });
   });
@@ -61,12 +60,10 @@
     if (hint){ hint.textContent = ''; hint.className = 'hint'; }
 
     const payload = {
-      // si es QR, no mandamos pass (se valida por header)
       pass: fromQR ? '' : (passInput?.value || '').trim(),
       name: (nameInput?.value || '').trim(),
       comment: (textInput?.value || '').trim(),
       rating: Number(ratingInp?.value || 5),
-      // publish: true
     };
 
     // Validaciones UX
@@ -87,7 +84,6 @@
       if (btn) btn.disabled = true;
       if (hint){ hint.textContent = 'Enviando...'; hint.className='hint'; }
 
-      // headers: solo ponemos X-Review-QR cuando viene de QR
       const headers = { 'Content-Type': 'application/json' };
       if (fromQR) headers['X-Review-QR'] = qrToken;
 
@@ -97,16 +93,21 @@
         body: JSON.stringify(payload)
       });
 
-      const d = await r.json().catch(()=> ({}));
+      // Intentamos JSON; si falla, mostramos texto para ver el error completo.
+      let d = null;
+      const rawText = await r.text();
+      try { d = JSON.parse(rawText); } catch { d = null; }
 
       if (!r.ok || !d?.ok){
-        if (hint){ hint.textContent = d?.error || `Error ${r.status}`; hint.className='err'; }
+        const msg = (d && (d.error || d.message)) ? (d.error || d.message) : `Error ${r.status}`;
+        const extra = d?.detail ? ` (${d.detail})` : (rawText && rawText !== '' ? ` — ${rawText}` : '');
+        if (hint){ hint.textContent = msg + extra; hint.className='err'; }
         if (btn) btn.disabled = false;
         return;
       }
 
       if (hint){ hint.textContent = '¡Gracias! Tu reseña fue enviada.'; hint.className='ok'; }
-      if (form) form.reset();
+      form?.reset();
       if (ratingInp) ratingInp.value = '5';
       paint(5);
     }catch(err){
