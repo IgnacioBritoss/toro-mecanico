@@ -32,6 +32,7 @@
       <h2>¡Gracias por colaborar! ⭐</h2>
       <p class="muted">Tu opinión nos ayuda a mejorar y a que más personas disfruten de la experiencia. abajo pon la contraseña que esta en la tarjeta</p>
 
+      <!-- Importante: botón type="submit" para que dispare el handler del form -->
       <form id="reviewForm" novalidate>
         <!-- Password se oculta si viene con ?q= (QR) -->
         <div id="passWrap">
@@ -60,7 +61,7 @@
         <label>Comentario</label>
         <textarea id="revText" rows="4" placeholder="¿Cómo la pasaron? ¿Qué te gustó?"></textarea>
 
-        <!-- Se quitó el checkbox de 'publicar' -->
+        <!-- Sin checkbox "publicar" -->
 
         <button id="revSend" class="btn" type="submit">Enviar reseña</button>
         <div id="revHint" class="hint" aria-live="polite"></div>

@@ -1,79 +1,118 @@
 (function(){
   const qs = new URLSearchParams(location.search);
-  const qrToken = (qs.get('q') || '').trim();          // si viene de QR
-  const fromQR  = !!qrToken;
+  const qrToken = (qs.get('q') || '').trim();      // si viene de QR: ?q=rvQR_...
+  const fromQR  = qrToken.length > 0;
 
-  const form   = document.getElementById('reviewForm');
-  const pass   = document.getElementById('revPass');
-  const passWrap = document.getElementById('passWrap');
-  const name   = document.getElementById('revName');
-  const text   = document.getElementById('revText');
-  const ratingInput = document.getElementById('revRating');
-  const stars  = document.getElementById('revStars');
-  const hint   = document.getElementById('revHint');
-  const btn    = document.getElementById('revSend');
+  const form      = document.getElementById('reviewForm');
+  const passWrap  = document.getElementById('passWrap');
+  const passInput = document.getElementById('revPass');
+  const nameInput = document.getElementById('revName');
+  const textInput = document.getElementById('revText');
+  const ratingInp = document.getElementById('revRating');
+  const starsBox  = document.getElementById('revStars');
+  const hint      = document.getElementById('revHint');
+  const btn       = document.getElementById('revSend');
 
   // Si viene con ?q=... (QR): ocultar password
   if (fromQR && passWrap) passWrap.classList.add('hide');
 
   // Estrellas
   function paint(n){
-    [...stars.querySelectorAll('button')].forEach(b => {
+    if (!starsBox) return;
+    const btns = starsBox.querySelectorAll('button');
+    btns.forEach(b => {
       const v = Number(b.dataset.v);
       b.textContent = v <= n ? '★' : '☆';
     });
   }
-  paint(Number(ratingInput.value) || 5);
+  paint(Number(ratingInp?.value) || 5);
 
-  stars.addEventListener('click', (e) => {
-    const v = Number(e.target?.dataset?.v || 0);
-    if (!v) return;
-    ratingInput.value = String(v);
-    paint(v);
+  if (starsBox){
+    starsBox.addEventListener('click', (e) => {
+      const v = Number(e.target?.dataset?.v || 0);
+      if (!v) return;
+      if (ratingInp) ratingInp.value = String(v);
+      paint(v);
+    });
+  }
+
+  // Evitar submit nativo accidental (por si el HTML tuviera action)
+  if (form){
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await sendReview();
+      return false;
+    });
+  }
+
+  // Enter en inputs => mandar
+  [passInput, nameInput, textInput].forEach(el=>{
+    if (!el) return;
+    el.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', {cancelable:true, bubbles:true}));
+      }
+    });
   });
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hint.textContent = '';
-    hint.className = 'hint';
+  async function sendReview(){
+    if (hint){ hint.textContent = ''; hint.className = 'hint'; }
 
     const payload = {
-      // Si hay QR uso qr_token; si no, uso pass
-      pass: fromQR ? '' : (pass?.value || '').trim(),
-      qr_token: fromQR ? qrToken : '',
-      name: (name?.value || '').trim(),
-      rating: Number(ratingInput?.value || 5),
-      comment: (text?.value || '').trim(),
-      publish: true  // ya no mostramos checkbox
+      // si es QR, no mandamos pass (se valida por header)
+      pass: fromQR ? '' : (passInput?.value || '').trim(),
+      name: (nameInput?.value || '').trim(),
+      comment: (textInput?.value || '').trim(),
+      rating: Number(ratingInp?.value || 5),
+      // publish: true
     };
 
-    if (!fromQR && !payload.pass){ hint.textContent = 'Ingresá la contraseña.'; return; }
-    if (!payload.comment){ hint.textContent = 'Escribí un comentario.'; return; }
-    if (payload.rating < 1 || payload.rating > 5){ hint.textContent = 'Calificación inválida.'; return; }
+    // Validaciones UX
+    if (!fromQR && !payload.pass){
+      if (hint){ hint.textContent = 'Ingresá la contraseña.'; hint.className='err'; }
+      return;
+    }
+    if (!payload.comment || payload.comment.length < 3){
+      if (hint){ hint.textContent = 'Escribí un comentario.'; hint.className='err'; }
+      return;
+    }
+    if (!Number.isFinite(payload.rating) || payload.rating < 1 || payload.rating > 5){
+      if (hint){ hint.textContent = 'Calificación inválida.'; hint.className='err'; }
+      return;
+    }
 
     try{
-      btn.disabled = true;
-      hint.textContent = 'Enviando...';
+      if (btn) btn.disabled = true;
+      if (hint){ hint.textContent = 'Enviando...'; hint.className='hint'; }
+
+      // headers: solo ponemos X-Review-QR cuando viene de QR
+      const headers = { 'Content-Type': 'application/json' };
+      if (fromQR) headers['X-Review-QR'] = qrToken;
+
       const r = await fetch('/api/reserve?review=1', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method: 'POST',
+        headers,
         body: JSON.stringify(payload)
       });
-      const d = await r.json().catch(()=>({}));
+
+      const d = await r.json().catch(()=> ({}));
+
       if (!r.ok || !d?.ok){
-        hint.textContent = d?.error || 'No se pudo guardar la reseña.';
-        btn.disabled = false;
+        if (hint){ hint.textContent = d?.error || `Error ${r.status}`; hint.className='err'; }
+        if (btn) btn.disabled = false;
         return;
       }
-      hint.textContent = '¡Gracias! Tu reseña fue enviada.';
-      hint.className = 'ok';
-      form.reset();
-      ratingInput.value = '5';
+
+      if (hint){ hint.textContent = '¡Gracias! Tu reseña fue enviada.'; hint.className='ok'; }
+      if (form) form.reset();
+      if (ratingInp) ratingInp.value = '5';
       paint(5);
-    }catch{
-      hint.textContent = 'Error de red. Intentá de nuevo.';
+    }catch(err){
+      if (hint){ hint.textContent = 'Error de red. Intentá de nuevo.'; hint.className='err'; }
     }finally{
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
-  });
+  }
 })();
