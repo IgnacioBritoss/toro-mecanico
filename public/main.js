@@ -187,16 +187,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Hookear overlay (login admin)
   initAdminAuth();
 
-  // NUEVO: cache isAdmin SOLO si estamos en admin
-  if (ON_ADMIN) {
-    try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
-  } else {
-    IS_ADMIN = false;
-    // si no es admin, ni siquiera mostramos la sección bosque
-    document.getElementById('forestSection')?.remove();
-  }
-  
-window.IS_ADMIN = IS_ADMIN;   // ← para que reach-zones.js lo lea
+   // NUEVO: cache isAdmin SOLO si estamos en admin
+if (ON_ADMIN) {
+  try { IS_ADMIN = await isAdmin(); } catch { IS_ADMIN = false; }
+} else {
+  IS_ADMIN = false;
+  document.getElementById('forestSection')?.remove();
+}
+
+window.IS_ADMIN = IS_ADMIN;   // ← reach-zones.js lo usa
+// Avisar a todos los módulos que ya sabemos si es admin
+window.dispatchEvent(new CustomEvent("admin:ready", { detail: { isAdmin: IS_ADMIN } }));
+// Mostrar/ocultar el panel de zonas inmediatamente
+const zp = document.getElementById("zonesPanel");
+if (zp) zp.hidden = !IS_ADMIN;
+  // ← para que reach-zones.js lo lea
 
   lockDateTimeFields();
 

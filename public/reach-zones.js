@@ -1,5 +1,5 @@
 // reach-zones.js — panel mínimo de zonas (todo habilitado por defecto).
-// Muestra solo las DESHABILITADAS como "chips". Al guardar:
+// UI muestra SOLO las deshabilitadas como "chips". Al guardar:
 //  - Envía active:false para las que queden en UI (deshabilitar)
 //  - Envía active:true para las que estaban deshabilitadas en el server y ya NO están en UI (re-habilitar)
 
@@ -13,10 +13,12 @@ const BA_CITIES = [
 ];
 
 // DOM
-const panel   = document.getElementById("zonesPanel");
-const controls= document.getElementById("zonesPanelControls");
+const panel    = document.getElementById("zonesPanel");
+const controls = document.getElementById("zonesPanelControls");
+
+// Si no existe en el DOM, nada que hacer
 if (!panel || !controls) {
-  // No hay panel en DOM: nada que hacer
+  // noop
 } else {
   const selProv = document.getElementById("zoneProv");
   const selCity = document.getElementById("zoneCity");
@@ -26,7 +28,7 @@ if (!panel || !controls) {
   const hint    = document.getElementById("zonesHint");
 
   // Estado
-  // "uiDisabled": listado que se ve como chips (zonas deshabilitadas actualmente en la UI)
+  // "uiDisabled": listado visible (chips) => zonas deshabilitadas en UI
   let uiDisabled = []; // [{province, city, active:false}]
   // "serverDisabled": snapshot de lo que vino deshabilitado del servidor
   let serverDisabled = new Set(); // claves "prov||city"
@@ -98,7 +100,6 @@ if (!panel || !controls) {
         }
       });
 
-      // Si no hay cambios, igual enviamos (idempotente)
       const payload = { zones: [...toFalse, ...toTrue] };
 
       const r = await fetch("/api/reserve?zones=1", {
@@ -131,12 +132,27 @@ if (!panel || !controls) {
   btnSave?.addEventListener("click", save);
   selProv?.addEventListener("change", fillCities);
 
-  // Init
+  // Init UI base
   fillProvs();
   fillCities();
   render();
-  // Mostramos el panel solo si sos admin (lo setea main.js)
-  panel.hidden = !window.IS_ADMIN;
-  // Igual cargamos por si lo activás luego
-  load();
+
+  // ─────────────────────────────────────────────────────────────
+  // VISIBILIDAD: mostrar/ocultar cuando main.js confirme admin
+  // ─────────────────────────────────────────────────────────────
+  // Arranca oculto hasta que main.js decida
+  panel.hidden = true;
+
+  // Si ya estaba seteado (caso navegación intra-app)
+  if (window.IS_ADMIN === true) {
+    panel.hidden = false;
+    load();
+  }
+
+  // Escuchamos el "ping" de main.js cuando resuelve si sos admin
+  window.addEventListener("admin:ready", (ev) => {
+    const isAdmin = !!(ev && ev.detail && ev.detail.isAdmin);
+    panel.hidden = !isAdmin;
+    if (isAdmin) load();
+  }, { once:false });
 }
