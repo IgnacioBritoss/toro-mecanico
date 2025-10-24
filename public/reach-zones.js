@@ -1,8 +1,21 @@
-// reach-zones.js — Panel de zonas (deshabilitar) + suscripción "avisame" sin tocar main.js
+// public/reach-zones.js
+// Panel "Deshabilitar zonas" + interceptor para modal “Por ahora no llegamos”
 
-// ====================== Config ======================
+// ===== Listas
 const PROVS = ["CABA", "Buenos Aires"];
-const CABA_CIUDAD = ["CABA"];
+
+const CABA_BARRIOS = [
+  "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
+  "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta",
+  "La Boca","La Paternal","Liniers","Mataderos","Monte Castro","Monserrat",
+  "Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco",
+  "Parque Chas","Parque Patricios","Puerto Madero","Recoleta","Retiro",
+  "Saavedra","San Cristóbal","San Nicolás","San Telmo","Versalles",
+  "Villa Crespo","Villa del Parque","Villa Devoto","Villa General Mitre",
+  "Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real",
+  "Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza"
+];
+
 const BA_CITIES = [
   "Avellaneda","Lanús","Quilmes","Berazategui","Florencio Varela","Lomas de Zamora",
   "Almirante Brown","Esteban Echeverría","Ezeiza","La Matanza","Morón","Ituzaingó",
@@ -10,28 +23,27 @@ const BA_CITIES = [
   "San Fernando","Tigre","San Miguel","Malvinas Argentinas","Berisso","Ensenada"
 ];
 
-// ====================== DOM refs (panel) ======================
-const panel    = document.getElementById("zonesPanel");
-const controls = document.getElementById("zonesPanelControls");
+// ===== DOM panel
+const panel   = document.getElementById("zonesPanel");
+const controls= document.getElementById("zonesPanelControls");
+const selProv = document.getElementById("zoneProv");
+const selCity = document.getElementById("zoneCity");
+const btnAdd  = document.getElementById("btnAddZone");
+const list    = document.getElementById("zonesEnabled");
+const btnSave = document.getElementById("zonesSaveBtn");
+const hint    = document.getElementById("zonesHint");
 
-const selProv  = document.getElementById("zoneProv");
-const selCity  = document.getElementById("zoneCity");
-const btnAdd   = document.getElementById("btnAddZone");
-const list     = document.getElementById("zonesEnabled");
-const btnSave  = document.getElementById("zonesSaveBtn");
-const hint     = document.getElementById("zonesHint");
-
-// ====================== Estado ======================
-let uiDisabled = [];      // [{province, city, active:false}]
-let serverDisabled = new Set(); // keys "prov||city"
+// ===== Estado
+let uiDisabled = []; // [{province,city,active:false}]
+let serverDisabled = new Set();
 const key = (p,c) => `${p}||${c}`;
 
-// ====================== Utils ======================
+// ===== Utils UI
 function msg(t, kind=""){ if(!hint) return; hint.textContent=t||""; hint.className="msg"+(kind?` ${kind}`:""); }
 function fillProvs(){ if(selProv) selProv.innerHTML = PROVS.map(p=>`<option value="${p}">${p}</option>`).join(""); }
 function fillCities(){
   if(!selProv || !selCity) return;
-  const src = selProv.value === "CABA" ? CABA_CIUDAD : BA_CITIES;
+  const src = selProv.value === "CABA" ? CABA_BARRIOS : BA_CITIES;
   selCity.innerHTML = src.map(c=>`<option value="${c}">${c}</option>`).join("");
 }
 function render(){
@@ -53,7 +65,7 @@ function render(){
   });
 }
 
-// ====================== Cargar/Guardar zonas ======================
+// ===== Cargar / Guardar zonas
 async function loadZones(){
   try{
     const r = await fetch("/api/reserve?zones=1");
@@ -63,7 +75,7 @@ async function loadZones(){
       zones.filter(z => z.active === false).map(z => key(z.province, z.city))
     );
     uiDisabled = zones.filter(z => z.active === false)
-                      .map(z => ({ province:z.province, city:z.city, active:false }));
+      .map(z => ({ province:z.province, city:z.city, active:false }));
     render(); msg("");
   }catch(e){
     console.warn("No se pudieron cargar zonas:", e);
@@ -77,7 +89,6 @@ async function saveZones(){
     msg("Guardando…");
 
     const uiKeys = new Set(uiDisabled.map(z => key(z.province, z.city)));
-
     const toFalse = uiDisabled.map(z => ({ province:z.province, city:z.city, active:false }));
     const toTrue  = [];
     serverDisabled.forEach(k => {
@@ -96,7 +107,6 @@ async function saveZones(){
     const d = await r.json().catch(()=>({}));
     if (!r.ok) throw new Error(d?.error || String(r.status));
 
-    // éxito => snapshot actualiza
     serverDisabled = new Set(uiDisabled.map(z => key(z.province, z.city)));
     msg("Zonas guardadas.","ok");
   }catch(e){
@@ -107,7 +117,7 @@ async function saveZones(){
   }
 }
 
-// ====================== Eventos UI panel ======================
+// ===== Eventos panel
 btnAdd?.addEventListener("click", () => {
   const p = selProv?.value; const c = selCity?.value;
   if (!p || !c) return;
@@ -118,33 +128,28 @@ btnAdd?.addEventListener("click", () => {
 btnSave?.addEventListener("click", saveZones);
 selProv?.addEventListener("change", fillCities);
 
-// ====== Ajustes visuales del panel (título y escondemos bloques que no usamos)
+// ===== Ajustes visuales (título/subtítulo)
 (function tweakPanelCopy(){
   if (!panel) return;
   const h2 = panel.querySelector("h2");
   if (h2) h2.textContent = "Deshabilitar zonas";
-  // ocultar bloques no deseados si existen en el HTML
-  document.getElementById("blocksWrap")?.remove();     // bloqueos por barrio (no usado)
-  document.getElementById("villaBlacklist")?.closest(".row")?.remove?.(); // listado villas (solo lectura)
+  const p = panel.querySelector("p.muted");
+  if (p) p.textContent = "Agregá barrios/partidos que quieras deshabilitar. Por defecto todo está habilitado.";
+  document.getElementById("blocksWrap")?.remove();
+  document.getElementById("villaBlacklist")?.closest(".row")?.remove?.();
 })();
 
-// ====== Init panel (solo si existe en el DOM) ======
+// ===== Init panel (solo si sos admin)
 if (panel && controls){
   fillProvs(); fillCities(); render();
-  // mostrar el panel solo si sos admin (flag global seteado por main.js)
   panel.hidden = !window.IS_ADMIN;
   loadZones();
 }
 
-// =============================================================
-//          INTERÉS “AVISARME” (NO TOCAR main.js)
-//  Intercepta fetch al POST /api/reserve, si devuelve 409 con
-//  {can_subscribe:true, province, city, display_name} abre modal,
-//  guarda el email y avisa.
-// =============================================================
-
+/* ==========================================================
+   INTERÉS “AVISARME” — intercepta POST /api/reserve 409
+========================================================== */
 (function interestModalBootstrap(){
-  // Construimos el modal por JS para no tocar el HTML
   const overlay = document.createElement("div");
   overlay.id = "interestOverlay";
   overlay.className = "overlay hidden";
@@ -180,10 +185,12 @@ if (panel && controls){
   function openInterestModal(payload){
     lastPayload = payload || null;
     hint.textContent = "";
-    input.value = (window.fEmail?.value || "").trim(); // si tu form tiene fEmail, lo tomamos
+    // si existe el input del form de reserva, lo reutilizamos
+    const formEmail = document.getElementById("fEmail");
+    input.value = formEmail ? (formEmail.value || "") : "";
     lead.innerHTML = `Aún no operamos en <strong>${payload.province}</strong> / <strong>${payload.city}</strong>. Te avisamos cuando habilitemos la zona.`;
     overlay.classList.remove("hidden");
-    document.body.classList.add("has-admin-overlay"); // reutilizo clase para bloquear scroll
+    document.body.classList.add("has-admin-overlay");
     setTimeout(()=>input.focus(), 50);
   }
   function closeInterestModal(){
@@ -192,7 +199,7 @@ if (panel && controls){
   }
   function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||""); }
 
-  async function subscribeInterest(){ // POST /api/reserve?interest=1
+  async function subscribeInterest(){
     try{
       hint.textContent = "";
       const email = (input.value || "").trim().toLowerCase();
@@ -226,10 +233,7 @@ if (panel && controls){
   btnOk.addEventListener("click", subscribeInterest);
   btnNo.addEventListener("click", closeInterestModal);
 
-  // Exponer por si querés abrir manualmente desde consola.
-  window.openInterestModal = openInterestModal;
-
-  // -------- Interceptor de fetch para no tocar main.js ----------
+  // Interceptor de fetch (sin tocar main.js)
   const origFetch = window.fetch;
   window.fetch = async function(input, init){
     const res = await origFetch(input, init);
@@ -240,7 +244,6 @@ if (panel && controls){
         (init?.method || "GET").toUpperCase() === "POST";
 
       if (isReservePost && res.status === 409){
-        // Clonamos para que el caller aún pueda leer el body
         const clone = res.clone();
         const data = await clone.json().catch(()=>null);
         if (data && data.can_subscribe && data.province && data.city){
@@ -255,4 +258,3 @@ if (panel && controls){
     return res;
   };
 })();
-
