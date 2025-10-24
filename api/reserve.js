@@ -62,7 +62,6 @@ const VILLA_BLACKLIST = [
   "villa itatí","villa azul","villa azúl","fuerte apache","ejército de los andes","villa caraza",
   "villa la cava","villa palito","villa jardín","villa trujui","villa los paraguayos","la saladita","la saladita de wilde"
 ].map(s => s.toLowerCase());
-
 function isVilla(displayName=""){
   const t = (displayName || "").toLowerCase();
   return VILLA_BLACKLIST.some(k => t.includes(k));
@@ -156,8 +155,8 @@ async function handleInterest(req, res){
   }
 }
 
-/* ============= Reseñas: config + tabla + handler ============= */
-const REVIEW_PASS = (process.env.REVIEW_PASS || "").trim();
+/* ============= Reseñas ============= */
+const REVIEW_PASS = (process.env.REVIEW_PASS ?? "lezama").trim();  // fallback seguro
 const REVIEW_QR_TOKEN = (process.env.REVIEW_QR_TOKEN || "").trim();
 
 async function ensureReviewsTable(){
@@ -167,13 +166,15 @@ async function ensureReviewsTable(){
         id          bigserial PRIMARY KEY,
         name        text,
         rating      int NOT NULL CHECK (rating BETWEEN 1 AND 5),
-        comment     text NOT NULL,
+        comment     text NOT NULL CHECK (char_length(comment) BETWEEN 3 AND 2000),
         publish     boolean NOT NULL DEFAULT true,
-        created_at  timestamptz DEFAULT now()
+        created_at  timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON public.reviews (created_at DESC)`);
   }catch(e){
     console.error("ensureReviewsTable:", e);
+    throw e;
   }
 }
 
@@ -181,84 +182,33 @@ async function handleReview(req, res){
   try{
     const mode = String(req.query?.review || "").toLowerCase();
 
-    // **CAMBIO**: cualquier POST a /api/reserve?review=... crea reseña
-    if (req.method === "POST"){
-      await ensureReviewsTable();
-
-      const body = await parseJSON(req);
-      const pass = (body?.pass || "").trim();
-      const qrHeader = String(req.headers["x-review-qr"] || "").trim();
-
-      const passOk = !!REVIEW_PASS && !!pass && pass === REVIEW_PASS;
-      const qrOk   = !!REVIEW_QR_TOKEN && !!qrHeader && qrHeader === REVIEW_QR_TOKEN;
-
-      if (!(passOk || qrOk)){
-        return res.status(401).json({ error: "Contraseña inválida" });
-      }
-
-      const rating = parseInt(body?.rating, 10);
-      const name = (body?.name || "").trim() || null;
-      const comment = (body?.comment || "").trim();
-      const publish = body?.publish === false ? false : true;
-      if (!comment || !Number.isFinite(rating) || rating < 1 || rating > 5){
-        return res.status(400).json({ error: "Datos inválidos" });
-      }
-
-      const { rows } = await pool.query(
-        `INSERT INTO public.reviews (name, rating, comment, publish)
-         VALUES ($1,$2,$3,$4)
-         RETURNING id, name, rating, comment, publish, created_at`,
-        [name, rating, comment, publish]
-      );
-
-      try{
-        const transporter = createTransporter();
-        if (transporter){
-          const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
-          const fromEmail  = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
-          await transporter.sendMail({
-            from: `Reseñas Toro Mecánico <${fromEmail}>`,
-            to: ownerEmail,
-            subject: "Nueva reseña recibida",
-            html: `
-              <div style="font-family:system-ui,Segoe UI,Roboto">
-                <h3>Nueva reseña</h3>
-                <p><strong>Rating:</strong> ${rows[0].rating} / 5</p>
-                ${rows[0].name ? `<p><strong>Nombre:</strong> ${rows[0].name}</p>` : ""}
-                <p style="white-space:pre-wrap"><strong>Comentario:</strong><br/>${rows[0].comment}</p>
-                <p><em>Publicar:</em> ${rows[0].publish ? "Sí" : "No"}</p>
-              </div>`
-          });
-        }
-      }catch(e){ console.error("MAIL review error:", e); }
-
-      return res.status(200).json({ ok:true, review: rows[0] });
-    }
-
-    if (req.method === "GET" && mode === "public"){
+    // GET "public" (feed para la web)
+    if (req.method === "GET" && (mode === "public" || mode === "feed")){
       await ensureReviewsTable();
       const { rows } = await pool.query(
         `SELECT name, rating, comment, created_at
-         FROM public.reviews
-         WHERE publish = TRUE
-         ORDER BY created_at DESC
-         LIMIT 30`
+           FROM public.reviews
+          WHERE publish = TRUE
+          ORDER BY created_at DESC
+          LIMIT 30`
       );
       return res.status(200).json({ ok:true, reviews: rows });
     }
 
+    // GET "all" (admin)
     if (req.method === "GET" && mode === "all"){
       if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
       await ensureReviewsTable();
       const { rows } = await pool.query(
         `SELECT id, name, rating, comment, publish, created_at
-         FROM public.reviews
-         ORDER BY created_at DESC
-         LIMIT 200`
+           FROM public.reviews
+          ORDER BY created_at DESC
+          LIMIT 200`
       );
       return res.status(200).json({ ok:true, reviews: rows });
     }
 
+    // DELETE "delete" (admin)
     if (req.method === "DELETE" && mode === "delete"){
       if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
       const id = parseInt(String(req.query?.id || ""), 10);
@@ -267,6 +217,79 @@ async function handleReview(req, res){
       await ensureReviewsTable();
       const r = await pool.query(`DELETE FROM public.reviews WHERE id=$1`, [id]);
       return res.status(200).json({ ok:true, deleted: r.rowCount });
+    }
+
+    // POST: crear reseña => /api/reserve?review=1
+    if (req.method === "POST"){
+      await ensureReviewsTable();
+
+      const body = await parseJSON(req);
+
+      const pass = (body?.pass || "").trim();
+      const qrHeader = String(req.headers["x-review-qr"] || "").trim();
+
+      const passOk = !!pass && pass === REVIEW_PASS;
+      const qrOk   = !!REVIEW_QR_TOKEN && !!qrHeader && qrHeader === REVIEW_QR_TOKEN;
+
+      if (!(passOk || qrOk)){
+        return res.status(401).json({ error: "Contraseña inválida" });
+      }
+
+      const rating = parseInt(body?.rating, 10);
+      const name = (body?.name || "").toString().trim().slice(0,80) || null;
+      const comment = (body?.comment || "").toString().trim().slice(0,2000);
+      const publish = body?.publish === false ? false : true;
+
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5){
+        return res.status(400).json({ error: "Calificación inválida (1..5)" });
+      }
+      if (comment.length < 3){
+        return res.status(400).json({ error: "Comentario demasiado corto" });
+      }
+
+      try{
+        const { rows } = await pool.query(
+          `INSERT INTO public.reviews (name, rating, comment, publish)
+           VALUES ($1,$2,$3,$4)
+           RETURNING id, name, rating, comment, publish, created_at`,
+          [name, rating, comment, publish]
+        );
+
+        // correo opcional
+        try{
+          const transporter = createTransporter();
+          if (transporter){
+            const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
+            const fromEmail  = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
+            await transporter.sendMail({
+              from: `Reseñas Toro Mecánico <${fromEmail}>`,
+              to: ownerEmail,
+              subject: "Nueva reseña recibida",
+              html: `
+                <div style="font-family:system-ui,Segoe UI,Roboto">
+                  <h3>Nueva reseña</h3>
+                  <p><strong>Rating:</strong> ${rows[0].rating} / 5</p>
+                  ${rows[0].name ? `<p><strong>Nombre:</strong> ${rows[0].name}</p>` : ""}
+                  <p style="white-space:pre-wrap"><strong>Comentario:</strong><br/>${rows[0].comment}</p>
+                  <p><em>Publicar:</em> ${rows[0].publish ? "Sí" : "No"}</p>
+                </div>`
+            });
+          }
+        }catch(mailErr){ console.error("MAIL review error:", mailErr); }
+
+        return res.status(200).json({ ok:true, review: rows[0] });
+      }catch(dbErr){
+        console.error("DB review insert:", dbErr);
+        return res.status(500).json({
+          error: "Error interno (DB reviews)",
+          detail: dbErr?.code || dbErr?.message || String(dbErr)
+        });
+      }
+    }
+
+    // Si llega GET a ?review=1 (sin modo), aclaramos que es POST.
+    if (req.method === "GET"){
+      return res.status(405).json({ error: "Usá POST para enviar reseñas" });
     }
 
     return res.status(405).json({ error:"Método no permitido (review)" });
@@ -398,7 +421,7 @@ export default async function handler(req, res){
   // CORS/health
   if (req.method === "OPTIONS"){
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD");
+    res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin, X-Review-QR");
     return res.status(200).end();
   }
