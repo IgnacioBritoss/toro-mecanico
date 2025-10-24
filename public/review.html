@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dejanos tu reseña</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .wrap { max-width: 760px; margin: 32px auto; padding: 16px; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: 20px; }
+    .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    @media (max-width: 600px){ .row { grid-template-columns: 1fr; } }
+    .stars { display:flex; gap:8px; font-size:28px; cursor:pointer; }
+    .stars button { background: none; border: none; padding:4px; line-height:1; }
+    .hint { color:#6b7280; margin-top:6px; }
+    .err { color:#dc2626; margin-top:8px; }
+    .ok { color:#16a34a; margin-top:8px; }
+    .btn { background:#0f172a; color:#fff; border:none; padding:12px 16px; border-radius:10px; cursor:pointer; }
+    .btn[disabled] { opacity:.6; cursor:default; }
+    input, textarea { width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:10px; }
+    label { display:block; font-weight:600; margin:10px 0 6px; }
+    .muted { color:#6b7280; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>¡Gracias por tu evento! ⭐</h2>
+      <p class="muted">Esta página es privada. Necesitás la contraseña que te dimos con el QR.</p>
+
+      <form id="reviewForm" novalidate>
+        <label>Contraseña</label>
+        <input id="revPass" type="password" placeholder="••••••" autocomplete="off" required />
+
+        <div class="row">
+          <div>
+            <label>Tu nombre (opcional)</label>
+            <input id="revName" type="text" placeholder="Juan / Cumpleaños de Mia" />
+          </div>
+          <div>
+            <label>Calificación</label>
+            <div id="revStars" class="stars" role="group" aria-label="Calificación de 1 a 5">
+              <button type="button" data-v="1" aria-label="1 estrella">☆</button>
+              <button type="button" data-v="2" aria-label="2 estrellas">☆</button>
+              <button type="button" data-v="3" aria-label="3 estrellas">☆</button>
+              <button type="button" data-v="4" aria-label="4 estrellas">☆</button>
+              <button type="button" data-v="5" aria-label="5 estrellas">☆</button>
+            </div>
+            <input id="revRating" type="hidden" value="5" />
+            <div class="hint">Tocá las estrellas para elegir (5 = excelente).</div>
+          </div>
+        </div>
+
+        <label>Comentario</label>
+        <textarea id="revText" rows="4" placeholder="¿Cómo la pasaron? ¿Qué te gustó?" required></textarea>
+
+        <div style="margin:10px 0">
+          <label style="display:flex; gap:8px; align-items:center; font-weight:500">
+            <input id="revPublish" type="checkbox" checked />
+            Acepto que publiquen mi reseña en la web.
+          </label>
+        </div>
+
+        <button id="revSend" class="btn" type="submit">Enviar reseña</button>
+        <div id="revHint" class="hint" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/review.js"></script>
+</body>
+</html>

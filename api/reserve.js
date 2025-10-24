@@ -159,6 +159,98 @@ async function handleInterest(req, res){
   }
 }
 
+/* ============= Reseñas: config + tabla + handler ============= */
+const REVIEW_PASS = (process.env.REVIEW_PASS || "toro2025").trim();
+
+async function ensureReviewsTable(){
+  try{
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.reviews(
+        id          bigserial PRIMARY KEY,
+        name        text,
+        rating      int NOT NULL CHECK (rating BETWEEN 1 AND 5),
+        comment     text NOT NULL,
+        publish     boolean NOT NULL DEFAULT true,
+        created_at  timestamptz DEFAULT now()
+      )
+    `);
+  }catch(e){
+    console.error("ensureReviewsTable:", e);
+  }
+}
+
+async function handleReview(req, res){
+  // POST /api/reserve?review=1    -> crea reseña (con pass)
+  // GET  /api/reserve?review=public -> lista reseñas publicadas
+  try{
+    const mode = String(req.query?.review || "").toLowerCase();
+
+    if (req.method === "POST" && (mode === "1" || mode === "true")){
+      await ensureReviewsTable();
+      const body = await parseJSON(req);
+      const pass = (body?.pass || "").trim();
+      if (!pass || pass !== REVIEW_PASS){
+        return res.status(401).json({ error: "Contraseña inválida" });
+      }
+      const rating = parseInt(body?.rating, 10);
+      const name = (body?.name || "").trim() || null;
+      const comment = (body?.comment || "").trim();
+      const publish = body?.publish === false ? false : true;
+      if (!comment || !Number.isFinite(rating) || rating < 1 || rating > 5){
+        return res.status(400).json({ error: "Datos inválidos" });
+      }
+
+      const { rows } = await pool.query(
+        `INSERT INTO public.reviews (name, rating, comment, publish)
+         VALUES ($1,$2,$3,$4)
+         RETURNING id, name, rating, comment, publish, created_at`,
+        [name, rating, comment, publish]
+      );
+
+      // Notificación opcional al dueño
+      try{
+        const transporter = createTransporter();
+        if (transporter){
+          const ownerEmail = process.env.TO_EMAIL || process.env.SMTP_USER;
+          const fromEmail  = process.env.FROM_EMAIL || process.env.SMTP_USER || ownerEmail;
+          await transporter.sendMail({
+            from: `Reseñas Toro Mecánico <${fromEmail}>`,
+            to: ownerEmail,
+            subject: "Nueva reseña recibida",
+            html: `
+              <div style="font-family:system-ui,Segoe UI,Roboto">
+                <h3>Nueva reseña</h3>
+                <p><strong>Rating:</strong> ${rating} / 5</p>
+                ${name ? `<p><strong>Nombre:</strong> ${name}</p>` : ""}
+                <p style="white-space:pre-wrap"><strong>Comentario:</strong><br/>${comment}</p>
+                <p><em>Publicar:</em> ${publish ? "Sí" : "No"}</p>
+              </div>`
+          });
+        }
+      }catch(e){ console.error("MAIL review error:", e); }
+
+      return res.status(200).json({ ok:true, review: rows[0] });
+    }
+
+    if (req.method === "GET" && mode === "public"){
+      await ensureReviewsTable();
+      const { rows } = await pool.query(
+        `SELECT name, rating, comment, created_at
+         FROM public.reviews
+         WHERE publish = TRUE
+         ORDER BY created_at DESC
+         LIMIT 30`
+      );
+      return res.status(200).json({ ok:true, reviews: rows });
+    }
+
+    return res.status(405).json({ error:"Método no permitido (review)" });
+  }catch(e){
+    console.error("review handler:", e);
+    return res.status(500).json({ error:"Error interno (review)" });
+  }
+}
+
 /* ============= GET/PUT zonas (panel) + notificación “Llegamos” ============= */
 async function handleZones(req, res){
   try{
@@ -197,7 +289,7 @@ async function handleZones(req, res){
           )
         `);
 
-        // Snapshot de lo que estaba antes
+        // Snapshot previo
         const prev = await client.query(`SELECT province, city, active FROM public.service_zones`);
         const prevMap = new Map(prev.rows.map(r => [`${r.province}||${r.city}`, r.active]));
 
@@ -213,7 +305,7 @@ async function handleZones(req, res){
           await client.query(upsert, [z.province, z.city, act]);
         }
 
-        // Detectar cambios false->true para enviar “Llegamos”
+        // Cambios false->true => “Llegamos”
         const nowRows = await client.query(`SELECT province, city, active FROM public.service_zones`);
         const enabledNow = nowRows.rows.filter(r => {
           const k = `${r.province}||${r.city}`;
@@ -221,7 +313,6 @@ async function handleZones(req, res){
           return before === false && r.active === true;
         });
 
-        // Intereses y mails
         if (enabledNow.length){
           await client.query(`
             CREATE TABLE IF NOT EXISTS public.service_interests(
@@ -289,6 +380,12 @@ export default async function handler(req, res){
     return res.status(200).end();
   }
   if (req.method === "HEAD"){ return res.status(200).end(); }
+
+  // Reseñas (QR + feed público)
+  if ((req.method === "POST" || req.method === "GET") &&
+      (req.query?.review !== undefined)){
+    return handleReview(req, res);
+  }
 
   // interés “avisame”
   if (req.method === "POST" && (req.query?.interest === "1" || req.query?.interest === 1)){
