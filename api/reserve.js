@@ -35,13 +35,11 @@ async function parseJSON(req){
   try { return JSON.parse(raw); } catch { return {}; }
 }
 function isAdmin(req){
-  // usá tu auth real si la tenés; para el panel basta con este header
+  // usá tu auth real si la tenés; para el panel alcanza con este header
   return req.headers["x-admin"] === "1" || req.user?.is_admin === true;
 }
 
-/* ===========================================================
-   Barrios de CABA (para inferencia de ciudad/barrio)
-=========================================================== */
+/* ===== Barrios de CABA (para inferencia de ciudad/barrio) */
 const CABA_BARRIOS = [
   "Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito",
   "Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta",
@@ -55,7 +53,7 @@ const CABA_BARRIOS = [
 ];
 const BARRIOS_REGEX = CABA_BARRIOS.map(b => ({
   name: b,
-  re: new RegExp(`\\b${b.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\b`, "i")
+  re: new RegExp(`\\b${b.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b`, "i")
 }));
 
 /* =================================================================
@@ -72,30 +70,26 @@ const VILLA_BLACKLIST = [
   "villa la cava","villa palito","villa jardín","villa trujui","villa los paraguayos","la saladita","la saladita de wilde"
 ].map(s => s.toLowerCase());
 
-function isVilla(displayName = ""){
+function isVilla(displayName=""){
   const t = (displayName || "").toLowerCase();
   return VILLA_BLACKLIST.some(k => t.includes(k));
 }
 
 /* ===========================================================
-   Inferencia de provincia/ciudad (CABA=barrios, BA=partidos)
+   Inferencia provincia/ciudad/barrio desde display_name
 =========================================================== */
-function inferProvinceCity(display_name = ""){
+function inferProvinceCity(display_name=""){
   const low = (display_name || "").toLowerCase();
-
-  // Provincia
   const isCABA = /c\.?a\.?b\.?a|ciudad aut[oó]noma de buenos aires|capital federal|caba\b/.test(low);
   const province = isCABA ? "CABA" : "Buenos Aires";
 
-  // En CABA devolvemos BARRIO si aparece en el display_name; si no, "CABA"
   if (province === "CABA"){
-    for (const { name, re } of BARRIOS_REGEX){
+    for (const {name, re} of BARRIOS_REGEX){
       if (re.test(display_name || "")) return { province, city: name };
     }
     return { province, city: "CABA" };
   }
 
-  // En Provincia intentamos detectar partidos frecuentes
   const tokens = (display_name || "").split(",").map(s => s.trim());
   for (const tk of tokens){
     const t = tk.toLowerCase();
@@ -103,19 +97,13 @@ function inferProvinceCity(display_name = ""){
       return { province, city: tk };
     }
   }
-  // fallback: BA sin ciudad ⇒ no bloqueamos por ciudad
   return { province, city: "" };
 }
 
 /* ===========================================================
    ¿Ciudad/partido/barrio deshabilitado?
-   Tabla opcional public.service_zones (province, city, active)
-   • Si NO existe o está VACÍA => todo habilitado
-   • Si existe => bloquea si hay fila active=false para (province,city)
 =========================================================== */
 async function isDisabledCity(province, city){
-  // Si no pudimos inferir ciudad/barrio, no bloqueamos
-  if (!city) return false;
   try{
     const exist = await pool.query(`
       SELECT 1 FROM information_schema.tables
@@ -129,7 +117,7 @@ async function isDisabledCity(province, city){
     const q = await pool.query(
       `SELECT 1 FROM public.service_zones
        WHERE province=$1 AND city=$2 AND active=FALSE LIMIT 1`,
-      [province || "Buenos Aires", city]
+      [province || "Buenos Aires", city || "CABA"]
     );
     return q.rowCount > 0;
   }catch{
@@ -138,70 +126,160 @@ async function isDisabledCity(province, city){
 }
 
 /* ===========================================================
-   GET/PUT ?zones=1 para el panel (opcional)
-   - GET devuelve {zones:[{province,city,active}]}
-   - PUT guarda lista; requiere X-Admin: 1
+   GET/PUT ?zones=1 para el panel + POST ?interest=1
 =========================================================== */
 async function handleZones(req, res){
-  try{
-    if (req.method === "GET"){
-      try{
-        const { rows } = await pool.query(
-          `SELECT province, city, active
-             FROM public.service_zones
-            WHERE province IN ('CABA','Buenos Aires')
-            ORDER BY province, city`
-        );
-        return res.status(200).json({ zones: rows });
-      }catch(e){
-        // si tabla no existe => setup vacío
-        if (e.code === "42P01") return res.status(200).json({ zones: [] });
-        throw e;
-      }
+  // GET listado de zonas
+  if (req.method === "GET"){
+    try{
+      const { rows } = await pool.query(
+        `SELECT province, city, active
+           FROM public.service_zones
+          WHERE province IN ('CABA','Buenos Aires')
+          ORDER BY province, city`
+      );
+      return res.status(200).json({ zones: rows });
+    }catch(e){
+      if (e.code === "42P01") return res.status(200).json({ zones: [] });
+      console.error("zones GET:", e);
+      return res.status(500).json({ error:"Error interno (zonas)" });
     }
+  }
 
-    if (req.method === "PUT"){
-      if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
+  // PUT guardar zonas + notificar interesados re-habilitados
+  if (req.method === "PUT"){
+    if (!isAdmin(req)) return res.status(403).json({ error:"No autorizado" });
 
-      const body = await parseJSON(req);
-      const zones = Array.isArray(body?.zones) ? body.zones : [];
+    const body = await parseJSON(req);
+    const zones = Array.isArray(body?.zones) ? body.zones : [];
 
-      const client = await pool.connect();
-      try{
-        await client.query("BEGIN");
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS public.service_zones(
-            province   text NOT NULL,
-            city       text NOT NULL,
-            active     boolean NOT NULL DEFAULT true,
-            updated_at timestamptz DEFAULT now(),
-            PRIMARY KEY (province, city)
-          )`);
-        const upsert = `
-          INSERT INTO public.service_zones (province, city, active)
-          VALUES ($1,$2,$3)
-          ON CONFLICT (province, city)
-          DO UPDATE SET active=EXCLUDED.active, updated_at=now()
-        `;
-        for (const z of zones){
-          if (!z?.province || !z?.city) continue;
-          const act = z.active === false ? false : true;
-          await client.query(upsert, [z.province, z.city, act]);
+    const client = await pool.connect();
+    let enabledNow = [];
+    try{
+      await client.query("BEGIN");
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.service_zones(
+          province   text NOT NULL,
+          city       text NOT NULL,
+          active     boolean NOT NULL DEFAULT true,
+          updated_at timestamptz DEFAULT now(),
+          PRIMARY KEY (province, city)
+        )`);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.service_interests(
+          email        text NOT NULL,
+          province     text NOT NULL,
+          city         text NOT NULL,
+          display_name text,
+          created_at   timestamptz DEFAULT now(),
+          notified_at  timestamptz,
+          PRIMARY KEY (email, province, city)
+        )`);
+
+      const upsert = `
+        INSERT INTO public.service_zones (province, city, active)
+        VALUES ($1,$2,$3)
+        ON CONFLICT (province, city)
+        DO UPDATE SET active=EXCLUDED.active, updated_at=now()
+        RETURNING province, city, active
+      `;
+      for (const z of zones){
+        if (!z?.province || !z?.city) continue;
+        const act = z.active === false ? false : true;
+        const r = await client.query(upsert, [z.province, z.city, act]);
+        if (r.rows?.[0]?.active === true){
+          enabledNow.push({ province: r.rows[0].province, city: r.rows[0].city });
         }
-        await client.query("COMMIT");
-      }catch(e){
-        await client.query("ROLLBACK");
-        throw e;
-      }finally{
-        client.release();
       }
-      return res.status(200).json({ ok:true });
+      await client.query("COMMIT");
+    }catch(e){
+      await client.query("ROLLBACK");
+      client.release();
+      console.error("zones PUT:", e);
+      return res.status(500).json({ error:"Error interno (zonas)" });
+    }
+    client.release();
+
+    // Notificar interesados (best-effort)
+    try{
+      if (enabledNow.length){
+        const transporter = createTransporter();
+        const seen = new Set();
+        enabledNow = enabledNow.filter(z => {
+          const k = `${z.province}||${z.city}`.toLowerCase();
+          if (seen.has(k)) return false; seen.add(k); return true;
+        });
+
+        for (const z of enabledNow){
+          const { rows } = await pool.query(
+            `SELECT email FROM public.service_interests
+             WHERE province=$1 AND city=$2 AND notified_at IS NULL`,
+            [z.province, z.city]
+          );
+          if (!rows.length) continue;
+
+          if (transporter){
+            for (const r of rows){
+              try{
+                await transporter.sendMail({
+                  from: `Equipo de Toro Mecánico <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
+                  to: r.email,
+                  subject: "¡Llegamos a tu zona!",
+                  text: `Buenas, ya estamos operando en ${z.city} (${z.province}). Reservá tu fecha en: ${process.env.PUBLIC_BASE_URL || ("https://" + (process.env.VERCEL_URL||""))}`
+                });
+              }catch(e){ console.error("MAIL interest ERROR:", e); }
+            }
+          }
+          await pool.query(
+            `UPDATE public.service_interests
+               SET notified_at=now()
+             WHERE province=$1 AND city=$2 AND notified_at IS NULL`,
+            [z.province, z.city]
+          );
+        }
+      }
+    }catch(e){ console.error("notify interests error:", e); }
+
+    return res.status(200).json({ ok:true });
+  }
+
+  return res.status(405).json({ error:"Método no permitido" });
+}
+
+async function handleInterest(req, res){
+  try{
+    const body = await parseJSON(req);
+    const email = (body?.email || "").trim().toLowerCase();
+    const province = body?.province || "";
+    const city = body?.city || "";
+    const display_name = body?.display_name || "";
+
+    if (!isValidEmail(email) || !province || !city){
+      return res.status(400).json({ error:"Datos inválidos" });
     }
 
-    return res.status(405).json({ error:"Método no permitido" });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.service_interests(
+        email        text NOT NULL,
+        province     text NOT NULL,
+        city         text NOT NULL,
+        display_name text,
+        created_at   timestamptz DEFAULT now(),
+        notified_at  timestamptz,
+        PRIMARY KEY (email, province, city)
+      )`);
+
+    await pool.query(
+      `INSERT INTO public.service_interests(email, province, city, display_name)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (email, province, city) DO NOTHING`,
+      [email, province, city, display_name]
+    );
+
+    return res.status(200).json({ ok:true });
   }catch(e){
-    console.error("zones handler:", e);
-    return res.status(500).json({ error:"Error interno (zonas)" });
+    console.error("interest handler:", e);
+    return res.status(500).json({ error:"Error interno (interest)" });
   }
 }
 
@@ -222,6 +300,12 @@ export default async function handler(req, res){
   if ((req.method === "GET" || req.method === "PUT") &&
       (req.query?.zones === "1" || req.query?.zones === 1)){
     return handleZones(req, res);
+  }
+
+  // Suscripción de interés (cuando la zona está deshabilitada)
+  if (req.method === "POST" &&
+      (req.query?.interest === "1" || req.query?.interest === 1)){
+    return handleInterest(req, res);
   }
 
   // Solo POST para crear reserva
@@ -255,23 +339,28 @@ export default async function handler(req, res){
       if (referred.toLowerCase() === email.toLowerCase()) return res.status(400).json({ error:"No podés referirte a vos mismo" });
     }
 
-    // Fechas válidas (mismo criterio de tu front)
+    // Fechas válidas
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)){
       return res.status(400).json({ error:"Fecha u hora inválidas" });
     }
 
-    // === 1) Bloqueo por villas (automático)
+    // 1) Bloqueo por villas
     if (isVilla(location.display_name)) {
       return res.status(409).json({ error:"No trabajamos en esa zona." });
     }
 
-    // === 2) Bloqueo si la CIUDAD/PARTIDO/BARRIO está deshabilitada (por defecto todo habilitado)
+    // 2) Bloqueo por zona deshabilitada (ciudad/partido/barrio)
     const { province, city } = inferProvinceCity(location.display_name);
     if (await isDisabledCity(province, city)){
-      return res.status(409).json({ error:"Todavía no llegamos a tu zona" });
+      return res.status(409).json({
+        error: "Todavía no llegamos a tu zona",
+        can_subscribe: true,
+        province, city,
+        display_name: location.display_name || ""
+      });
     }
 
-    // === Plan válido
+    // Plan válido
     const planKey = (plan || "1h").toLowerCase();
     const qPlan = await pool.query(
       `SELECT code, label, price_usd::float FROM plans WHERE code=$1 AND active=TRUE`,
@@ -279,7 +368,7 @@ export default async function handler(req, res){
     );
     if (qPlan.rowCount === 0) return res.status(400).json({ error:"Plan inválido o no disponible" });
 
-    // === Disponibilidad (máx 2 por día y hora única)
+    // Disponibilidad (máx 2 por día y hora única)
     const hourInt = parseInt(String(time).split(":")[0], 10);
 
     const client = await pool.connect();
@@ -348,7 +437,7 @@ export default async function handler(req, res){
       client.release();
     }
 
-    // Emails (propietario + cliente) – opcional, no rompe si falta SMTP
+    // Emails (propietario + cliente) – opcional
     const transporter = createTransporter();
     try{
       if (transporter){
@@ -369,6 +458,13 @@ export default async function handler(req, res){
         const yy = String(d.getUTCFullYear()).slice(-2);
         const fechaCorta = `${dd}/${mm}/${yy}`;
 
+        const mapsUrl = (Number.isFinite(reservation.location_lat) && Number.isFinite(reservation.location_lng))
+          ? `https://www.google.com/maps?q=${encodeURIComponent(reservation.location_lat)},${encodeURIComponent(reservation.location_lng)}`
+          : (reservation.location_address
+              ? `https://www.google.com/maps?q=${encodeURIComponent(reservation.location_address)}`
+              : "");
+
+        // Dueño
         await transporter.sendMail({
           from: `Reservas Toro Mecánico <${fromEmail}>`,
           to: ownerEmail,
@@ -381,14 +477,18 @@ export default async function handler(req, res){
               <p><strong>${fechaCorta}</strong> · ${hh}:00 — Plan: <strong>${reservation.plan}</strong></p>
               <p>Prov/Ciudad: ${reservation.province||"-"} / ${reservation.city||"-"}</p>
               <p>Ubicación: ${reservation.location_display||"-"}</p>
-              ${reservation.referred_email ? `<p><strong>Referido por:</strong> ${reservation.referred_email}</p>` : ""}
-              <p style="margin-top:12px">
+              <p style="margin:14px 0">
+                ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noreferrer"
+                    style="background:#0ea5e9;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;margin-right:6px;display:inline-block">
+                    Abrir en Google Maps
+                  </a>` : ``}
                 <a href="${acceptUrl}" style="background:#16a34a;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;margin-right:6px">Aceptar</a>
                 <a href="${rejectUrl}" style="background:#dc2626;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">Rechazar</a>
               </p>
             </div>`
         });
 
+        // Cliente
         await transporter.sendMail({
           from: `Equipo de Toro Mecánico <${fromEmail}>`,
           to: user.email,
