@@ -160,7 +160,10 @@ async function handleInterest(req, res){
 }
 
 /* ============= Reseñas: config + tabla + handler ============= */
-const REVIEW_PASS = (process.env.REVIEW_PASS || "toro2025").trim();
+// Contraseña: SETEALA en env. (sin fallback)
+const REVIEW_PASS = (process.env.REVIEW_PASS || "").trim();
+// Token QR opcional (si no lo seteás, no hay bypass por QR)
+const REVIEW_QR_TOKEN = (process.env.REVIEW_QR_TOKEN || "").trim();
 
 async function ensureReviewsTable(){
   try{
@@ -180,20 +183,27 @@ async function ensureReviewsTable(){
 }
 
 async function handleReview(req, res){
-  // POST /api/reserve?review=1           -> crea reseña (con pass)
-  // GET  /api/reserve?review=public      -> lista reseñas publicadas (para el carrusel)
-  // GET  /api/reserve?review=all         -> lista TODAS (admin)
-  // DELETE /api/reserve?review=delete&id=123 -> borra por id (admin)
+  // POST /api/reserve?review=1
+  // GET  /api/reserve?review=public
+  // GET  /api/reserve?review=all
+  // DELETE /api/reserve?review=delete&id=123
   try{
     const mode = String(req.query?.review || "").toLowerCase();
 
     if (req.method === "POST" && (mode === "1" || mode === "true")){
       await ensureReviewsTable();
+
       const body = await parseJSON(req);
       const pass = (body?.pass || "").trim();
-      if (!pass || pass !== (process.env.REVIEW_PASS || "toro2025").trim()){
+      const qrHeader = String(req.headers["x-review-qr"] || "").trim();
+
+      const passOk = !!REVIEW_PASS && !!pass && pass === REVIEW_PASS;
+      const qrOk   = !!REVIEW_QR_TOKEN && !!qrHeader && qrHeader === REVIEW_QR_TOKEN;
+
+      if (!(passOk || qrOk)){
         return res.status(401).json({ error: "Contraseña inválida" });
       }
+
       const rating = parseInt(body?.rating, 10);
       const name = (body?.name || "").trim() || null;
       const comment = (body?.comment || "").trim();
@@ -399,7 +409,8 @@ export default async function handler(req, res){
   if (req.method === "OPTIONS"){
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, GET, OPTIONS, HEAD");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin");
+    // agregado X-Review-QR
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin, X-Review-QR");
     return res.status(200).end();
   }
   if (req.method === "HEAD"){ return res.status(200).end(); }

@@ -2,9 +2,6 @@
 // Unifica: feed público, envío con contraseña y panel admin (borrar reseñas)
 
 (function (){
-  /* =========================
-   * Utilidades
-   * ========================= */
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
 
@@ -24,15 +21,13 @@
     }catch{ return ''; }
   }
 
-  /* =========================
-   * A) FEED PÚBLICO (index.html)
-   * ========================= */
+  /* ===== A) FEED PÚBLICO ===== */
   function initPublicFeed(){
     const strip = $('#reviewsStrip');
     const empty = $('#reviewsEmpty');
     const btnPrev = $('#revPrev');
     const btnNext = $('#revNext');
-    if (!strip) return; // no está la sección
+    if (!strip) return;
 
     function card({name, rating, comment, created_at}){
       const div = document.createElement('article');
@@ -78,13 +73,10 @@
     load();
   }
 
-  /* =========================
-   * B) FORM PRIVADO (review.html)
-   *    Link/QR abre /review y ahí pide contraseña
-   * ========================= */
+  /* ===== B) FORM PRIVADO (con modo QR opcional) ===== */
   function initPrivateForm(){
     const form = $('#reviewForm');
-    if (!form) return; // no estamos en review.html
+    if (!form) return;
 
     const pass = $('#revPass');
     const name = $('#revName');
@@ -94,6 +86,15 @@
     const publish = $('#revPublish');
     const hint = $('#revHint');
     const btn = $('#revSend');
+
+    // Detectar si vino por QR (?q=TOKEN). Si hay token, oculto el campo pass
+    const params = new URLSearchParams(location.search);
+    const qrToken = params.get('q');
+    if (qrToken){
+      const passLabel = document.querySelector('label[for="revPass"]') || pass?.closest("label");
+      (passLabel || pass)?.style && ((passLabel || pass).style.display = "none");
+      pass.value = "";
+    }
 
     function paint(n){
       $$('#revStars button').forEach(b => {
@@ -122,16 +123,20 @@
         comment: (text?.value || '').trim(),
         publish: !!publish?.checked
       };
-      if (!payload.pass){ hint.textContent = 'Ingresá la contraseña.'; return; }
+      if (!qrToken && !payload.pass){ hint.textContent = 'Ingresá la contraseña.'; return; }
       if (!payload.comment){ hint.textContent = 'Escribí un comentario.'; return; }
       if (payload.rating < 1 || payload.rating > 5){ hint.textContent = 'Calificación inválida.'; return; }
 
       try{
         btn.disabled = true;
         hint.textContent = 'Enviando...';
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (qrToken) headers['X-Review-QR'] = qrToken;
+
         const r = await fetch('/api/reserve?review=1', {
           method:'POST',
-          headers:{'Content-Type':'application/json'},
+          headers,
           body: JSON.stringify(payload)
         });
         const d = await r.json().catch(()=>({}));
@@ -153,18 +158,13 @@
     });
   }
 
-  /* =========================
-   * C) ADMIN (borrar reseñas) — en index.html
-   *     Visible solo si tu main.js deja ON_ADMIN & IS_ADMIN
-   * ========================= */
+  /* ===== C) ADMIN (borrar reseñas) ===== */
   function initAdminList(){
     const wrapSection = $('#reviewsAdmin');
     const list = $('#reviewsAdminList');
     const hint = $('#reviewsAdminHint');
-    // Si no existe el contenedor, nada que hacer
     if (!wrapSection || !list) return;
 
-    // Mostrar solo cuando estamos realmente en admin
     if (!window.ON_ADMIN || !window.IS_ADMIN) return;
 
     wrapSection.hidden = false;
@@ -209,7 +209,7 @@
             try{
               const resp = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(rv.id)}`, {
                 method: 'DELETE',
-                headers: { 'X-Admin': '1' } // mismo criterio que venís usando
+                headers: { 'X-Admin': '1' }
               });
               const dj = await resp.json().catch(()=>({}));
               if (!resp.ok || !dj?.ok){
@@ -236,7 +236,6 @@
     loadAll();
   }
 
-  // Init de los tres frentes (cada uno se auto-desactiva si no aplica)
   document.addEventListener('DOMContentLoaded', () => {
     initPublicFeed();
     initPrivateForm();
