@@ -743,46 +743,43 @@ body.has-admin-overlay{ overflow:hidden; }
   opacity:.5; cursor:default; transform:none;
 }
 
-/* Base */
-.nice-select-wrapper{ position:relative; display:block; }
-.nice-select-display{
+/* wrapper y visibilidad */
+.tm-select{ position:absolute !important; opacity:0 !important; pointer-events:none; width:0; height:0; }
+.tm-select-wrap{ position:relative; display:block; }
+
+/* botón cerrado */
+.tm-select-btn{
   display:flex; align-items:center; justify-content:space-between;
-  height:44px; padding:0 14px; border-radius:10px; border:1px solid #0b1324;
-  background:#0b1324; color:#fff; font-weight:600; cursor:pointer;
+  height:44px; padding:0 14px; width:100%;
+  background:#0b1324; color:#fff; font-weight:600;
+  border:1px solid #0b1324; border-radius:12px; cursor:pointer;
   box-shadow:0 2px 8px rgba(0,0,0,.15);
 }
-.nice-select-display:focus{ outline:2px solid #101827; outline-offset:2px; }
+.tm-select-btn:focus{ outline:2px solid #101827; outline-offset:2px; }
 
 /* flecha */
-.nice-select-display::after{
+.tm-select-btn::after{
   content:""; width:10px; height:10px; margin-left:10px; flex:0 0 10px;
   background:
     linear-gradient(45deg, transparent 50%, #fff 50%) left,
     linear-gradient(-45deg, transparent 50%, #fff 50%) right;
   background-size:50% 100%; background-repeat:no-repeat;
-  transform: translateY(1px);
 }
 
-/* Lista (siempre debajo) */
-.nice-select-list{
-  position:absolute; left:0; right:0; top:calc(100% + 6px);
-  max-height:240px; overflow:auto; border:1px solid #0b1324;
-  background:#111827; color:#fff; border-radius:12px; z-index:9999;
-  box-shadow:0 8px 20px rgba(0,0,0,.35); padding:6px;
-  display:none;
+/* lista (siempre debajo) */
+.tm-select-list{
+  position:absolute; left:0; right:0; top:calc(100% + 6px); z-index:9999;
+  max-height:260px; overflow:auto; padding:6px;
+  background:#111827; color:#fff; border:1px solid #0b1324; border-radius:12px;
+  box-shadow:0 10px 24px rgba(0,0,0,.35); display:none;
 }
-.nice-select-wrapper.open .nice-select-list{ display:block; }
+.tm-open .tm-select-list{ display:block; }
 
-/* Items */
-.nice-select-item{
+/* ítems */
+.tm-option{
   padding:10px 12px; border-radius:8px; cursor:pointer; line-height:1.2;
 }
-.nice-select-item:hover, .nice-select-item[aria-selected="true"]{
-  background:#1f2937;
-}
+.tm-option:hover, .tm-option[aria-selected="true"]{ background:#1f2937; }
 
-/* Oculta el select real pero accesible para forms */
-select.nice-select{
-  position:absolute !important; opacity:0 !important; pointer-events:none !important;
-  width:0; height:0; margin:0; padding:0; border:0;
-}
+/* por si el bloque es muy alto, deja aire abajo para que no tape */
+.tm-select-wrap{ margin-bottom:12px; }

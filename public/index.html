@@ -181,7 +181,7 @@
       <div class="zp-field">
         <label for="zoneProv">Provincia</label>
         <div class="select">
-          <select id="zoneProv" class="select-clean"></select>
+          <select id="zoneProv" class="tm-select"></select>
           <span class="sel-caret" aria-hidden="true">▾</span>
         </div>
       </div>
@@ -189,7 +189,7 @@
       <div class="zp-field">
         <label for="zoneCity">Ciudad/Partido</label>
         <div class="select">
-          <select id="zoneCity" class="select-clean"></select>
+          <select id="zoneCity" class="tm-select"></select>
           <span class="sel-caret" aria-hidden="true">▾</span>
         </div>
       </div>
@@ -431,5 +431,84 @@
   <script src="reach-zones.js" defer></script>
   <script src="week-activity.js"></script>
   <script src="./admin-prices.js"></script>
+
+
+<script>
+(function(){
+  function enhanceSelect(sel){
+    // 1) armar wrapper + botón + lista
+    const wrap   = document.createElement("div");
+    const button = document.createElement("button");
+    const list   = document.createElement("div");
+    wrap.className = "tm-select-wrap";
+    button.type = "button";
+    button.className = "tm-select-btn";
+    list.className = "tm-select-list";
+
+    // insertar en DOM
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    wrap.appendChild(button);
+    wrap.appendChild(list);
+
+    // 2) construir UI desde las <option>
+    function rebuild(){
+      const opts = Array.from(sel.options);
+      const current = opts[sel.selectedIndex];
+      button.textContent = current ? current.text : "Seleccionar";
+
+      list.innerHTML = "";
+      opts.forEach((o,i)=>{
+        const it = document.createElement("div");
+        it.className = "tm-option";
+        it.textContent = o.text;
+        if (i === sel.selectedIndex) it.setAttribute("aria-selected","true");
+        it.addEventListener("click", ()=>{
+          sel.selectedIndex = i;
+          sel.dispatchEvent(new Event("change",{bubbles:true}));
+          rebuild();
+          wrap.classList.remove("tm-open");
+          button.focus();
+        });
+        list.appendChild(it);
+      });
+    }
+
+    // 3) abrir/cerrar
+    button.addEventListener("click", ()=>{
+      wrap.classList.toggle("tm-open");
+      if (wrap.classList.contains("tm-open")){
+        // asegura que se vea hacia abajo
+        wrap.scrollIntoView({block:"nearest"});
+      }
+    });
+    document.addEventListener("click", (e)=>{
+      if (!wrap.contains(e.target)) wrap.classList.remove("tm-open");
+    });
+
+    // 4) teclado básico (↑ ↓ Enter Esc)
+    button.addEventListener("keydown", (e)=>{
+      const max = sel.options.length - 1;
+      if (e.key === "ArrowDown"){ e.preventDefault(); sel.selectedIndex = Math.min(max, sel.selectedIndex+1); rebuild(); }
+      if (e.key === "ArrowUp"){   e.preventDefault(); sel.selectedIndex = Math.max(0, sel.selectedIndex-1); rebuild(); }
+      if (e.key === "Enter"){     e.preventDefault(); wrap.classList.toggle("tm-open"); }
+      if (e.key === "Escape"){    wrap.classList.remove("tm-open"); }
+    });
+
+    // si cambian dinámicamente las opciones:
+    sel.addEventListener("change", rebuild);
+    rebuild();
+  }
+
+  document.addEventListener("DOMContentLoaded", ()=>{
+    document.querySelectorAll("select.tm-select").forEach(enhanceSelect);
+  });
+})();
+</script>
+
+
+
 </body>
 </html>
+
+
