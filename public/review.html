@@ -26,12 +26,13 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h2>¡Gracias por tu evento! ⭐</h2>
-      <p class="muted">Esta página es privada. Necesitás la contraseña que te dimos con el QR.</p>
+      <h2 id="revTitle">¡Gracias por tu evento! ⭐</h2>
+      <p id="revSubtitle" class="muted">Esta página es privada. Necesitás la contraseña que te dimos con el QR.</p>
 
       <form id="reviewForm" novalidate>
-        <label>Contraseña</label>
-        <input id="revPass" type="password" placeholder="••••••" autocomplete="off" required />
+        <label id="revPassLabel">Contraseña
+          <input id="revPass" type="password" placeholder="••••••" autocomplete="off" required />
+        </label>
 
         <div class="row">
           <div>
@@ -52,10 +53,11 @@
           </div>
         </div>
 
-        <label>Comentario</label>
-        <textarea id="revText" rows="4" placeholder="¿Cómo la pasaron? ¿Qué te gustó?" required></textarea>
+        <label>Comentario
+          <textarea id="revText" rows="4" placeholder="¿Cómo la pasaron? ¿Qué te gustó?" required></textarea>
+        </label>
 
-        <div style="margin:10px 0">
+        <div id="revPublishWrap" style="margin:10px 0">
           <label style="display:flex; gap:8px; align-items:center; font-weight:500">
             <input id="revPublish" type="checkbox" checked />
             Acepto que publiquen mi reseña en la web.
@@ -68,6 +70,7 @@
     </div>
   </div>
 
+  <!-- OJO: tu archivo se llama review.js -->
   <script src="/review.js"></script>
 </body>
 </html>
