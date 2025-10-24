@@ -172,32 +172,45 @@
 <!-- ===================== ZONAS (ADMIN) ===================== -->
 <section id="zonesPanel" class="card admin-only" hidden>
   <h2>Deshabilitar zonas</h2>
-  <p class="muted">Agregá localidades que NO atendés. Por defecto, todas las zonas están habilitadas.</p>
+  <p class="muted">Agregá barrios/partidos que quieras deshabilitar. Por defecto todo está habilitado.</p>
 
-  <div class="reach-controls" id="zonesPanelControls">
-    <form id="zoneAddForm" class="row" onsubmit="return false">
-      <div>
+  <div id="zonesPanelControls" class="reach-controls reach-controls--compact">
+
+    <!-- Formulario: Provincia (arriba) y Ciudad/Partido (debajo) -->
+    <form id="zoneAddForm" class="zp-form" onsubmit="return false">
+      <div class="zp-field">
         <label for="zoneProv">Provincia</label>
-        <select id="zoneProv"></select>
+        <div class="select">
+          <select id="zoneProv"></select>
+          <span class="sel-caret" aria-hidden="true">▾</span>
+        </div>
       </div>
-      <div>
+
+      <div class="zp-field">
         <label for="zoneCity">Ciudad/Partido</label>
-        <select id="zoneCity"></select>
+        <div class="select">
+          <select id="zoneCity"></select>
+          <span class="sel-caret" aria-hidden="true">▾</span>
+        </div>
       </div>
+
       <button type="button" id="btnAddZone" class="btn">Agregar</button>
     </form>
 
-    <div class="row">
-      <label>Zonas deshabilitadas</label>
-      <ul id="zonesEnabled" class="chips"></ul>
-    </div>
-
-    <div class="row end">
+    <!-- Guardar debajo de Agregar -->
+    <div class="zp-save">
       <button type="button" id="zonesSaveBtn" class="btn primary">Guardar</button>
       <span id="zonesHint" class="msg"></span>
     </div>
+
+    <!-- Lista debajo del título “Zonas deshabilitadas” -->
+    <div class="zp-list">
+      <label class="zp-list-title">Zonas deshabilitadas</label>
+      <ul id="zonesEnabled" class="chips"></ul>
+    </div>
   </div>
 </section>
+
 
 
   <!-- Reserva -->
