@@ -1,10 +1,7 @@
-// reach-zones.js — panel mínimo de zonas (todo habilitado por defecto).
-// UI muestra SOLO las deshabilitadas como "chips". Al guardar:
-//  - Envía active:false para las que queden en UI (deshabilitar)
-//  - Envía active:true para las que estaban deshabilitadas en el server y ya NO están en UI (re-habilitar)
+// reach-zones.js — Admin: deshabilitar zonas puntuales (por defecto TODO habilitado)
 
 const PROVS = ["CABA", "Buenos Aires"];
-const CABA_CIUDAD = ["CABA"]; // En CABA solo seleccionamos "CABA"
+const CABA_CIUDAD = ["CABA"];
 const BA_CITIES = [
   "Avellaneda","Lanús","Quilmes","Berazategui","Florencio Varela","Lomas de Zamora",
   "Almirante Brown","Esteban Echeverría","Ezeiza","La Matanza","Morón","Ituzaingó",
@@ -16,9 +13,8 @@ const BA_CITIES = [
 const panel    = document.getElementById("zonesPanel");
 const controls = document.getElementById("zonesPanelControls");
 
-// Si no existe en el DOM, nada que hacer
 if (!panel || !controls) {
-  // noop
+  // nada que hacer
 } else {
   const selProv = document.getElementById("zoneProv");
   const selCity = document.getElementById("zoneCity");
@@ -27,15 +23,10 @@ if (!panel || !controls) {
   const btnSave = document.getElementById("zonesSaveBtn");
   const hint    = document.getElementById("zonesHint");
 
-  // Estado
-  // "uiDisabled": listado visible (chips) => zonas deshabilitadas en UI
-  let uiDisabled = []; // [{province, city, active:false}]
-  // "serverDisabled": snapshot de lo que vino deshabilitado del servidor
-  let serverDisabled = new Set(); // claves "prov||city"
-
+  let uiDisabled = [];        // [{province, city, active:false}]
+  let serverDisabled = new Set(); // "prov||city"
   const key = (p,c) => `${p}||${c}`;
 
-  // Utils UI
   function msg(t, kind=""){ if(!hint) return; hint.textContent=t||""; hint.className="msg"+(kind?` ${kind}`:""); }
   function fillProvs(){ if(selProv) selProv.innerHTML = PROVS.map(p=>`<option value="${p}">${p}</option>`).join(""); }
   function fillCities(){
@@ -47,7 +38,7 @@ if (!panel || !controls) {
     if (!list) return;
     list.innerHTML = "";
     if (!uiDisabled.length){
-      list.innerHTML = `<span class="muted">Todas las zonas habilitadas (por defecto).</span>`;
+      list.innerHTML = `<span class="muted">No hay zonas deshabilitadas.</span>`;
       return;
     }
     uiDisabled.forEach(z => {
@@ -62,46 +53,34 @@ if (!panel || !controls) {
     });
   }
 
-  // Cargar snapshot desde server
   async function load(){
     try{
       const r = await fetch("/api/reserve?zones=1");
       const d = await r.json();
       const zones = Array.isArray(d?.zones) ? d.zones : [];
-      serverDisabled = new Set(
-        zones.filter(z => z.active === false).map(z => key(z.province, z.city))
-      );
-      // Para la UI guardamos solo las deshabilitadas
-      uiDisabled = zones
-        .filter(z => z.active === false)
-        .map(z => ({ province:z.province, city:z.city, active:false }));
-      render();
-      msg("");
+      serverDisabled = new Set(zones.filter(z=>z.active===false).map(z=>key(z.province,z.city)));
+      uiDisabled = zones.filter(z=>z.active===false).map(z => ({province:z.province, city:z.city, active:false}));
+      render(); msg("");
     }catch(e){
       console.warn("No se pudieron cargar zonas:", e);
-      render();
-      msg("No se pudieron cargar zonas.","err");
+      render(); msg("No se pudieron cargar zonas.","err");
     }
   }
 
-  // Guardar: deshabilitar lo que quede en UI, re-habilitar lo que se quitó
   async function save(){
     try{
-      if (btnSave) btnSave.disabled = true;
+      btnSave && (btnSave.disabled = true);
       msg("Guardando…");
       const uiKeys = new Set(uiDisabled.map(z => key(z.province, z.city)));
-
-      const toFalse = uiDisabled.map(z => ({ province:z.province, city:z.city, active:false }));
+      const toFalse = uiDisabled.map(z => ({province:z.province, city:z.city, active:false}));
       const toTrue  = [];
-      serverDisabled.forEach(k => {
-        if (!uiKeys.has(k)){
+      serverDisabled.forEach(k=>{
+        if(!uiKeys.has(k)){
           const [p,c] = k.split("||");
-          toTrue.push({ province:p, city:c, active:true });
+          toTrue.push({province:p, city:c, active:true});
         }
       });
-
       const payload = { zones: [...toFalse, ...toTrue] };
-
       const r = await fetch("/api/reserve?zones=1", {
         method:"PUT",
         headers:{ "Content-Type":"application/json", "X-Admin":"1" },
@@ -109,50 +88,34 @@ if (!panel || !controls) {
       });
       const d = await r.json().catch(()=>({}));
       if (!r.ok) throw new Error(d?.error || String(r.status));
-
-      // Éxito => actualizamos snapshot
-      serverDisabled = new Set(uiDisabled.map(z => key(z.province, z.city)));
+      serverDisabled = new Set(uiDisabled.map(z=>key(z.province,z.city)));
       msg("Zonas guardadas.","ok");
     }catch(e){
-      console.error("Error guardando zonas:", e);
+      console.error("save zones:", e);
       msg("Error guardando zonas","err");
     }finally{
-      if (btnSave) btnSave.disabled = false;
+      btnSave && (btnSave.disabled = false);
     }
   }
 
-  // Eventos
   btnAdd?.addEventListener("click", () => {
-    const p = selProv?.value; const c = selCity?.value;
-    if (!p || !c) return;
-    if (uiDisabled.some(z => z.province===p && z.city===c)) return; // evita duplicados
-    uiDisabled.push({ province:p, city:c, active:false });
+    const p = selProv?.value, c = selCity?.value;
+    if(!p || !c) return;
+    if (uiDisabled.some(z=>z.province===p && z.city===c)) return;
+    uiDisabled.push({province:p, city:c, active:false});
     render();
   });
   btnSave?.addEventListener("click", save);
   selProv?.addEventListener("change", fillCities);
 
-  // Init UI base
-  fillProvs();
-  fillCities();
-  render();
+  fillProvs(); fillCities(); render();
 
-  // ─────────────────────────────────────────────────────────────
-  // VISIBILIDAD: mostrar/ocultar cuando main.js confirme admin
-  // ─────────────────────────────────────────────────────────────
-  // Arranca oculto hasta que main.js decida
+  // visibilidad controlada por main.js cuando resuelve admin
   panel.hidden = true;
-
-  // Si ya estaba seteado (caso navegación intra-app)
-  if (window.IS_ADMIN === true) {
-    panel.hidden = false;
-    load();
-  }
-
-  // Escuchamos el "ping" de main.js cuando resuelve si sos admin
-  window.addEventListener("admin:ready", (ev) => {
-    const isAdmin = !!(ev && ev.detail && ev.detail.isAdmin);
+  if (window.IS_ADMIN === true){ panel.hidden = false; load(); }
+  window.addEventListener("admin:ready", (ev)=>{
+    const isAdmin = !!ev?.detail?.isAdmin;
     panel.hidden = !isAdmin;
     if (isAdmin) load();
-  }, { once:false });
+  });
 }

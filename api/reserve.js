@@ -85,6 +85,8 @@ function inferProvinceCity(display_name=""){
    • Si existe => bloquea si hay fila active=false para (province,city)
 =========================================================== */
 async function isDisabledCity(province, city){
+  // Si no pudimos inferir ciudad, no bloqueamos (fallback a todo habilitado)
+  if (!city) return false;
   try{
     const exist = await pool.query(`
       SELECT 1 FROM information_schema.tables
@@ -98,13 +100,14 @@ async function isDisabledCity(province, city){
     const q = await pool.query(
       `SELECT 1 FROM public.service_zones
        WHERE province=$1 AND city=$2 AND active=FALSE LIMIT 1`,
-      [province || "Buenos Aires", city || "CABA"]
+      [province || "Buenos Aires", city]
     );
     return q.rowCount > 0;
   }catch{
     return false;
   }
 }
+
 
 /* ===========================================================
    GET/PUT ?zones=1 para el panel (opcional)
