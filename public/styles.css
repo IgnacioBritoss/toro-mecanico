@@ -783,3 +783,76 @@ body.has-admin-overlay{ overflow:hidden; }
 
 /* por si el bloque es muy alto, deja aire abajo para que no tape */
 .tm-select-wrap{ margin-bottom:12px; }
+
+/* ===== Tira de reseñas (ajuste de gutters y overflow) ===== */
+.rev-strip{
+  display: flex;
+  gap: 12px;
+  /* solo scroll horizontal, NO recortar vertical */
+  overflow-x: auto;
+  overflow-y: visible;
+
+  /* aire para que la sombra no se corte en los bordes */
+  padding: 16px 24px;
+
+  /* snap como antes */
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+/* gutters fantasma al inicio/fin para que la 1ª y última tarjeta
+   no queden pegadas al borde y se vea la sombra completa */
+.rev-strip::before,
+.rev-strip::after{
+  content: "";
+  flex: 0 0 24px;   /* mismo valor que el padding lateral */
+}
+
+/* la sombra de las cards (podés dejar tu valor actual) */
+.rev-card{
+  min-width: 260px;
+  max-width: 320px;
+  scroll-snap-align: start;
+  background: #fff;
+  border-radius: 14px;
+  /* sombra uniforme alrededor */
+  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* opcional: un poquito de margen vertical por si el contenedor superior
+   tiene un fondo que también recortaba arriba */
+@media (min-width: 0){
+  .rev-card{ margin-block: 2px; }
+}
+
+/* scrollbar como antes */
+.rev-strip::-webkit-scrollbar{ height: 8px; }
+
+/* Botón de borrar en tarjetas (solo visible para admin por JS) */
+.rev-card{ position: relative; } /* para posicionar la X */
+
+.rev-del{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 10px;
+  background: #0f172a;         /* negro azulado de tu UI */
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+  cursor: pointer;
+  opacity: .92;
+  transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease;
+}
+.rev-del:hover{ opacity: 1; transform: scale(1.03); box-shadow: 0 8px 20px rgba(0,0,0,.24); }
+.rev-del:active{ transform: scale(0.97); }
+.rev-del svg{ width: 16px; height: 16px; pointer-events: none; }

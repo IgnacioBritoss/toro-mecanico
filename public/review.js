@@ -124,7 +124,7 @@
 /* ==========================================================
    MÓDULO 2 — Feed público + Panel admin (home/index)
    - Muestra /api/reserve?review=public a usuarios
-   - Si es admin, muestra /api/reserve?review=all y permite borrar
+   - Si es admin, usa /api/reserve?review=all (tiene id) y muestra botón “X”
    ========================================================== */
 (function(){
   const strip     = document.getElementById("reviewsStrip");
@@ -132,7 +132,7 @@
   const btnPrev   = document.getElementById("revPrev");
   const btnNext   = document.getElementById("revNext");
 
-  // si no existe el contenedor, no estamos en el home -> salir
+  // si no existe el contenedor ni la sección admin, no estamos en el home -> salir
   if (!strip && !document.getElementById("reviewsAdmin")) return;
 
   const isAdmin =
@@ -155,15 +155,20 @@
     } catch { return ""; }
   }
 
-  // ----- Feed público -----
+  // ----- Feed (público para users; completo para admin) -----
   async function loadPublic() {
     if (!strip) return;
     try {
-      const r = await fetch("/api/reserve?review=public");
+      const url = isAdmin ? "/api/reserve?review=all" : "/api/reserve?review=public";
+      const opts = isAdmin ? { headers: { "X-Admin": "1" } } : undefined;
+      const r = await fetch(url, opts);
       const d = await r.json();
       if (!r.ok || !d?.ok) throw new Error(d?.error || "No se pudieron cargar las reseñas");
 
-      const items = Array.isArray(d.reviews) ? d.reviews : [];
+      // Si es admin, viene con id/publish. Filtramos solo publicadas.
+      const rows = Array.isArray(d.reviews) ? d.reviews : [];
+      const items = isAdmin ? rows.filter(x => x.publish !== false) : rows;
+
       if (!items.length) {
         if (empty) empty.style.display = "block";
         return;
@@ -180,6 +185,38 @@
           <div class="rev-name">${it.name ? it.name : "Anónimo"}</div>
           <div class="rev-date">${fmtDate(it.created_at)}</div>
         `;
+
+        // Si sos admin, agregamos la “X” arriba a la derecha para borrar
+        if (isAdmin && it.id) {
+          const btnDel = document.createElement("button");
+          btnDel.className = "rev-del";
+          btnDel.type = "button";
+          btnDel.title = "Eliminar reseña";
+          btnDel.setAttribute("aria-label", `Eliminar reseña #${it.id}`);
+          btnDel.innerHTML = `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7A1 1 0 0 0 5.7 7.1L10.6 12l-4.9 4.9a1 1 0 1 0 1.4 1.4L12 13.4l4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/>
+            </svg>
+          `;
+          btnDel.addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            if (!confirm(`¿Eliminar reseña #${it.id}?`)) return;
+            try {
+              const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(it.id)}`, {
+                method: "DELETE",
+                headers: { "X-Admin": "1" }
+              });
+              const dd = await rr.json();
+              if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");
+              card.remove();
+              if (adminHint) adminHint.textContent = `Reseña #${it.id} eliminada.`;
+            } catch (e) {
+              alert(e.message || "Error al eliminar");
+            }
+          });
+          card.appendChild(btnDel);
+        }
+
         strip.appendChild(card);
       }
     } catch (e) {
@@ -188,10 +225,11 @@
     }
   }
 
+  // Navegación horizontal
   if (btnPrev && strip) btnPrev.addEventListener("click", () => strip.scrollBy({ left: -320, behavior: "smooth" }));
   if (btnNext && strip) btnNext.addEventListener("click", () => strip.scrollBy({ left:  320, behavior: "smooth" }));
 
-  // ----- Panel admin -----
+  // ----- Panel admin (lista aparte con borrar) -----
   async function loadAdmin() {
     if (!isAdmin || !adminSection || !adminList) return;
     adminSection.hidden = false;
@@ -214,7 +252,6 @@
         const item = document.createElement("div");
         item.className = "rev-card";
         item.dataset.id = it.id;
-
         item.innerHTML = `
           <div class="rev-stars">${stars(it.rating)}</div>
           <p class="rev-text" style="white-space:pre-wrap">${it.comment || ""}</p>
@@ -224,7 +261,6 @@
             <button class="btn btn--icon" data-act="del" aria-label="Eliminar">🗑️</button>
           </div>
         `;
-
         item.querySelector('[data-act="del"]').addEventListener("click", async () => {
           const id = it.id;
           if (!confirm(`¿Eliminar reseña #${id}?`)) return;
@@ -241,7 +277,6 @@
             adminHint.textContent = e.message || "Error al eliminar";
           }
         });
-
         adminList.appendChild(item);
       }
     } catch (e) {
