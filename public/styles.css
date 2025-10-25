@@ -784,228 +784,12 @@ body.has-admin-overlay{ overflow:hidden; }
 /* por si el bloque es muy alto, deja aire abajo para que no tape */
 .tm-select-wrap{ margin-bottom:12px; }
 
-/* ===== Tira de reseñas (ajuste de gutters y overflow) ===== */
-.rev-strip{
-  display: flex;
-  gap: 12px;
-  /* solo scroll horizontal, NO recortar vertical */
-  overflow-x: auto;
-  overflow-y: visible;
 
-  /* aire para que la sombra no se corte en los bordes */
-  padding: 16px 24px;
-
-  /* snap como antes */
-  scroll-snap-type: x mandatory;
-  scrollbar-width: thin;
-}
-
-/* gutters fantasma al inicio/fin para que la 1ª y última tarjeta
-   no queden pegadas al borde y se vea la sombra completa */
-.rev-strip::before,
-.rev-strip::after{
-  content: "";
-  flex: 0 0 24px;   /* mismo valor que el padding lateral */
-}
-
-/* la sombra de las cards (podés dejar tu valor actual) */
-.rev-card{
-  min-width: 260px;
-  max-width: 320px;
-  scroll-snap-align: start;
-  background: #fff;
-  border-radius: 14px;
-  /* sombra uniforme alrededor */
-  box-shadow: 0 12px 30px rgba(0,0,0,.12);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* opcional: un poquito de margen vertical por si el contenedor superior
-   tiene un fondo que también recortaba arriba */
-@media (min-width: 0){
-  .rev-card{ margin-block: 2px; }
-}
-
-/* scrollbar como antes */
-.rev-strip::-webkit-scrollbar{ height: 8px; }
-
-/* Botón de borrar en tarjetas (solo visible para admin por JS) */
-.rev-card{ position: relative; } /* para posicionar la X */
-
-.rev-del{
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 10px;
-  background: #0f172a;         /* negro azulado de tu UI */
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 16px rgba(0,0,0,.18);
-  cursor: pointer;
-  opacity: .92;
-  transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease;
-}
-.rev-del:hover{ opacity: 1; transform: scale(1.03); box-shadow: 0 8px 20px rgba(0,0,0,.24); }
-.rev-del:active{ transform: scale(0.97); }
-.rev-del svg{ width: 16px; height: 16px; pointer-events: none; }
-
-
-/* Viewport oculta la barra y deja respirar las sombras */
-.rev-viewport{
-  overflow: hidden;              /* oculta la barra */
-  position: relative;
-}
-
-/* Tira: 4 por vista en desktop, sin scrollbar visible, con padding para sombras */
-.rev-strip{
-  --gap: 12px;
-  display: flex;
-  gap: var(--gap);
-  padding: 10px;                 /* espacio para que la sombra no “corte” */
-  margin: 0 -10px;               /* la sombra “asoma” a ambos lados */
-  scroll-snap-type: x mandatory;
-  overflow-x: auto;
-  scrollbar-width: none;         /* Firefox: ocultar scrollbar */
-}
-.rev-strip::-webkit-scrollbar{ display: none; } /* WebKit: ocultar scrollbar */
-
-/* Tarjetas: 4 por vista, con scroll-snap */
-.rev-card{
-  flex: 0 0 calc((100% - 3*var(--gap)) / 4);  /* 4 por vista */
-  scroll-snap-align: start;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 14px 34px rgba(0,0,0,.10);
-}
-
-/* Responsivo: 3/2/1 por vista según ancho */
-@media (max-width: 1200px){
-  .rev-card{ flex-basis: calc((100% - 2*var(--gap)) / 3); }
-}
-@media (max-width: 900px){
-  .rev-card{ flex-basis: calc((100% - 1*var(--gap)) / 2); }
-}
-@media (max-width: 560px){
-  .rev-card{ flex-basis: 100%; }
-}
-
-/* Botones de navegación (ya los tenés). Si querés, puedes fijarlos con position sticky: */
-.h-actions{ position: sticky; top: 8px; z-index: 2; }
-
-/* Viewport que oculta el overflow y deja respirar las sombras */
-.rev-viewport{
-  overflow: hidden;              /* oculta la barra */
-  padding: 12px;                 /* para que no se corte la sombra */
-  margin-inline: -12px;          /* mantiene el alineado con el resto del layout */
-  position: relative;
-}
-
-/* La tira sigue siendo flex horizontal, pero con la barra escondida */
-.rev-strip{
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;              /* scrolleable, pero sin mostrar barra */
-  scroll-snap-type: x mandatory; /* snaps agradables */
-  padding-bottom: 2px;           /* evita que las sombras toquen el borde inferior */
-  -ms-overflow-style: none;      /* IE/Edge */
-  scrollbar-width: none;         /* Firefox */
-}
-.rev-strip::-webkit-scrollbar{ display: none; } /* WebKit */
-
-/* Tarjeta con ancho fijo para ver 4 en desktop (ajustable) */
-.rev-card{
-  flex: 0 0 320px;               /* 4 x 320 + gaps ≈ viewport ancho desktop */
-  max-width: 100%;
-  scroll-snap-align: start;
-}
-
-/* En móviles permitimos 1–2 por vista, manteniendo estética */
-@media (max-width: 900px){
-  .rev-card{ flex-basis: 280px; }
-}
-@media (max-width: 640px){
-  .rev-card{ flex-basis: 85vw; }
-}
-
-
-
-
-/* === Reseñas (tira sin barra visible, 4 por vista, sombras completas) === */
-#resenas .rev-viewport{
-  overflow: hidden;
-  position: relative;
-  padding: 12px;                 /* aire para que la sombra no se corte */
-  margin-inline: -12px;          /* mantiene alineado con el container */
-}
-
-#resenas .rev-strip{
-  --gap: 16px;
-  display: flex;
-  gap: var(--gap);
-  scroll-snap-type: x mandatory;
-  overflow-x: auto;
-  overflow-y: visible;
-  padding: 6px;                  /* un poco de aire interno */
-  margin: 0 -6px;                /* que la sombra pueda “asomar” a los lados */
-
-  /* Ocultar scrollbar en todos los navegadores */
-  -ms-overflow-style: none;      /* IE/Edge antiguo */
-  scrollbar-width: none !important; /* Firefox */
-}
-#resenas .rev-strip::-webkit-scrollbar{ display: none !important; } /* WebKit */
-
-#resenas .rev-card{
-  flex: 0 0 calc((100% - 3*var(--gap)) / 4);  /* 4 tarjetas por vista */
-  max-width: calc((100% - 3*var(--gap)) / 4);
-  scroll-snap-align: start;
-  background:#fff;
-  border-radius:14px;
-  box-shadow:0 14px 34px rgba(0,0,0,.10);     /* sombra uniforme alrededor */
-  padding:14px 16px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-/* Tipografía de la tarjeta (igual que venías usando) */
-#resenas .rev-stars{ font-size:18px; letter-spacing:1px; }
-#resenas .rev-name{ font-weight:600; color:#0f172a; }
-#resenas .rev-text{ color:#374151; line-height:1.4 }
-#resenas .rev-date{ color:#6b7280; font-size:12px }
-
-/* Responsivo: 3 / 2 / 1 por vista */
-@media (max-width: 1200px){
-  #resenas .rev-card{ flex-basis: calc((100% - 2*var(--gap)) / 3); max-width: calc((100% - 2*var(--gap)) / 3); }
-}
-@media (max-width: 900px){
-  #resenas .rev-card{ flex-basis: calc((100% - 1*var(--gap)) / 2); max-width: calc((100% - 1*var(--gap)) / 2); }
-}
-@media (max-width: 620px){
-  #resenas .rev-card{ flex-basis: 100%; max-width: 100%; }
-}
-
-/* Botones de navegación en negro (como tu UI) */
-#resenas .btn--icon{
-  background:#0f172a; color:#fff; border:none; padding:8px 10px; border-radius:10px;
-}
-
-/* (opcional) que las flechas queden “pegadas” arriba al hacer scroll */
-#resenas .h-actions{ position: sticky; top: 8px; z-index: 2; }
-
-
-/* === Reseñas: 4 por vista, sin flechas ni barra, sombras completas === */
+/* === Reseñas: 4 por vista, sin flechas ni barra, sombras completas (FINAL) === */
 #resenas .h-actions.is-hidden { display: none !important; }
 
-/* La viewport se “desborda” 16px a cada lado (igual al padding del .container)
-   así no se ve ningún corte en los bordes y las sombras respiran. */
+/* La viewport se desborda 16px a cada lado (igual al padding del .container)
+   para que no se vea ningún corte y las sombras respiren. */
 #resenas .rev-viewport{
   overflow: hidden;
   position: relative;
@@ -1015,7 +799,7 @@ body.has-admin-overlay{ overflow:hidden; }
   padding-right: 16px;
 }
 
-/* La tira scrolleable (drag), sin barra visible */
+/* Tira scrolleable con drag; sin barra visible */
 #resenas .rev-strip{
   --gap: 16px;
   display: flex;
@@ -1023,9 +807,9 @@ body.has-admin-overlay{ overflow:hidden; }
   overflow-x: auto;
   overflow-y: visible;
   scroll-snap-type: x mandatory;
-  padding: 0;               /* sin padding para que la 1ª y la última queden llenas */
-  -ms-overflow-style: none; /* IE/Edge legacy */
-  scrollbar-width: none;    /* Firefox */
+  padding: 0;                 /* sin padding para que 1ª y última queden llenas */
+  -ms-overflow-style: none;   /* IE/Edge legacy */
+  scrollbar-width: none;      /* Firefox */
 }
 #resenas .rev-strip::-webkit-scrollbar{ display: none; } /* WebKit */
 
@@ -1037,25 +821,31 @@ body.has-admin-overlay{ overflow:hidden; }
 
   background:#fff;
   border-radius:14px;
-  box-shadow:0 14px 34px rgba(0,0,0,.10);
+  box-shadow:0 14px 34px rgba(0,0,0,.10);  /* sombra pareja alrededor */
   padding:14px 16px;
   display:flex;
   flex-direction:column;
   gap:8px;
 }
 
-/* Tipografía (igual que venías usando) */
+/* Tipografía de la tarjeta */
 #resenas .rev-stars{ font-size:18px; letter-spacing:1px; }
 #resenas .rev-name{ font-weight:600; color:#0f172a; }
-#resenas .rev-text{ color:#374151; line-height:1.4 }
-#resenas .rev-date{ color:#6b7280; font-size:12px }
+#resenas .rev-text{ color:#374151; line-height:1.4; }
+#resenas .rev-date{ color:#6b7280; font-size:12px; }
 
 /* Responsivo: 3 / 2 / 1 por vista */
 @media (max-width: 1200px){
-  #resenas .rev-card{ flex-basis: calc((100% - 2*var(--gap)) / 3); max-width: calc((100% - 2*var(--gap)) / 3); }
+  #resenas .rev-card{
+    flex-basis: calc((100% - 2*var(--gap)) / 3);
+    max-width: calc((100% - 2*var(--gap)) / 3);
+  }
 }
 @media (max-width: 900px){
-  #resenas .rev-card{ flex-basis: calc((100% - 1*var(--gap)) / 2); max-width: calc((100% - 1*var(--gap)) / 2); }
+  #resenas .rev-card{
+    flex-basis: calc((100% - 1*var(--gap)) / 2);
+    max-width: calc((100% - 1*var(--gap)) / 2);
+  }
 }
 @media (max-width: 620px){
   #resenas .rev-card{ flex-basis: 100%; max-width: 100%; }
