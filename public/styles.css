@@ -785,35 +785,52 @@ body.has-admin-overlay{ overflow:hidden; }
 .tm-select-wrap{ margin-bottom:12px; }
 
 
-/* === Reseñas: 4 por vista, sin flechas ni barra, sombras completas (FINAL) === */
-#resenas .h-actions.is-hidden { display: none !important; }
-
-/* La viewport se desborda 16px a cada lado (igual al padding del .container)
-   para que no se vea ningún corte y las sombras respiren. */
+/* === Reseñas — viewport sin recortes + fade en los costados === */
 #resenas .rev-viewport{
-  overflow: hidden;
+  /* no recortamos nada para que respiren las sombras */
+  overflow: visible;
   position: relative;
-  margin-left: -16px;
-  margin-right: -16px;
-  padding-left: 16px;
-  padding-right: 16px;
+  margin: 0;             /* sin márgenes negativos */
+  padding: 0;            /* el padding lo maneja la tira */
 }
 
-/* Tira scrolleable con drag; sin barra visible */
+/* Tira scrolleable sin barra + FADES laterales */
 #resenas .rev-strip{
   --gap: 16px;
+  --fade: 22px; /* ancho del difuminado de costados */
+
   display: flex;
   gap: var(--gap);
   overflow-x: auto;
   overflow-y: visible;
   scroll-snap-type: x mandatory;
-  padding: 0;                 /* sin padding para que 1ª y última queden llenas */
+
+  /* un poquito de aire interno para que no toque el borde del container */
+  padding-inline: 16px;
+
+  /* Ocultar scrollbar en todos */
   -ms-overflow-style: none;   /* IE/Edge legacy */
   scrollbar-width: none;      /* Firefox */
 }
-#resenas .rev-strip::-webkit-scrollbar{ display: none; } /* WebKit */
+#resenas .rev-strip::-webkit-scrollbar{ display: none; }
 
-/* 4 tarjetas exactas dentro del ancho del contenedor */
+/* Difuminado suave en los costados para que no se “note” el contenedor */
+#resenas .rev-strip{
+  -webkit-mask-image:
+    linear-gradient(to right,
+      transparent 0,
+      #000 var(--fade),
+      #000 calc(100% - var(--fade)),
+      transparent 100%);
+  mask-image:
+    linear-gradient(to right,
+      transparent 0,
+      #000 var(--fade),
+      #000 calc(100% - var(--fade)),
+      transparent 100%);
+}
+
+/* 4 tarjetas exactas por vista (igual que antes) */
 #resenas .rev-card{
   flex: 0 0 calc((100% - 3*var(--gap)) / 4);
   max-width: calc((100% - 3*var(--gap)) / 4);
@@ -821,14 +838,14 @@ body.has-admin-overlay{ overflow:hidden; }
 
   background:#fff;
   border-radius:14px;
-  box-shadow:0 14px 34px rgba(0,0,0,.10);  /* sombra pareja alrededor */
+  box-shadow:0 14px 34px rgba(0,0,0,.10);
   padding:14px 16px;
   display:flex;
   flex-direction:column;
   gap:8px;
 }
 
-/* Tipografía de la tarjeta */
+/* Tipografía */
 #resenas .rev-stars{ font-size:18px; letter-spacing:1px; }
 #resenas .rev-name{ font-weight:600; color:#0f172a; }
 #resenas .rev-text{ color:#374151; line-height:1.4; }
