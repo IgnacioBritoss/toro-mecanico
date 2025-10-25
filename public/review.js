@@ -1,9 +1,17 @@
+/* ==========================================================
+   MÓDULO 1 — Envío de reseñas (/review)
+   - Soporta pass o QR (?q=… -> header X-Review-QR)
+   - Validaciones front
+   - Mensajes claros con detalle de error del backend
+   ========================================================== */
 (function(){
   const qs = new URLSearchParams(location.search);
-  const qrToken = (qs.get('q') || '').trim();      // si viene de QR: ?q=rvQR_...
+  const qrToken = (qs.get('q') || '').trim();
   const fromQR  = qrToken.length > 0;
 
   const form      = document.getElementById('reviewForm');
+  if (!form) return; // <- este módulo solo corre en la página de reseñas
+
   const passWrap  = document.getElementById('passWrap');
   const passInput = document.getElementById('revPass');
   const nameInput = document.getElementById('revName');
@@ -13,10 +21,8 @@
   const hint      = document.getElementById('revHint');
   const btn       = document.getElementById('revSend');
 
-  // Si viene con ?q=... (QR): ocultar password
   if (fromQR && passWrap) passWrap.classList.add('hide');
 
-  // Estrellas
   function paint(n){
     if (!starsBox) return;
     const btns = starsBox.querySelectorAll('button');
@@ -36,16 +42,13 @@
     });
   }
 
-  if (form){
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      await sendReview();
-      return false;
-    });
-  }
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await sendReview();
+    return false;
+  });
 
-  // Enter en inputs => mandar
   [passInput, nameInput, textInput].forEach(el=>{
     if (!el) return;
     el.addEventListener('keydown', (e)=>{
@@ -66,7 +69,6 @@
       rating: Number(ratingInp?.value || 5),
     };
 
-    // Validaciones UX
     if (!fromQR && !payload.pass){
       if (hint){ hint.textContent = 'Ingresá la contraseña.'; hint.className='err'; }
       return;
@@ -93,7 +95,6 @@
         body: JSON.stringify(payload)
       });
 
-      // Intentamos JSON; si falla, mostramos texto para ver el error completo.
       let d = null;
       const rawText = await r.text();
       try { d = JSON.parse(rawText); } catch { d = null; }
@@ -118,4 +119,139 @@
       if (btn) btn.disabled = false;
     }
   }
+})();
+
+/* ==========================================================
+   MÓDULO 2 — Feed público + Panel admin (home/index)
+   - Muestra /api/reserve?review=public a usuarios
+   - Si es admin, muestra /api/reserve?review=all y permite borrar
+   ========================================================== */
+(function(){
+  const strip     = document.getElementById("reviewsStrip");
+  const empty     = document.getElementById("reviewsEmpty");
+  const btnPrev   = document.getElementById("revPrev");
+  const btnNext   = document.getElementById("revNext");
+
+  // si no existe el contenedor, no estamos en el home -> salir
+  if (!strip && !document.getElementById("reviewsAdmin")) return;
+
+  const isAdmin =
+    localStorage.getItem("tm_is_admin") === "1" ||
+    document.body.classList.contains("is-admin");
+
+  const adminSection = document.getElementById("reviewsAdmin");
+  const adminList    = document.getElementById("reviewsAdminList");
+  const adminHint    = document.getElementById("reviewsAdminHint");
+
+  function stars(n) {
+    const on = "★".repeat(Math.max(0, Math.min(5, n|0)));
+    const off = "☆".repeat(5 - on.length);
+    return on + off;
+  }
+  function fmtDate(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+    } catch { return ""; }
+  }
+
+  // ----- Feed público -----
+  async function loadPublic() {
+    if (!strip) return;
+    try {
+      const r = await fetch("/api/reserve?review=public");
+      const d = await r.json();
+      if (!r.ok || !d?.ok) throw new Error(d?.error || "No se pudieron cargar las reseñas");
+
+      const items = Array.isArray(d.reviews) ? d.reviews : [];
+      if (!items.length) {
+        if (empty) empty.style.display = "block";
+        return;
+      }
+      if (empty) empty.style.display = "none";
+
+      strip.innerHTML = "";
+      for (const it of items) {
+        const card = document.createElement("article");
+        card.className = "rev-card";
+        card.innerHTML = `
+          <div class="rev-stars" aria-label="Calificación: ${it.rating} de 5">${stars(it.rating)}</div>
+          <p class="rev-text">${(it.comment || "").replace(/\n/g, "<br/>")}</p>
+          <div class="rev-name">${it.name ? it.name : "Anónimo"}</div>
+          <div class="rev-date">${fmtDate(it.created_at)}</div>
+        `;
+        strip.appendChild(card);
+      }
+    } catch (e) {
+      if (empty) { empty.textContent = "No se pudieron cargar las reseñas."; empty.style.display = "block"; }
+      console.error(e);
+    }
+  }
+
+  if (btnPrev && strip) btnPrev.addEventListener("click", () => strip.scrollBy({ left: -320, behavior: "smooth" }));
+  if (btnNext && strip) btnNext.addEventListener("click", () => strip.scrollBy({ left:  320, behavior: "smooth" }));
+
+  // ----- Panel admin -----
+  async function loadAdmin() {
+    if (!isAdmin || !adminSection || !adminList) return;
+    adminSection.hidden = false;
+    adminHint.textContent = "Cargando…";
+
+    try {
+      const r = await fetch("/api/reserve?review=all", { headers: { "X-Admin": "1" } });
+      const d = await r.json();
+      if (!r.ok || !d?.ok) throw new Error(d?.error || "No se pudieron cargar");
+
+      const rows = Array.isArray(d.reviews) ? d.reviews : [];
+      adminList.innerHTML = "";
+      if (!rows.length) {
+        adminHint.textContent = "No hay reseñas aún.";
+        return;
+      }
+      adminHint.textContent = "";
+
+      for (const it of rows) {
+        const item = document.createElement("div");
+        item.className = "rev-card";
+        item.dataset.id = it.id;
+
+        item.innerHTML = `
+          <div class="rev-stars">${stars(it.rating)}</div>
+          <p class="rev-text" style="white-space:pre-wrap">${it.comment || ""}</p>
+          <div class="rev-name">${it.name || "Anónimo"}</div>
+          <div class="rev-date">#${it.id} • ${fmtDate(it.created_at)} • ${it.publish ? "publicada" : "oculta"}</div>
+          <div style="display:flex; gap:8px; margin-top:6px">
+            <button class="btn btn--icon" data-act="del" aria-label="Eliminar">🗑️</button>
+          </div>
+        `;
+
+        item.querySelector('[data-act="del"]').addEventListener("click", async () => {
+          const id = it.id;
+          if (!confirm(`¿Eliminar reseña #${id}?`)) return;
+          try {
+            const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(id)}`, {
+              method: "DELETE",
+              headers: { "X-Admin": "1" }
+            });
+            const dd = await rr.json();
+            if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");
+            item.remove();
+            adminHint.textContent = `Reseña #${id} eliminada.`;
+          } catch (e) {
+            adminHint.textContent = e.message || "Error al eliminar";
+          }
+        });
+
+        adminList.appendChild(item);
+      }
+    } catch (e) {
+      adminHint.textContent = e.message || "Error cargando reseñas";
+      console.error(e);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadPublic();
+    loadAdmin();
+  });
 })();
