@@ -5,8 +5,15 @@
   const CAL_ROOT_ID = "calendario"; // dónde colgamos el bloque
 
   document.addEventListener("DOMContentLoaded", () => {
-    initWeeksForAdmin();
-  });
+  // si no sos admin, no muestres nada y salí
+  if (!isAdmin()) {
+    const leftover = document.getElementById("weekActivity");
+    if (leftover) leftover.remove(); // o leftover.hidden = true;
+    return;
+  }
+  initWeeksForAdmin(); // solo admins llegan acá
+});
+
 
   /* =========================
    *  ACTIVIDAD POR SEMANAS (ADMIN)
@@ -139,12 +146,14 @@
   function fmt(d){ return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
   function pad2(n){ return String(n).padStart(2, "0"); }
 
-  async function isAdmin() {
-    try {
-      const r = await fetch("/api/admin/plans", { method: "GET" });
-      return r.status !== 401;
-    } catch { return false; }
-  }
+  // Reemplazar la función isAdmin() por esta
+function isAdmin(){
+  return (
+    localStorage.getItem("tm_is_admin") === "1" ||
+    document.body.classList.contains("is-admin")
+  );
+}
+
 
   function hookMonthButtons(cb){
     const prev = document.getElementById("prevMonth");
