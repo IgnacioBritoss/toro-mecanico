@@ -999,3 +999,64 @@ body.has-admin-overlay{ overflow:hidden; }
 
 /* (opcional) que las flechas queden “pegadas” arriba al hacer scroll */
 #resenas .h-actions{ position: sticky; top: 8px; z-index: 2; }
+
+
+/* === Reseñas: 4 por vista, sin flechas ni barra, sombras completas === */
+#resenas .h-actions.is-hidden { display: none !important; }
+
+/* La viewport se “desborda” 16px a cada lado (igual al padding del .container)
+   así no se ve ningún corte en los bordes y las sombras respiran. */
+#resenas .rev-viewport{
+  overflow: hidden;
+  position: relative;
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* La tira scrolleable (drag), sin barra visible */
+#resenas .rev-strip{
+  --gap: 16px;
+  display: flex;
+  gap: var(--gap);
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-snap-type: x mandatory;
+  padding: 0;               /* sin padding para que la 1ª y la última queden llenas */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+  scrollbar-width: none;    /* Firefox */
+}
+#resenas .rev-strip::-webkit-scrollbar{ display: none; } /* WebKit */
+
+/* 4 tarjetas exactas dentro del ancho del contenedor */
+#resenas .rev-card{
+  flex: 0 0 calc((100% - 3*var(--gap)) / 4);
+  max-width: calc((100% - 3*var(--gap)) / 4);
+  scroll-snap-align: start;
+
+  background:#fff;
+  border-radius:14px;
+  box-shadow:0 14px 34px rgba(0,0,0,.10);
+  padding:14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+/* Tipografía (igual que venías usando) */
+#resenas .rev-stars{ font-size:18px; letter-spacing:1px; }
+#resenas .rev-name{ font-weight:600; color:#0f172a; }
+#resenas .rev-text{ color:#374151; line-height:1.4 }
+#resenas .rev-date{ color:#6b7280; font-size:12px }
+
+/* Responsivo: 3 / 2 / 1 por vista */
+@media (max-width: 1200px){
+  #resenas .rev-card{ flex-basis: calc((100% - 2*var(--gap)) / 3); max-width: calc((100% - 2*var(--gap)) / 3); }
+}
+@media (max-width: 900px){
+  #resenas .rev-card{ flex-basis: calc((100% - 1*var(--gap)) / 2); max-width: calc((100% - 1*var(--gap)) / 2); }
+}
+@media (max-width: 620px){
+  #resenas .rev-card{ flex-basis: 100%; max-width: 100%; }
+}
