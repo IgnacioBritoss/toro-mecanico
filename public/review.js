@@ -123,59 +123,87 @@
 
 /* ==========================================================
    MÓDULO 2 — Feed público + Panel admin (home/index)
-   - Muestra /api/reserve?review=public a usuarios
-   - Si es admin, usa /api/reserve?review=all (tiene id) y muestra botón “X”
+   - Auto-detecta modo admin
+   - En admin muestra botón "X" para borrar en cada tarjeta
    ========================================================== */
 (function(){
   const strip     = document.getElementById("reviewsStrip");
   const empty     = document.getElementById("reviewsEmpty");
   const btnPrev   = document.getElementById("revPrev");
   const btnNext   = document.getElementById("revNext");
-
-  // si no existe el contenedor ni la sección admin, no estamos en el home -> salir
-  if (!strip && !document.getElementById("reviewsAdmin")) return;
-
-  const isAdmin =
-    localStorage.getItem("tm_is_admin") === "1" ||
-    document.body.classList.contains("is-admin");
-
   const adminSection = document.getElementById("reviewsAdmin");
   const adminList    = document.getElementById("reviewsAdminList");
   const adminHint    = document.getElementById("reviewsAdminHint");
 
+  // si no existe el contenedor ni la sección admin, no estamos en el home -> salir
+  if (!strip && !adminSection) return;
+
+  // ---------- Detección de admin (robusta) ----------
+  function hasCookieFlag() {
+    // busca tm_admin=1 o tm_is_admin=1 en cookies no httpOnly
+    return document.cookie.split(";").some(c => {
+      const [k,v] = c.trim().split("=");
+      return (k === "tm_admin" || k === "tm_is_admin") && v === "1";
+    });
+  }
+  function isAdminNow(){
+    return (
+      // clase en body
+      document.body.classList.contains("is-admin") ||
+      document.body.classList.contains("admin-mode") ||
+      // claves comunes en localStorage que tal vez use tu login
+      localStorage.getItem("tm_is_admin") === "1" ||
+      localStorage.getItem("tm_admin") === "1" ||
+      localStorage.getItem("tm_admin_ok") === "1" ||
+      !!localStorage.getItem("tm_admin_jwt") ||
+      // cookie simple
+      hasCookieFlag()
+    );
+  }
+  let IS_ADMIN = isAdminNow();
+
+  // Re-render si cambia el modo admin (por login en otro script o en otra pestaña)
+  window.addEventListener("storage", (e) => {
+    if (!e.key) return;
+    const before = IS_ADMIN;
+    IS_ADMIN = isAdminNow();
+    if (before !== IS_ADMIN) bootstrap();   // vuelve a cargar feed/panel
+  });
+  // si tu login dispara un evento custom, lo escuchamos
+  window.addEventListener("tm:admin:ready", () => { const b=IS_ADMIN; IS_ADMIN=isAdminNow(); if (b!==IS_ADMIN) bootstrap(); });
+  window.addEventListener("tm:admin:logout", () => { const b=IS_ADMIN; IS_ADMIN=isAdminNow(); if (b!==IS_ADMIN) bootstrap(); });
+
+  // ---------- Utilidades ----------
   function stars(n) {
     const on = "★".repeat(Math.max(0, Math.min(5, n|0)));
     const off = "☆".repeat(5 - on.length);
     return on + off;
   }
   function fmtDate(iso) {
-    try {
-      const d = new Date(iso);
-      return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-    } catch { return ""; }
+    try { return new Date(iso).toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"}); }
+    catch { return ""; }
   }
 
-  // ----- Feed (público para users; completo para admin) -----
-  async function loadPublic() {
+  // ---------- Feed (público para users; completo para admin) ----------
+  async function loadFeed() {
     if (!strip) return;
     try {
-      const url = isAdmin ? "/api/reserve?review=all" : "/api/reserve?review=public";
-      const opts = isAdmin ? { headers: { "X-Admin": "1" } } : undefined;
+      const url  = IS_ADMIN ? "/api/reserve?review=all"    : "/api/reserve?review=public";
+      const opts = IS_ADMIN ? { headers: { "X-Admin": "1" }} : undefined;
       const r = await fetch(url, opts);
       const d = await r.json();
       if (!r.ok || !d?.ok) throw new Error(d?.error || "No se pudieron cargar las reseñas");
 
-      // Si es admin, viene con id/publish. Filtramos solo publicadas.
-      const rows = Array.isArray(d.reviews) ? d.reviews : [];
-      const items = isAdmin ? rows.filter(x => x.publish !== false) : rows;
+      const rows  = Array.isArray(d.reviews) ? d.reviews : [];
+      const items = IS_ADMIN ? rows.filter(x => x.publish !== false) : rows;
 
+      strip.innerHTML = "";
       if (!items.length) {
-        if (empty) empty.style.display = "block";
+        if (empty) { empty.style.display = "block"; }
         return;
       }
       if (empty) empty.style.display = "none";
 
-      strip.innerHTML = "";
       for (const it of items) {
         const card = document.createElement("article");
         card.className = "rev-card";
@@ -186,8 +214,8 @@
           <div class="rev-date">${fmtDate(it.created_at)}</div>
         `;
 
-        // Si sos admin, agregamos la “X” arriba a la derecha para borrar
-        if (isAdmin && it.id) {
+        // Botón X solo para admin
+        if (IS_ADMIN && it.id) {
           const btnDel = document.createElement("button");
           btnDel.className = "rev-del";
           btnDel.type = "button";
@@ -210,9 +238,7 @@
               if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");
               card.remove();
               if (adminHint) adminHint.textContent = `Reseña #${it.id} eliminada.`;
-            } catch (e) {
-              alert(e.message || "Error al eliminar");
-            }
+            } catch (e) { alert(e.message || "Error al eliminar"); }
           });
           card.appendChild(btnDel);
         }
@@ -225,16 +251,13 @@
     }
   }
 
-  // Navegación horizontal
-  if (btnPrev && strip) btnPrev.addEventListener("click", () => strip.scrollBy({ left: -320, behavior: "smooth" }));
-  if (btnNext && strip) btnNext.addEventListener("click", () => strip.scrollBy({ left:  320, behavior: "smooth" }));
+  // ---------- Panel admin (lista completa con borrar) ----------
+  async function loadAdminPanel() {
+    if (!adminSection || !adminList) return;
+    if (!IS_ADMIN) { adminSection.hidden = true; adminList.innerHTML = ""; return; }
 
-  // ----- Panel admin (lista aparte con borrar) -----
-  async function loadAdmin() {
-    if (!isAdmin || !adminSection || !adminList) return;
     adminSection.hidden = false;
     adminHint.textContent = "Cargando…";
-
     try {
       const r = await fetch("/api/reserve?review=all", { headers: { "X-Admin": "1" } });
       const d = await r.json();
@@ -242,10 +265,7 @@
 
       const rows = Array.isArray(d.reviews) ? d.reviews : [];
       adminList.innerHTML = "";
-      if (!rows.length) {
-        adminHint.textContent = "No hay reseñas aún.";
-        return;
-      }
+      if (!rows.length) { adminHint.textContent = "No hay reseñas aún."; return; }
       adminHint.textContent = "";
 
       for (const it of rows) {
@@ -262,20 +282,17 @@
           </div>
         `;
         item.querySelector('[data-act="del"]').addEventListener("click", async () => {
-          const id = it.id;
-          if (!confirm(`¿Eliminar reseña #${id}?`)) return;
+          if (!confirm(`¿Eliminar reseña #${it.id}?`)) return;
           try {
-            const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(id)}`, {
+            const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(it.id)}`, {
               method: "DELETE",
               headers: { "X-Admin": "1" }
             });
             const dd = await rr.json();
             if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");
             item.remove();
-            adminHint.textContent = `Reseña #${id} eliminada.`;
-          } catch (e) {
-            adminHint.textContent = e.message || "Error al eliminar";
-          }
+            adminHint.textContent = `Reseña #${it.id} eliminada.`;
+          } catch (e) { adminHint.textContent = e.message || "Error al eliminar"; }
         });
         adminList.appendChild(item);
       }
@@ -285,8 +302,25 @@
     }
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    loadPublic();
-    loadAdmin();
+  // ---------- Navegación horizontal ----------
+  if (btnPrev && strip) btnPrev.addEventListener("click", () => strip.scrollBy({ left: -320, behavior: "smooth" }));
+  if (btnNext && strip) btnNext.addEventListener("click", () => strip.scrollBy({ left:  320, behavior: "smooth" }));
+
+  // ---------- Orquestador ----------
+  function bootstrap(){
+    loadFeed();
+    loadAdminPanel();
+  }
+  document.addEventListener("DOMContentLoaded", bootstrap);
+
+  // (Dev helper opcional): Alt+Shift+A para togglear admin localmente
+  document.addEventListener("keydown", (e)=>{
+    if (e.altKey && e.shiftKey && e.key.toLowerCase() === "a"){
+      const newVal = localStorage.getItem("tm_is_admin")==="1" ? "0" : "1";
+      localStorage.setItem("tm_is_admin", newVal);
+      const before = IS_ADMIN;
+      IS_ADMIN = isAdminNow();
+      if (before !== IS_ADMIN) bootstrap();
+    }
   });
 })();
