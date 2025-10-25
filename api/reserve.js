@@ -62,7 +62,6 @@ const VILLA_BLACKLIST = [
   "villa itatí","villa azul","villa azúl","fuerte apache","ejército de los andes","villa caraza",
   "villa la cava","villa palito","villa jardín","villa trujui","villa los paraguayos","la saladita","la saladita de wilde"
 ].map(s => s.toLowerCase());
-
 function isVilla(displayName=""){
   const t = (displayName || "").toLowerCase();
   return VILLA_BLACKLIST.some(k => t.includes(k));
@@ -287,9 +286,15 @@ async function handleReview(req, res){
         return res.status(200).json({ ok:true, review: rows[0] });
       }catch(dbErr){
         console.error("DB review insert:", dbErr);
+        // >>> Ajuste: devolvemos todos los datos del error para diagnosticar (23502: not_null_violation, etc.)
         return res.status(500).json({
           error: "Error interno (DB reviews)",
-          detail: dbErr?.code || dbErr?.message || String(dbErr)
+          code: dbErr?.code,
+          message: dbErr?.message,
+          detail: dbErr?.detail,
+          column: dbErr?.column,
+          table: dbErr?.table,
+          constraint: dbErr?.constraint
         });
       }
     }

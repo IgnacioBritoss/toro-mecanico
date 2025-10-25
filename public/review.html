@@ -7,7 +7,6 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    /* Fondo plano para esta página (sin gradiente) */
     body { background: #e8f1ff !important; }
     .wrap { max-width: 760px; margin: 32px auto; padding: 16px; }
     .card { background: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: 20px; }
@@ -33,7 +32,6 @@
       <p class="muted">Tu opinión nos ayuda a mejorar y a que más personas disfruten de la experiencia. abajo pon la contraseña que esta en la tarjeta</p>
 
       <form id="reviewForm" novalidate>
-        <!-- Password se oculta si viene con ?q= (QR) -->
         <div id="passWrap">
           <label>Contraseña</label>
           <input id="revPass" type="password" placeholder="••••••" autocomplete="off" />
@@ -66,6 +64,6 @@
     </div>
   </div>
 
-  <script src="review.js"></script>
+  <script src="/review.js"></script>
 </body>
 </html>

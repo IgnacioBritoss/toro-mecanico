@@ -100,7 +100,9 @@
 
       if (!r.ok || !d?.ok){
         const msg = (d && (d.error || d.message)) ? (d.error || d.message) : `Error ${r.status}`;
-        const extra = d?.detail ? ` (${d.detail})` : (rawText && rawText !== '' ? ` — ${rawText}` : '');
+        const extra = d?.detail ? ` (${d.detail})` :
+                      (d?.code ? ` (${d.code})` :
+                      (rawText && rawText !== '' ? ` — ${rawText}` : ''));
         if (hint){ hint.textContent = msg + extra; hint.className='err'; }
         if (btn) btn.disabled = false;
         return;
