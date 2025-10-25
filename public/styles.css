@@ -934,3 +934,68 @@ body.has-admin-overlay{ overflow:hidden; }
 @media (max-width: 640px){
   .rev-card{ flex-basis: 85vw; }
 }
+
+
+
+
+/* === Reseñas (tira sin barra visible, 4 por vista, sombras completas) === */
+#resenas .rev-viewport{
+  overflow: hidden;
+  position: relative;
+  padding: 12px;                 /* aire para que la sombra no se corte */
+  margin-inline: -12px;          /* mantiene alineado con el container */
+}
+
+#resenas .rev-strip{
+  --gap: 16px;
+  display: flex;
+  gap: var(--gap);
+  scroll-snap-type: x mandatory;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 6px;                  /* un poco de aire interno */
+  margin: 0 -6px;                /* que la sombra pueda “asomar” a los lados */
+
+  /* Ocultar scrollbar en todos los navegadores */
+  -ms-overflow-style: none;      /* IE/Edge antiguo */
+  scrollbar-width: none !important; /* Firefox */
+}
+#resenas .rev-strip::-webkit-scrollbar{ display: none !important; } /* WebKit */
+
+#resenas .rev-card{
+  flex: 0 0 calc((100% - 3*var(--gap)) / 4);  /* 4 tarjetas por vista */
+  max-width: calc((100% - 3*var(--gap)) / 4);
+  scroll-snap-align: start;
+  background:#fff;
+  border-radius:14px;
+  box-shadow:0 14px 34px rgba(0,0,0,.10);     /* sombra uniforme alrededor */
+  padding:14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+/* Tipografía de la tarjeta (igual que venías usando) */
+#resenas .rev-stars{ font-size:18px; letter-spacing:1px; }
+#resenas .rev-name{ font-weight:600; color:#0f172a; }
+#resenas .rev-text{ color:#374151; line-height:1.4 }
+#resenas .rev-date{ color:#6b7280; font-size:12px }
+
+/* Responsivo: 3 / 2 / 1 por vista */
+@media (max-width: 1200px){
+  #resenas .rev-card{ flex-basis: calc((100% - 2*var(--gap)) / 3); max-width: calc((100% - 2*var(--gap)) / 3); }
+}
+@media (max-width: 900px){
+  #resenas .rev-card{ flex-basis: calc((100% - 1*var(--gap)) / 2); max-width: calc((100% - 1*var(--gap)) / 2); }
+}
+@media (max-width: 620px){
+  #resenas .rev-card{ flex-basis: 100%; max-width: 100%; }
+}
+
+/* Botones de navegación en negro (como tu UI) */
+#resenas .btn--icon{
+  background:#0f172a; color:#fff; border:none; padding:8px 10px; border-radius:10px;
+}
+
+/* (opcional) que las flechas queden “pegadas” arriba al hacer scroll */
+#resenas .h-actions{ position: sticky; top: 8px; z-index: 2; }

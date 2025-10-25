@@ -63,7 +63,7 @@
     </div>
   </section>
 
-  <!-- Reseñas -->
+<!-- Reseñas -->
 <section id="resenas" class="section section--muted">
   <div class="container">
     <div class="section__header" style="align-items:center; gap:12px">
@@ -77,39 +77,18 @@
       </div>
     </div>
 
-    <!-- TIRA HORIZONTAL -->
-     <div class="rev-viewport">
-    <div id="reviewsStrip" class="rev-strip" aria-live="polite"></div>
-  </div>
+    <!-- Viewport que oculta la barra y deja respirar las sombras -->
+    <div class="rev-viewport">
+      <div id="reviewsStrip" class="rev-strip" aria-live="polite"></div>
+    </div>
+
     <!-- Fallback -->
     <p id="reviewsEmpty" class="hint" style="display:none;margin-top:12px">
       Aún no hay reseñas públicas.
     </p>
   </div>
-
-  <!-- Estilos mínimos para la tira horizontal -->
-  <style>
-    .rev-strip{
-      display:flex; gap:12px; overflow-x:auto; padding-bottom:8px;
-      scroll-snap-type:x mandatory; scrollbar-width:thin;
-    }
-    .rev-strip::-webkit-scrollbar{ height:8px; }
-    .rev-card{
-      min-width: 260px; max-width: 320px; scroll-snap-align:start;
-      background:#fff; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.08);
-      padding:14px 16px; display:flex; flex-direction:column; gap:8px;
-    }
-    .rev-stars{ font-size:18px; letter-spacing:1px; }
-    .rev-name{ font-weight:600; color:#0f172a; }
-    .rev-text{ color:#374151; line-height:1.4 }
-    .rev-date{ color:#6b7280; font-size:12px }
-    .btn--icon{ background:#0f172a; color:#fff; border:none; padding:8px 10px; border-radius:10px; }
-    @media (max-width: 720px){
-      .h-actions{ display:none; }
-      .rev-card{ min-width: 85vw; }
-    }
-  </style>
 </section>
+
 
 <!-- ===== ADMIN: Reseñas ===== -->
 <section id="reviewsAdmin" class="section admin-only" hidden>
