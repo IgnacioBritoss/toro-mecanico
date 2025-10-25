@@ -123,73 +123,68 @@
 
 /* ==========================================================
    MÓDULO 2 — Feed público + Panel admin (home/index)
-   - Auto-detecta modo admin
-   - En admin muestra botón "X" para borrar en cada tarjeta
    ========================================================== */
 (function(){
-  const strip     = document.getElementById("reviewsStrip");
-  const empty     = document.getElementById("reviewsEmpty");
-  const btnPrev   = document.getElementById("revPrev");
-  const btnNext   = document.getElementById("revNext");
+  const strip   = document.getElementById("reviewsStrip");
+  const empty   = document.getElementById("reviewsEmpty");
+  const btnPrev = document.getElementById("revPrev");
+  const btnNext = document.getElementById("revNext");
   const adminSection = document.getElementById("reviewsAdmin");
   const adminList    = document.getElementById("reviewsAdminList");
   const adminHint    = document.getElementById("reviewsAdminHint");
 
-  // si no existe el contenedor ni la sección admin, no estamos en el home -> salir
   if (!strip && !adminSection) return;
 
-  // ---------- Detección de admin (robusta) ----------
-  function hasCookieFlag() {
-    // busca tm_admin=1 o tm_is_admin=1 en cookies no httpOnly
-    return document.cookie.split(";").some(c => {
-      const [k,v] = c.trim().split("=");
-      return (k === "tm_admin" || k === "tm_is_admin") && v === "1";
-    });
-  }
+  // -------- Detección de admin (muy tolerante) --------
+  const qs   = new URLSearchParams(location.search);
+  const hash = location.hash || "";
+  function cookieHas(k){ return document.cookie.split(";").some(c=>c.trim().startsWith(k+"=1")); }
   function isAdminNow(){
     return (
-      // clase en body
+      // flags de URL para probar rápido
+      qs.get("adm")==="1" || hash.includes("#admin") ||
+      // body/class/data-attr
       document.body.classList.contains("is-admin") ||
       document.body.classList.contains("admin-mode") ||
-      // claves comunes en localStorage que tal vez use tu login
-      localStorage.getItem("tm_is_admin") === "1" ||
-      localStorage.getItem("tm_admin") === "1" ||
-      localStorage.getItem("tm_admin_ok") === "1" ||
+      document.body.dataset.admin === "1" ||
+      // localStorage variantes
+      localStorage.getItem("tm_is_admin")==="1" ||
+      localStorage.getItem("tm_admin")==="1" ||
+      localStorage.getItem("tm_admin_ok")==="1" ||
       !!localStorage.getItem("tm_admin_jwt") ||
       // cookie simple
-      hasCookieFlag()
+      cookieHas("tm_is_admin") || cookieHas("tm_admin") ||
+      // variable global opcional
+      (window.__TM_ADMIN__ === true)
     );
   }
   let IS_ADMIN = isAdminNow();
 
-  // Re-render si cambia el modo admin (por login en otro script o en otra pestaña)
-  window.addEventListener("storage", (e) => {
-    if (!e.key) return;
+  // reintento corto por si el login setea la flag unos ms después
+  let retries = 6;
+  const lateTick = setInterval(() => {
     const before = IS_ADMIN;
     IS_ADMIN = isAdminNow();
-    if (before !== IS_ADMIN) bootstrap();   // vuelve a cargar feed/panel
+    if (before !== IS_ADMIN) { bootstrap(); clearInterval(lateTick); }
+    if (--retries <= 0) clearInterval(lateTick);
+  }, 250);
+
+  window.addEventListener("storage", () => {
+    const before = IS_ADMIN;
+    IS_ADMIN = isAdminNow();
+    if (before !== IS_ADMIN) bootstrap();
   });
-  // si tu login dispara un evento custom, lo escuchamos
-  window.addEventListener("tm:admin:ready", () => { const b=IS_ADMIN; IS_ADMIN=isAdminNow(); if (b!==IS_ADMIN) bootstrap(); });
-  window.addEventListener("tm:admin:logout", () => { const b=IS_ADMIN; IS_ADMIN=isAdminNow(); if (b!==IS_ADMIN) bootstrap(); });
 
-  // ---------- Utilidades ----------
-  function stars(n) {
-    const on = "★".repeat(Math.max(0, Math.min(5, n|0)));
-    const off = "☆".repeat(5 - on.length);
-    return on + off;
-  }
-  function fmtDate(iso) {
-    try { return new Date(iso).toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"}); }
-    catch { return ""; }
-  }
+  // -------- utils --------
+  function stars(n){ const on="★".repeat(Math.max(0,Math.min(5,n|0))); return on+"☆".repeat(5-on.length); }
+  function fmtDate(iso){ try{ return new Date(iso).toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"});}catch{return"";} }
 
-  // ---------- Feed (público para users; completo para admin) ----------
-  async function loadFeed() {
+  // -------- feed (público o all si es admin) --------
+  async function loadFeed(){
     if (!strip) return;
-    try {
-      const url  = IS_ADMIN ? "/api/reserve?review=all"    : "/api/reserve?review=public";
-      const opts = IS_ADMIN ? { headers: { "X-Admin": "1" }} : undefined;
+    try{
+      const url  = IS_ADMIN ? "/api/reserve?review=all" : "/api/reserve?review=public";
+      const opts = IS_ADMIN ? { headers:{ "X-Admin":"1" } } : undefined;
       const r = await fetch(url, opts);
       const d = await r.json();
       if (!r.ok || !d?.ok) throw new Error(d?.error || "No se pudieron cargar las reseñas");
@@ -198,129 +193,113 @@
       const items = IS_ADMIN ? rows.filter(x => x.publish !== false) : rows;
 
       strip.innerHTML = "";
-      if (!items.length) {
-        if (empty) { empty.style.display = "block"; }
-        return;
-      }
-      if (empty) empty.style.display = "none";
+      if (!items.length){ if (empty) empty.style.display="block"; return; }
+      if (empty) empty.style.display="none";
 
-      for (const it of items) {
+      for (const it of items){
         const card = document.createElement("article");
         card.className = "rev-card";
         card.innerHTML = `
           <div class="rev-stars" aria-label="Calificación: ${it.rating} de 5">${stars(it.rating)}</div>
-          <p class="rev-text">${(it.comment || "").replace(/\n/g, "<br/>")}</p>
-          <div class="rev-name">${it.name ? it.name : "Anónimo"}</div>
+          <p class="rev-text">${(it.comment||"").replace(/\n/g,"<br/>")}</p>
+          <div class="rev-name">${it.name || "Anónimo"}</div>
           <div class="rev-date">${fmtDate(it.created_at)}</div>
         `;
 
-        // Botón X solo para admin
-        if (IS_ADMIN && it.id) {
+        // Botón X sólo si tenemos id y somos admin
+        if (IS_ADMIN && it.id){
           const btnDel = document.createElement("button");
-          btnDel.className = "rev-del";
-          btnDel.type = "button";
-          btnDel.title = "Eliminar reseña";
-          btnDel.setAttribute("aria-label", `Eliminar reseña #${it.id}`);
+          btnDel.className = "rev-del"; btnDel.type="button";
+          btnDel.title="Eliminar reseña"; btnDel.setAttribute("aria-label",`Eliminar reseña #${it.id}`);
           btnDel.innerHTML = `
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7A1 1 0 0 0 5.7 7.1L10.6 12l-4.9 4.9a1 1 0 1 0 1.4 1.4L12 13.4l4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/>
-            </svg>
-          `;
-          btnDel.addEventListener("click", async (ev) => {
+            </svg>`;
+          btnDel.addEventListener("click", async (ev)=>{
             ev.stopPropagation();
             if (!confirm(`¿Eliminar reseña #${it.id}?`)) return;
-            try {
+            try{
               const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(it.id)}`, {
-                method: "DELETE",
-                headers: { "X-Admin": "1" }
+                method:"DELETE", headers:{ "X-Admin":"1" }
               });
               const dd = await rr.json();
               if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");
               card.remove();
               if (adminHint) adminHint.textContent = `Reseña #${it.id} eliminada.`;
-            } catch (e) { alert(e.message || "Error al eliminar"); }
+            }catch(e){ alert(e.message || "Error al eliminar"); }
           });
           card.appendChild(btnDel);
         }
 
         strip.appendChild(card);
       }
-    } catch (e) {
-      if (empty) { empty.textContent = "No se pudieron cargar las reseñas."; empty.style.display = "block"; }
+    }catch(e){
+      if (empty){ empty.textContent="No se pudieron cargar las reseñas."; empty.style.display="block"; }
       console.error(e);
     }
   }
 
-  // ---------- Panel admin (lista completa con borrar) ----------
-  async function loadAdminPanel() {
-    if (!adminSection || !adminList) return;
-    if (!IS_ADMIN) { adminSection.hidden = true; adminList.innerHTML = ""; return; }
+  // -------- panel admin (lista completa con borrar) --------
+  async function loadAdminPanel(){
+    if (!adminSection || !adminList){ return; }
+    if (!IS_ADMIN){ adminSection.hidden = true; adminList.innerHTML=""; return; }
 
     adminSection.hidden = false;
     adminHint.textContent = "Cargando…";
-    try {
-      const r = await fetch("/api/reserve?review=all", { headers: { "X-Admin": "1" } });
+    try{
+      const r = await fetch("/api/reserve?review=all", { headers:{ "X-Admin":"1" }});
       const d = await r.json();
       if (!r.ok || !d?.ok) throw new Error(d?.error || "No se pudieron cargar");
 
       const rows = Array.isArray(d.reviews) ? d.reviews : [];
       adminList.innerHTML = "";
-      if (!rows.length) { adminHint.textContent = "No hay reseñas aún."; return; }
+      if (!rows.length){ adminHint.textContent = "No hay reseñas aún."; return; }
       adminHint.textContent = "";
 
-      for (const it of rows) {
+      for (const it of rows){
         const item = document.createElement("div");
         item.className = "rev-card";
         item.dataset.id = it.id;
         item.innerHTML = `
           <div class="rev-stars">${stars(it.rating)}</div>
-          <p class="rev-text" style="white-space:pre-wrap">${it.comment || ""}</p>
-          <div class="rev-name">${it.name || "Anónimo"}</div>
+          <p class="rev-text" style="white-space:pre-wrap">${it.comment||""}</p>
+          <div class="rev-name">${it.name||"Anónimo"}</div>
           <div class="rev-date">#${it.id} • ${fmtDate(it.created_at)} • ${it.publish ? "publicada" : "oculta"}</div>
           <div style="display:flex; gap:8px; margin-top:6px">
             <button class="btn btn--icon" data-act="del" aria-label="Eliminar">🗑️</button>
-          </div>
-        `;
-        item.querySelector('[data-act="del"]').addEventListener("click", async () => {
+          </div>`;
+        item.querySelector('[data-act="del"]').addEventListener("click", async ()=>{
           if (!confirm(`¿Eliminar reseña #${it.id}?`)) return;
-          try {
+          try{
             const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(it.id)}`, {
-              method: "DELETE",
-              headers: { "X-Admin": "1" }
+              method:"DELETE", headers:{ "X-Admin":"1" }
             });
             const dd = await rr.json();
             if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");
-            item.remove();
-            adminHint.textContent = `Reseña #${it.id} eliminada.`;
-          } catch (e) { adminHint.textContent = e.message || "Error al eliminar"; }
+            item.remove(); adminHint.textContent = `Reseña #${it.id} eliminada.`;
+          }catch(e){ adminHint.textContent = e.message || "Error al eliminar"; }
         });
         adminList.appendChild(item);
       }
-    } catch (e) {
+    }catch(e){
       adminHint.textContent = e.message || "Error cargando reseñas";
       console.error(e);
     }
   }
 
-  // ---------- Navegación horizontal ----------
-  if (btnPrev && strip) btnPrev.addEventListener("click", () => strip.scrollBy({ left: -320, behavior: "smooth" }));
-  if (btnNext && strip) btnNext.addEventListener("click", () => strip.scrollBy({ left:  320, behavior: "smooth" }));
+  // -------- navegación horizontal --------
+  if (btnPrev && strip) btnPrev.addEventListener("click", ()=> strip.scrollBy({ left:-320, behavior:"smooth" }));
+  if (btnNext && strip) btnNext.addEventListener("click", ()=> strip.scrollBy({ left: 320, behavior:"smooth" }));
 
-  // ---------- Orquestador ----------
-  function bootstrap(){
-    loadFeed();
-    loadAdminPanel();
-  }
+  function bootstrap(){ loadFeed(); loadAdminPanel(); }
   document.addEventListener("DOMContentLoaded", bootstrap);
 
-  // (Dev helper opcional): Alt+Shift+A para togglear admin localmente
-  document.addEventListener("keydown", (e)=>{
-    if (e.altKey && e.shiftKey && e.key.toLowerCase() === "a"){
-      const newVal = localStorage.getItem("tm_is_admin")==="1" ? "0" : "1";
-      localStorage.setItem("tm_is_admin", newVal);
-      const before = IS_ADMIN;
-      IS_ADMIN = isAdminNow();
-      if (before !== IS_ADMIN) bootstrap();
+  // atajo dev: Alt+Shift+A togglear admin local
+  document.addEventListener("keydown",(e)=>{
+    if (e.altKey && e.shiftKey && e.key.toLowerCase()==="a"){
+      const nv = localStorage.getItem("tm_is_admin")==="1" ? "0" : "1";
+      localStorage.setItem("tm_is_admin", nv);
+      const before = IS_ADMIN; IS_ADMIN = isAdminNow(); if (before!==IS_ADMIN) bootstrap();
     }
   });
 })();
