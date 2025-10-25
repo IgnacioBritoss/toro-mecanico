@@ -121,20 +121,23 @@
   }
 })();
 
+
 /* ==========================================================
    MÓDULO 2 — Feed público + Panel admin (home/index)
    - Muestra /api/reserve?review=public a usuarios
    - Si es admin, muestra /api/reserve?review=all y permite borrar
+   - Navegación por flechas con paso según el ancho visible
    ========================================================== */
-(function(){
-  const strip     = document.getElementById("reviewsStrip");
-  const empty     = document.getElementById("reviewsEmpty");
-  const btnPrev   = document.getElementById("revPrev");
-  const btnNext   = document.getElementById("revNext");
+(function () {
+  const strip   = document.getElementById("reviewsStrip");
+  const empty   = document.getElementById("reviewsEmpty");
+  const btnPrev = document.getElementById("revPrev");
+  const btnNext = document.getElementById("revNext");
 
   // si no existe el contenedor, no estamos en el home -> salir
   if (!strip && !document.getElementById("reviewsAdmin")) return;
 
+  // admin flag (igual que venías usando)
   const isAdmin =
     localStorage.getItem("tm_is_admin") === "1" ||
     document.body.classList.contains("is-admin");
@@ -143,16 +146,23 @@
   const adminList    = document.getElementById("reviewsAdminList");
   const adminHint    = document.getElementById("reviewsAdminHint");
 
+  // utilidades
   function stars(n) {
-    const on = "★".repeat(Math.max(0, Math.min(5, n|0)));
+    const on  = "★".repeat(Math.max(0, Math.min(5, n | 0)));
     const off = "☆".repeat(5 - on.length);
     return on + off;
   }
   function fmtDate(iso) {
     try {
       const d = new Date(iso);
-      return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-    } catch { return ""; }
+      return d.toLocaleDateString("es-AR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return "";
+    }
   }
 
   // ----- Feed público -----
@@ -183,13 +193,25 @@
         strip.appendChild(card);
       }
     } catch (e) {
-      if (empty) { empty.textContent = "No se pudieron cargar las reseñas."; empty.style.display = "block"; }
+      if (empty) {
+        empty.textContent = "No se pudieron cargar las reseñas.";
+        empty.style.display = "block";
+      }
       console.error(e);
     }
   }
 
-  if (btnPrev && strip) btnPrev.addEventListener("click", () => strip.scrollBy({ left: -320, behavior: "smooth" }));
-  if (btnNext && strip) btnNext.addEventListener("click", () => strip.scrollBy({ left:  320, behavior: "smooth" }));
+  // Navegación por flechas: paso ~ viewport
+  function stepPx() {
+    const viewport = document.querySelector(".rev-viewport") || strip;
+    return Math.max(320, Math.round(viewport.clientWidth * 0.92));
+  }
+  if (btnPrev && strip) btnPrev.addEventListener("click", () => {
+    strip.scrollBy({ left: -stepPx(), behavior: "smooth" });
+  });
+  if (btnNext && strip) btnNext.addEventListener("click", () => {
+    strip.scrollBy({ left:  stepPx(), behavior: "smooth" });
+  });
 
   // ----- Panel admin -----
   async function loadAdmin() {
@@ -231,7 +253,7 @@
           try {
             const rr = await fetch(`/api/reserve?review=delete&id=${encodeURIComponent(id)}`, {
               method: "DELETE",
-              headers: { "X-Admin": "1" }
+              headers: { "X-Admin": "1" },
             });
             const dd = await rr.json();
             if (!rr.ok || !dd?.ok) throw new Error(dd?.error || "No se pudo eliminar");

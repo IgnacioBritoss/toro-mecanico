@@ -182,13 +182,25 @@ async function ensureReviewsTable(){
   }
 }
 
-function htmlPage(msg){
+function htmlPage(msg, { silent=false, redirect="/" } = {}){
+  const auto = silent ? `
+    <script>
+      // intentamos cerrar; si el navegador no nos deja, redirigimos
+      setTimeout(() => { try{ window.close(); }catch{} }, 100);
+      setTimeout(() => { if (!document.hidden) location.replace(${JSON.stringify(redirect)}); }, 700);
+    </script>` : "";
   return `<!doctype html><html lang="es"><meta charset="utf-8"/>
-  <title>Reseñas</title>
-  <style>body{font-family:system-ui,Segoe UI,Roboto;padding:28px;background:#f8fafc;color:#0f172a}
-  .card{background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:20px;max-width:520px}</style>
-  <div class="card"><h2>${msg.title}</h2><p>${msg.body}</p></div>`;
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${msg.title}</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto;padding:28px;background:#f8fafc;color:#0f172a}
+    .card{background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:20px;max-width:520px}
+    .muted{color:#6b7280}
+  </style>
+  <div class="card"><h2>${msg.title}</h2><p>${msg.body}</p>
+  <p class="muted">${silent ? "Podés cerrar esta pestaña." : ""}</p></div>${auto}`;
 }
+
 
 async function handleReview(req, res){
   try{
@@ -238,8 +250,9 @@ async function handleReview(req, res){
             process.env.PUBLIC_BASE_URL?.trim() ||
             (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
 
-          const approveUrl = `${baseUrl}/api/reserve?review=approve&id=${rows[0].id}&token=${token}`;
-          const rejectUrl  = `${baseUrl}/api/reserve?review=reject&id=${rows[0].id}&token=${token}`;
+          const approveUrl = `${baseUrl}/api/reserve?review=approve&id=${rows[0].id}&token=${token}&silent=1`;
+          const rejectUrl  = `${baseUrl}/api/reserve?review=reject&id=${rows[0].id}&token=${token}&silent=1`;
+
 
           await transporter.sendMail({
             from: `Reseñas Toro Mecánico <${fromEmail}>`,
@@ -298,39 +311,52 @@ async function handleReview(req, res){
       return res.status(200).json({ ok:true, deleted: r.rowCount });
     }
 
-    // ✅ Aprobar/Reject por email (links con token)
-    if (req.method === "GET" && (mode === "approve" || mode === "reject")){
-      await ensureReviewsTable();
+   // ✅ Aprobar / Rechazar por email (links con token)
+if (req.method === "GET" && (mode === "approve" || mode === "reject")) {
+  await ensureReviewsTable();
 
-      const id = parseInt(String(req.query?.id || ""), 10);
-      const token = String(req.query?.token || "");
-      if (!Number.isFinite(id) || !token) {
-        res.setHeader("Content-Type","text/html; charset=utf-8");
-        return res.status(400).end(htmlPage({title:"Solicitud inválida", body:"Faltan parámetros."}));
-      }
-      const expected = signReviewToken(id);
-      if (token !== expected){
-        res.setHeader("Content-Type","text/html; charset=utf-8");
-        return res.status(401).end(htmlPage({title:"Token inválido", body:"El enlace no es válido o expiró."}));
-      }
+  const id     = parseInt(String(req.query?.id || ""), 10);
+  const token  = String(req.query?.token || "");
+  const silent = String(req.query?.silent || "") === "1";  // para autocerrar pestaña
 
-      if (mode === "approve") {
-  await pool.query(`UPDATE public.reviews SET publish=TRUE WHERE id=$1`, [id]);
-} else {
-  await pool.query(`DELETE FROM public.reviews WHERE id=$1`, [id]);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  if (!Number.isFinite(id) || !token) {
+    return res
+      .status(400)
+      .end(htmlPage({ title: "Solicitud inválida", body: "Faltan parámetros." }, { silent }));
+  }
+
+  const expected = signReviewToken(id);
+  if (token !== expected) {
+    return res
+      .status(401)
+      .end(htmlPage({ title: "Token inválido", body: "El enlace no es válido o expiró." }, { silent }));
+  }
+
+  const publish = (mode === "approve");
+
+  if (publish) {
+    await pool.query(`UPDATE public.reviews SET publish = TRUE WHERE id = $1`, [id]);
+  } else {
+    await pool.query(`DELETE FROM public.reviews WHERE id = $1`, [id]);
+  }
+
+  return res
+    .status(200)
+    .end(
+      htmlPage(
+        {
+          title: publish ? "¡Reseña publicada!" : "Reseña eliminada",
+          body:  publish
+            ? "La reseña ya figura en el sitio."
+            : "La reseña fue eliminada y ya no se mostrará."
+        },
+        { silent, redirect: "/" }
+      )
+    );
 }
 
-
-      res.setHeader("Content-Type","text/html; charset=utf-8");
-      return res
-        .status(200)
-        .end(htmlPage({
-          title: publish ? "¡Reseña publicada!" : "Reseña oculta",
-          body: publish
-            ? "La reseña ya figura en el sitio."
-            : "La reseña quedó oculta para los visitantes."
-        }));
-    }
 
     return res.status(405).json({ error:"Método no permitido (review)" });
   }catch(e){

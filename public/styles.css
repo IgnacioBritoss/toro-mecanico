@@ -856,3 +856,46 @@ body.has-admin-overlay{ overflow:hidden; }
 .rev-del:hover{ opacity: 1; transform: scale(1.03); box-shadow: 0 8px 20px rgba(0,0,0,.24); }
 .rev-del:active{ transform: scale(0.97); }
 .rev-del svg{ width: 16px; height: 16px; pointer-events: none; }
+
+
+/* Viewport oculta la barra y deja respirar las sombras */
+.rev-viewport{
+  overflow: hidden;              /* oculta la barra */
+  position: relative;
+}
+
+/* Tira: 4 por vista en desktop, sin scrollbar visible, con padding para sombras */
+.rev-strip{
+  --gap: 12px;
+  display: flex;
+  gap: var(--gap);
+  padding: 10px;                 /* espacio para que la sombra no “corte” */
+  margin: 0 -10px;               /* la sombra “asoma” a ambos lados */
+  scroll-snap-type: x mandatory;
+  overflow-x: auto;
+  scrollbar-width: none;         /* Firefox: ocultar scrollbar */
+}
+.rev-strip::-webkit-scrollbar{ display: none; } /* WebKit: ocultar scrollbar */
+
+/* Tarjetas: 4 por vista, con scroll-snap */
+.rev-card{
+  flex: 0 0 calc((100% - 3*var(--gap)) / 4);  /* 4 por vista */
+  scroll-snap-align: start;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.10);
+}
+
+/* Responsivo: 3/2/1 por vista según ancho */
+@media (max-width: 1200px){
+  .rev-card{ flex-basis: calc((100% - 2*var(--gap)) / 3); }
+}
+@media (max-width: 900px){
+  .rev-card{ flex-basis: calc((100% - 1*var(--gap)) / 2); }
+}
+@media (max-width: 560px){
+  .rev-card{ flex-basis: 100%; }
+}
+
+/* Botones de navegación (ya los tenés). Si querés, puedes fijarlos con position sticky: */
+.h-actions{ position: sticky; top: 8px; z-index: 2; }
