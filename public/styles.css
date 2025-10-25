@@ -899,3 +899,38 @@ body.has-admin-overlay{ overflow:hidden; }
 
 /* Botones de navegación (ya los tenés). Si querés, puedes fijarlos con position sticky: */
 .h-actions{ position: sticky; top: 8px; z-index: 2; }
+
+/* Viewport que oculta el overflow y deja respirar las sombras */
+.rev-viewport{
+  overflow: hidden;              /* oculta la barra */
+  padding: 12px;                 /* para que no se corte la sombra */
+  margin-inline: -12px;          /* mantiene el alineado con el resto del layout */
+  position: relative;
+}
+
+/* La tira sigue siendo flex horizontal, pero con la barra escondida */
+.rev-strip{
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;              /* scrolleable, pero sin mostrar barra */
+  scroll-snap-type: x mandatory; /* snaps agradables */
+  padding-bottom: 2px;           /* evita que las sombras toquen el borde inferior */
+  -ms-overflow-style: none;      /* IE/Edge */
+  scrollbar-width: none;         /* Firefox */
+}
+.rev-strip::-webkit-scrollbar{ display: none; } /* WebKit */
+
+/* Tarjeta con ancho fijo para ver 4 en desktop (ajustable) */
+.rev-card{
+  flex: 0 0 320px;               /* 4 x 320 + gaps ≈ viewport ancho desktop */
+  max-width: 100%;
+  scroll-snap-align: start;
+}
+
+/* En móviles permitimos 1–2 por vista, manteniendo estética */
+@media (max-width: 900px){
+  .rev-card{ flex-basis: 280px; }
+}
+@media (max-width: 640px){
+  .rev-card{ flex-basis: 85vw; }
+}

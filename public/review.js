@@ -202,16 +202,19 @@
   }
 
   // Navegación por flechas: paso ~ viewport
-  function stepPx() {
-    const viewport = document.querySelector(".rev-viewport") || strip;
-    return Math.max(320, Math.round(viewport.clientWidth * 0.92));
-  }
-  if (btnPrev && strip) btnPrev.addEventListener("click", () => {
-    strip.scrollBy({ left: -stepPx(), behavior: "smooth" });
-  });
-  if (btnNext && strip) btnNext.addEventListener("click", () => {
-    strip.scrollBy({ left:  stepPx(), behavior: "smooth" });
-  });
+function stepPx() {
+  const viewport = document.querySelector(".rev-viewport") || strip;
+  return Math.max(320, Math.round(viewport.clientWidth * 0.92));
+}
+
+const scroller = document.querySelector(".rev-viewport") || strip;
+
+if (btnPrev && scroller) btnPrev.addEventListener("click", () => {
+  scroller.scrollBy({ left: -stepPx(), behavior: "smooth" });
+});
+if (btnNext && scroller) btnNext.addEventListener("click", () => {
+  scroller.scrollBy({ left:  stepPx(), behavior: "smooth" });
+});
 
   // ----- Panel admin -----
   async function loadAdmin() {
