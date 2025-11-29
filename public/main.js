@@ -767,7 +767,7 @@ function renderPricingCards(plans){
         <h3>${escapeHtml(p.label)}</h3>
         ${idx===1 ? '<span class="badge">Más pedido</span>':''}
       </header>
-      <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>USD</span></p>
+      <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>ARS</span></p>
       <ul class="card__list">
         <li>Operador incluido</li>
         <li>Colchonetas y seguridad</li>
