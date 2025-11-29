@@ -750,30 +750,47 @@ async function fetchPlans(){
   }catch{ return []; }
 }
 
+function getPlanLabel(p){
+  // Pisamos sólo los que nos interesan
+  if (p.code === "1h") return "1 hora";
+  if (p.code === "2h") return "3 horas";
+  return escapeHtml(p.label || "");
+}
+
+// Formatea 249999 => "249,999"
+function formatPrice(num){
+  const n = Number(num) || 0;
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  });
+}
+
 function renderPricingCards(plans){
   const wrap = document.getElementById('pricingCards');
-  if(!wrap) return;
+  if (!wrap) return;
   wrap.innerHTML = '';
-  if(!plans.length){
+  if (!plans.length){
     wrap.innerHTML = `<article class="card"><p>No hay planes activos.</p></article>`;
     return;
   }
+
   plans.forEach((p, idx) => {
     const art = document.createElement('article');
-    art.className = 'card' + (idx===1 ? ' card--featured':'');
+    art.className = 'card' + (idx === 1 ? ' card--featured' : '');
 
     art.innerHTML = `
       <header class="card__head">
-        <h3>${escapeHtml(p.label)}</h3>
-        ${idx===1 ? '<span class="badge">Más pedido</span>':''}
+        <h3>${getPlanLabel(p)}</h3>
+        ${idx === 1 ? '<span class="badge">Más pedido</span>' : ''}
       </header>
-      <p class="card__price">$${Number(p.price_usd).toFixed(0)} <span>ARS</span></p>
+      <p class="card__price">$${formatPrice(p.price_usd)} <span>ARS</span></p>
       <ul class="card__list">
         <li>Operador incluido</li>
         <li>Colchonetas y seguridad</li>
         <li>Traslado en AMBA*</li>
       </ul>
-      <a href="#calendario" class="btn btn--block ${idx===1?'btn--primary':''}">Reservar</a>
+      <a href="#calendario" class="btn btn--block ${idx === 1 ? 'btn--primary' : ''}">Reservar</a>
     `;
     wrap.appendChild(art);
   });
@@ -781,22 +798,25 @@ function renderPricingCards(plans){
 
 function renderPlanRadios(plans){
   const wrap = document.getElementById('planOptions');
-  if(!wrap) return;
+  if (!wrap) return;
   wrap.innerHTML = '';
-  if(!plans.length){
-    wrap.innerHTML = `<p class="hint">No hay planes activos.</p>`; return;
+  if (!plans.length){
+    wrap.innerHTML = `<p class="hint">No hay planes activos.</p>`;
+    return;
   }
-  const current = (document.querySelector('input[name="plan"]:checked')||{}).value;
+
+  const current = (document.querySelector('input[name="plan"]:checked') || {}).value;
 
   plans.forEach((p, idx) => {
-    const checked = current ? (current === p.code) : (idx===0);
+    const checked = current ? (current === p.code) : (idx === 0);
+    const labelText = getPlanLabel(p);
     const div = document.createElement('label');
     div.className = 'plan__opt';
     div.innerHTML = `
-      <input type="radio" name="plan" value="${escapeHtml(p.code)}" ${checked?'checked':''} />
-      <span class="plan__card ${idx===1?'plan__card--pop':''}">
-        <strong>${escapeHtml(p.label)}</strong>
-        <em>USD ${Number(p.price_usd).toFixed(0)}</em>
+      <input type="radio" name="plan" value="${escapeHtml(p.code)}" ${checked ? 'checked' : ''} />
+      <span class="plan__card ${idx === 1 ? 'plan__card--pop' : ''}">
+        <strong>${labelText}</strong>
+        <em>$${formatPrice(p.price_usd)} ARS</em>
       </span>
     `;
     wrap.appendChild(div);
