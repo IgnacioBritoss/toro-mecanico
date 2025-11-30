@@ -19,17 +19,26 @@ body{
 .brand{display:flex;align-items:center;gap:10px}
 
 .brand__logo{
-  width: 56px;              /* podés subir o bajar el tamaño */
+  width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 3px solid #000;   /* borde negro */
-  background: #fff;         /* fondo blanco detrás por si la imagen tiene transparencia */
-  overflow: hidden;         /* recorta todo a la circunferencia */
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  /* si querés mantener el fondo amarillo, dejalo, si no podés quitarlo */
+  background-color: #fff;
+
+  background-image: url("/toro.png");
+  background-repeat: no-repeat;
+
+  /* 🔍 un poco de zoom para que el cuerpo quede más cerca del borde */
+  background-size: 115%;          /* probá 110–125% si querés ajustar */
+
+  /* 🎯 centrado horizontal y un poco más abajo vertical */
+  background-position: center 60%; /* 60% = baja la imagen; probá 55–65% */
+
   flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(0,0,0,0.25);
 }
+
 
 /* La imagen adentro del círculo */
 .brand__logo img{
