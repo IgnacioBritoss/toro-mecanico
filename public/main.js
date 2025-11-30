@@ -651,7 +651,7 @@ async function onSecondStep(){
       s.dataset.source = "button";
       mpButtonWrap.appendChild(s);
     }
-    const FALLBACK_PAY_LINK = "https://mpago.la/142C1pN";
+    const FALLBACK_PAY_LINK = "https://mpago.la/1CafmTD";
     const payLink = d.payLink || FALLBACK_PAY_LINK;
 
     const btn = document.getElementById("mp-link-1ars");
@@ -667,9 +667,9 @@ async function onSecondStep(){
     }
 
     if (!d.mpPreferenceId && !d.payLink){
-      payWarn.textContent = "Falta configurar MP_PREFERENCE_ID o MP_LINK_1ARS en Vercel.";
+      
     }
-    secondStepHint.textContent = "Listo. Abajo tenés el botón para señar.";
+    secondStepHint.textContent = "Abajo tenés el botón para señar.";
   }catch{
     secondStepHint.textContent="Error de red. Probá de nuevo.";
     secondStepBtn.disabled=false;
