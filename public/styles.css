@@ -19,18 +19,26 @@ body{
 .brand{display:flex;align-items:center;gap:10px}
 
 .brand__logo{
-  width: 48px;                 /* tamaño del círculo */
-  height: 48px;
-  border-radius: 999px;        /* lo hace perfectamente circular */
-  background-color: #FCB527;   /* amarillo de tu sitio */
-  background-image: url("/toro.png");
-  background-size: 85%;        /* ajuste del tamaño del toro */
-  background-position: center;
-  background-repeat: no-repeat;
-  display: inline-block;
+  width: 56px;              /* podés subir o bajar el tamaño */
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid #000;   /* borde negro */
+  background: #fff;         /* fondo blanco detrás por si la imagen tiene transparencia */
+  overflow: hidden;         /* recorta todo a la circunferencia */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 0 4px rgba(0,0,0,0.25); /* opcional suaviza */
 }
+
+/* La imagen adentro del círculo */
+.brand__logo img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;        /* la imagen llena el círculo */
+  display: block;
+}
+
 
 .brand__name{font-weight:900;letter-spacing:.5px}
 .nav__links{display:none;gap:20px}

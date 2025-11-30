@@ -5,8 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Toro Mecánico — Alquiler para eventos (AMBA)</title>
   <link rel="stylesheet" href="./styles.css" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/toro.png" />
-  <link rel="shortcut icon" type="image/png" href="/toro.png" />
+  <link rel="icon" href="/toro.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="/toro.png" />
+
+<style>
+  link[rel="icon"] {
+    border-radius: 50%;
+    mask-image: radial-gradient(circle, white 99%, transparent 100%);
+    -webkit-mask-image: radial-gradient(circle, white 99%, transparent 100%);
+  }
+</style>
+
   <meta name="description" content="Alquiler de Toro Mecánico con operador, colchonetas de seguridad y traslado en AMBA. Reservá fecha y horario para tu evento." />
 </head>
 <body>
@@ -14,9 +23,12 @@
   <header class="nav">
     <div class="container nav__inner">
       <div class="brand">
-        <div class="brand__logo"></div>
-        <span class="brand__name">TORO MECÁNICO</span>
-      </div>
+  <div class="brand__logo">
+    <img src="/toro.png" alt="Logo Toro Mecánico" />
+  </div>
+  <span class="brand__name">TORO MECÁNICO</span>
+</div>
+
       <nav class="nav__links">
         <a href="#precios">Precios</a>
         <a href="#calendario">Disponibilidad</a>
