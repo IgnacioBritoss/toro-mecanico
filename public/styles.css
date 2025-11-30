@@ -22,7 +22,7 @@ body{
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border-color: #fff;
+  border: 5px solid #fff;
   overflow: hidden;
   /* si querés mantener el fondo amarillo, dejalo, si no podés quitarlo */
   background-color: #fff;
