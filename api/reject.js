@@ -20,6 +20,14 @@ function formatFechaCortaUTC(dateLike){
   return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
+function formatPlanLabel(plan){
+  const code = String(plan || "").toLowerCase();
+  if (code === "1h") return "1 hora";
+  if (code === "2h") return "3 horas";
+  return plan || "";
+}
+
+
 export default async function handler(req, res){
   
   if (req.method === "OPTIONS") {
@@ -102,7 +110,7 @@ if (req.method === "HEAD") {
                 <h2>Tu reserva fue rechazada</h2>
                 <p><strong>Motivo:</strong> ${escapeHtml(reason)}</p>
                 <p>Fecha solicitada: <strong>${fechaCorta}</strong> — ${horaStr}</p>
-                <p>Plan: <strong>${r.plan}</strong></p>
+                <p>Plan: <strong>${formatPlanLabel(r.plan)}</strong></p>
               </div>`
           });
         }

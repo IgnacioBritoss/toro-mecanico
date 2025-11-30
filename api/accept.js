@@ -19,6 +19,14 @@ function formatFechaCortaUTC(dateLike){
   return `${weekday} ${dd}/${mm}/${yy}`;
 }
 
+function formatPlanLabel(plan){
+  const code = String(plan || "").toLowerCase();
+  if (code === "1h") return "1 hora";
+  if (code === "2h") return "3 horas";
+  return plan || "";
+}
+
+
 export default async function handler(req, res){
   if (req.method !== "GET") return res.status(405).send("Método no permitido");
   const { id, token } = req.query || {};
@@ -65,7 +73,7 @@ export default async function handler(req, res){
             <div style="font-family:system-ui,Segoe UI,Roboto;line-height:1.5">
               <h2>Tu reserva fue aceptada  te recordamos:</h2>
               <p><strong>Fecha:</strong> ${fechaCorta} — a las ${horaStr}</p>
-              <p><strong>con el plan de </strong> ${r.plan}</p>
+              <p><strong>con el plan de </strong> ${formatPlanLabel(r.plan)}</p>
               <p> Nos pondremos en contacto para coordinar detalles. Saludos y gracias por confiar en nosotros.</p>
             </div>`
         });

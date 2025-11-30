@@ -16,6 +16,15 @@ function signReviewToken(id){
   const secret = process.env.RESERVATION_SECRET || "dev-secret";
   return crypto.createHmac("sha256", secret).update(`review:${id}`).digest("hex");
 }
+
+function formatPlanLabel(plan){
+  const code = String(plan || "").toLowerCase();
+  if (code === "1h") return "1 hora";
+  if (code === "2h") return "3 horas";
+  return plan || "";
+}
+
+
 function isValidLatLng(lat, lng){
   const la = Number(lat), ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return false;
@@ -659,7 +668,7 @@ export default async function handler(req, res){
               <h2>Nueva reserva</h2>
               <p><strong>${user.name}</strong> (${user.email}) — ${user.age} años</p>
               <p>Tel: ${user.phone||"-"} — CP: ${user.postal_code||"-"}</p>
-              <p><strong>${fechaCorta}</strong> · ${hh}:00 — Plan: <strong>${reservation.plan}</strong></p>
+              <p><strong>${fechaCorta}</strong> · ${hh}:00 — Plan: <strong>${formatPlanLabel(reservation.plan)}</strong></p>
               <p>Prov/Ciudad: ${reservation.province||"-"} / ${reservation.city||"-"}</p>
               <p>Ubicación: ${reservation.location_display||"-"}</p>
               <p style="margin:.75rem 0">
@@ -680,7 +689,7 @@ export default async function handler(req, res){
           from: `Equipo de Toro Mecánico <${fromEmail}>`,
           to: user.email,
           subject: "Recibimos tu solicitud",
-          text: `Hola ${user.name}, recibimos tu solicitud para el ${fechaCorta} a las ${hh}:00 (plan ${reservation.plan}).`
+          text: `Hola ${user.name}, recibimos tu solicitud para el ${fechaCorta} a las ${hh}:00 (plan ${formatPlanLabel(reservation.plan)}).`
         });
       }
     }catch(e){ console.error("MAIL ERROR:", e); }
